@@ -1,0 +1,141 @@
+[
+  {
+    "id": "modern-izzet-prowess",
+    "name": "Izzet Prowess",
+    "format": "modern",
+    "colors": ["U", "R"],
+    "tags": ["aggro", "spells", "tempo", "prowess"],
+    "strategy": "Deploy cheap threats, chain efficient spells, and end games before opponents stabilize.",
+    "mainboard": [
+      { "name": "Monastery Swiftspear", "quantity": 4 },
+      { "name": "Slickshot Show-Off", "quantity": 4 },
+      { "name": "Lightning Bolt", "quantity": 4 },
+      { "name": "Lava Dart", "quantity": 4 },
+      { "name": "Consider", "quantity": 4 },
+      { "name": "Monstrous Rage", "quantity": 4 },
+      { "name": "Stormchaser's Talent", "quantity": 4 },
+      { "name": "Spirebluff Canal", "quantity": 4 },
+      { "name": "Steam Vents", "quantity": 4 },
+      { "name": "Mountain", "quantity": 12 },
+      { "name": "Island", "quantity": 8 },
+      { "name": "Lightning Bolt", "quantity": 4 }
+    ],
+    "sideboard": [
+      { "name": "Swords to Plowshares", "quantity": 3 },
+      { "name": "Soul Warden", "quantity": 2 },
+      { "name": "Bishop of Wings", "quantity": 2 },
+      { "name": "Monastery Mentor", "quantity": 2 },
+      { "name": "Consider", "quantity": 2 },
+      { "name": "Lava Dart", "quantity": 2 },
+      { "name": "Monstrous Rage", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "modern-mono-white-lifegain",
+    "name": "Mono-White Lifegain",
+    "format": "modern",
+    "colors": ["W"],
+    "tags": ["lifegain", "aggro", "creatures"],
+    "strategy": "Stack repeated lifegain triggers and snowball scalable payoff threats.",
+    "mainboard": [
+      { "name": "Soul Warden", "quantity": 4 },
+      { "name": "Ajani's Pridemate", "quantity": 4 },
+      { "name": "Bishop of Wings", "quantity": 4 },
+      { "name": "Heliod, Sun-Crowned", "quantity": 4 },
+      { "name": "Swords to Plowshares", "quantity": 4 },
+      { "name": "Plains", "quantity": 20 },
+      { "name": "Soul Warden", "quantity": 4 },
+      { "name": "Ajani's Pridemate", "quantity": 4 },
+      { "name": "Bishop of Wings", "quantity": 4 },
+      { "name": "Plains", "quantity": 8 }
+    ],
+    "sideboard": [
+      { "name": "Swords to Plowshares", "quantity": 4 },
+      { "name": "Heliod, Sun-Crowned", "quantity": 2 },
+      { "name": "Bishop of Wings", "quantity": 3 },
+      { "name": "Soul Warden", "quantity": 3 },
+      { "name": "Ajani's Pridemate", "quantity": 3 }
+    ]
+  },
+  {
+    "id": "commander-five-color-slivers",
+    "name": "Five-Color Slivers",
+    "format": "commander",
+    "colors": ["W", "U", "B", "R", "G"],
+    "tags": ["slivers", "tribal", "aggressive", "synergy"],
+    "strategy": "Ramp quickly, deploy layered Sliver lords, and use The First Sliver to overwhelm the table with cascading pressure.",
+    "commander": "The First Sliver",
+    "mainboard": [
+      { "name": "Manaweft Sliver", "quantity": 1 },
+      { "name": "Predatory Sliver", "quantity": 1 },
+      { "name": "Sinew Sliver", "quantity": 1 },
+      { "name": "Cloudshredder Sliver", "quantity": 1 },
+      { "name": "Arcane Signet", "quantity": 1 },
+      { "name": "Cultivate", "quantity": 1 },
+      { "name": "Swords to Plowshares", "quantity": 1 },
+      { "name": "Command Tower", "quantity": 1 },
+      { "name": "Sliver Hive", "quantity": 1 },
+      { "name": "Plains", "quantity": 10 },
+      { "name": "Island", "quantity": 10 },
+      { "name": "Mountain", "quantity": 10 }
+    ],
+    "sideboard": []
+  },
+  {
+    "id": "standard-boros-aggro",
+    "name": "Boros Aggro",
+    "format": "standard",
+    "colors": ["R", "W"],
+    "tags": ["aggro", "combat", "burn"],
+    "strategy": "Curve out with efficient creatures and combat tricks while keeping pressure constant.",
+    "mainboard": [
+      { "name": "Slickshot Show-Off", "quantity": 4 },
+      { "name": "Monstrous Rage", "quantity": 4 },
+      { "name": "Plains", "quantity": 12 },
+      { "name": "Mountain", "quantity": 12 },
+      { "name": "Soul Warden", "quantity": 4 },
+      { "name": "Ajani's Pridemate", "quantity": 4 },
+      { "name": "Stormchaser's Talent", "quantity": 4 },
+      { "name": "Monstrous Rage", "quantity": 4 },
+      { "name": "Slickshot Show-Off", "quantity": 4 },
+      { "name": "Plains", "quantity": 4 },
+      { "name": "Mountain", "quantity": 4 }
+    ],
+    "sideboard": [
+      { "name": "Soul Warden", "quantity": 3 },
+      { "name": "Ajani's Pridemate", "quantity": 3 },
+      { "name": "Stormchaser's Talent", "quantity": 3 },
+      { "name": "Monstrous Rage", "quantity": 3 },
+      { "name": "Slickshot Show-Off", "quantity": 3 }
+    ]
+  },
+  {
+    "id": "legacy-boros-mentor",
+    "name": "Boros Mentor",
+    "format": "legacy",
+    "colors": ["R", "W"],
+    "tags": ["spells", "tokens", "midrange"],
+    "strategy": "Trade efficiently, then take over with Monastery Mentor backed by cheap spells.",
+    "mainboard": [
+      { "name": "Monastery Mentor", "quantity": 4 },
+      { "name": "Lightning Bolt", "quantity": 4 },
+      { "name": "Swords to Plowshares", "quantity": 4 },
+      { "name": "Monstrous Rage", "quantity": 4 },
+      { "name": "Plains", "quantity": 12 },
+      { "name": "Mountain", "quantity": 12 },
+      { "name": "Soul Warden", "quantity": 4 },
+      { "name": "Ajani's Pridemate", "quantity": 4 },
+      { "name": "Consider", "quantity": 4 },
+      { "name": "Plains", "quantity": 4 },
+      { "name": "Mountain", "quantity": 4 }
+    ],
+    "sideboard": [
+      { "name": "Swords to Plowshares", "quantity": 4 },
+      { "name": "Lightning Bolt", "quantity": 4 },
+      { "name": "Monastery Mentor", "quantity": 2 },
+      { "name": "Soul Warden", "quantity": 2 },
+      { "name": "Ajani's Pridemate", "quantity": 3 }
+    ]
+  }
+]
+

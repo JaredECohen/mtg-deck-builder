@@ -1,0 +1,12 @@
+{
+  "name": "mtg-deck-builder",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace web run dev",
+    "build:web": "npm --workspace web run build"
+  }
+}
+

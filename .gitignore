@@ -1,0 +1,12 @@
+.DS_Store
+.next
+node_modules
+.venv
+__pycache__
+.pytest_cache
+dist
+build
+*.pyc
+api/.mypy_cache
+api/data
+*.db
