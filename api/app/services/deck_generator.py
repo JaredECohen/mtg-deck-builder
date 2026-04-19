@@ -1,46 +1,40 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 from app.models import (
+    ArchetypeMetadata,
+    ArchetypePackage,
     ArchetypeRecord,
     CardRecord,
     CardRef,
+    CommanderPackageSummary,
     DeckCardExplanation,
+    DeckMechanic,
     DeckResponse,
+    DeckRoleSummary,
+    DeckSectionSummary,
     GenerateDeckRequest,
-    ScoreBreakdown,
+    ManaCurvePoint,
     ValidateDeckRequest,
+)
+from app.constants import (
+    CANONICAL_TAGS,
+    COMMANDER_DECK_SIZE,
+    COMMANDER_LAND_FLOOR,
+    COMMANDER_ROLE_TARGETS,
+    CONSTRUCTED_DECK_SIZE,
+    LAND_TARGET_AGGRO,
+    LAND_TARGET_COMMANDER,
+    LAND_TARGET_DEFAULT,
+    LAND_TARGET_RAMP,
+    ROLE_MAP,
+    SIDEBOARD_SIZE,
+    THEME_TO_TAGS,
 )
 from app.services.card_repository import CardRepository
 from app.services.deck_validator import DeckValidator
-
-
-ROLE_MAP = {
-    "aggressive": "primary pressure",
-    "aggro": "primary pressure",
-    "spells": "spell-density engine",
-    "prowess": "threat scaling payoff",
-    "lifegain": "lifegain engine",
-    "slivers": "tribal synergy piece",
-    "interaction": "interaction",
-    "land": "mana base",
-    "ramp": "mana acceleration",
-}
-
-CANONICAL_TAGS = {
-    "aggressive": "aggro",
-    "aristocrats": "sacrifice",
-    "artifacts": "artifact",
-    "creatures": "creature",
-    "life gain": "lifegain",
-    "midrange": "midrange",
-    "reanimator": "graveyard",
-    "sacrifice": "sacrifice",
-    "spellslinger": "spells",
-    "tempo": "tempo",
-    "tribal": "tribal",
-}
+from app.services.llm_service import RefinementIntent, interpret_generate_prompt, interpret_refinement
 
 
 class DeckGenerator:
@@ -49,130 +43,131 @@ class DeckGenerator:
         self.validator = validator
 
     def generate(self, request: GenerateDeckRequest) -> DeckResponse:
+        if request.prompt:
+            intent = interpret_generate_prompt(request.prompt)
+            request = request.model_copy(update={
+                "colors": request.colors or intent.colors,
+                "playstyle_tags": list(dict.fromkeys(request.playstyle_tags + intent.playstyle_tags)),
+                "theme_tags": list(dict.fromkeys(request.theme_tags + intent.theme_tags)),
+                "budget": request.budget if request.budget is not None else intent.budget,
+                "commander_name": request.commander_name or intent.commander_name,
+                "include_cards": list(dict.fromkeys(request.include_cards + intent.include_cards)),
+                "exclude_cards": list(dict.fromkeys(request.exclude_cards + intent.exclude_cards)),
+            })
+        requested_tags = [self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags]
         archetypes = self._retrieve_archetypes(request)
         base = archetypes[0] if archetypes else self._fallback_archetype(request)
-        mainboard = self._adapt_mainboard(base, request)
-        sideboard = self._adapt_sideboard(base, request, mainboard)
-        commander = base.commander if request.format == "commander" else None
+        colors = request.colors or base.colors
+        commander_reason: str | None = None
+        include_warnings: list[str] = self._check_include_cards(request)
+
+        if request.format == "commander":
+            if request.commander_name:
+                commander, commander_reason, commander_archetype = self._use_requested_commander(request, requested_tags)
+            else:
+                commander, commander_reason, commander_archetype = self._select_commander(base, request, colors, requested_tags)
+            base = commander_archetype
+            colors = self._ordered_commander_identity(commander, request.colors or base.colors or colors)
+            mainboard = self._build_commander_mainboard(base, request, colors, requested_tags, commander)
+            sideboard: list[CardRef] = []
+        else:
+            commander = None
+            mainboard = self._build_constructed_mainboard(base, request, colors, requested_tags)
+            sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard)
 
         validation = self.validator.validate(
-            ValidateDeckRequest(
-                format=request.format,
-                mainboard=mainboard,
-                sideboard=sideboard,
-                commander=commander,
-            )
+            ValidateDeckRequest(format=request.format, mainboard=mainboard, sideboard=sideboard, commander=commander)
         )
-
-        title = self._build_title(request, base)
-        deck_price = self._estimate_price(mainboard, sideboard, commander)
-        warnings = validation.warnings[:]
-        if request.budget is not None and deck_price is not None and deck_price > request.budget:
+        estimated_price = self._estimate_price(mainboard, sideboard, commander)
+        warnings = validation.warnings[:] + include_warnings
+        if request.budget is not None and estimated_price is not None and estimated_price > request.budget:
             warnings.append(
-                f"Estimated deck price is about ${deck_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
+                f"Estimated deck price is about ${estimated_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
             )
-        explanation = self._build_explanation(request, base, warnings, deck_price)
+
+        explanation = self._build_explanation(base, request, colors, mainboard, sideboard, warnings, commander_reason)
+        mechanics = self._build_mechanics(mainboard, commander)
+        role_summary = self._build_role_summary(mainboard)
+        sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason)
+        mana_curve = self._build_mana_curve(mainboard)
         card_notes = self._build_card_notes(mainboard)
 
         return DeckResponse(
             format=request.format,
-            title=title,
-            colors=request.colors or base.colors,
+            title=self._build_title(request, base, commander),
+            colors=colors,
             commander=commander,
             strategy_summary=base.strategy,
             mainboard=mainboard,
             sideboard=sideboard,
-            estimated_price_usd=deck_price,
+            estimated_price_usd=estimated_price,
             is_legal=validation.is_legal,
             validation_errors=validation.errors,
             score=validation.score,
             explanation=explanation,
             card_notes=card_notes,
+            sections=sections,
+            mechanics=mechanics,
+            role_summary=role_summary,
+            mana_curve=mana_curve,
             warnings=list(dict.fromkeys(warnings)),
             source_archetypes=[archetype.name for archetype in archetypes[:3]],
             selected_archetype=base,
+            playstyle_tags=request.playstyle_tags,
+            theme_tags=request.theme_tags,
         )
 
     def refine(self, deck: DeckResponse, prompt: str) -> DeckResponse:
-        updated = deck.model_copy(deep=True)
-        lower_prompt = prompt.lower()
-        refinement_notes: list[str] = []
-        deck_changed = False
+        intent = interpret_refinement(prompt)
 
-        if updated.format != "commander":
-            if "cheaper" in lower_prompt or "budget" in lower_prompt:
-                mana_swaps = self._downgrade_expensive_mana_base(updated, max_swaps=6)
-                spell_swaps = self._swap_expensive_spells_for_cheaper_options(updated, max_swaps=4)
-                total_budget_swaps = mana_swaps + spell_swaps
-                if total_budget_swaps:
-                    deck_changed = True
-                    refinement_notes.append(
-                        f"Refinement bias: reduced premium costs with {total_budget_swaps} budget-oriented swap{'s' if total_budget_swaps != 1 else ''}."
-                    )
-                else:
-                    refinement_notes.append("Refinement bias: looked for cheaper legal substitutes, but the current sample pool had no clean downgrade path.")
-            if "control" in lower_prompt or "interaction" in lower_prompt:
-                interaction_swaps = self._swap_basic_lands_for_candidates(
-                    updated,
-                    desired_tags={"interaction", "removal"},
-                    max_swaps=2,
-                )
-                if interaction_swaps:
-                    deck_changed = True
-                    refinement_notes.append(
-                        f"Refinement bias: converted {interaction_swaps} land slot{'s' if interaction_swaps != 1 else ''} into extra interaction."
-                    )
-                else:
-                    refinement_notes.append("Refinement bias: no legal interaction upgrades were available beyond the current main deck and sideboard limits.")
-            if "aggressive" in lower_prompt or "faster" in lower_prompt:
-                speed_swaps = self._swap_basic_lands_for_candidates(
-                    updated,
-                    desired_tags={"aggro", "spells", "tempo"},
-                    max_swaps=2,
-                    max_mana_value=2,
-                )
-                if speed_swaps:
-                    deck_changed = True
-                    refinement_notes.append(
-                        f"Refinement bias: trimmed {speed_swaps} mana source{'s' if speed_swaps != 1 else ''} for lower-curve threats or spells."
-                    )
-                else:
-                    refinement_notes.append("Refinement bias: the sample card pool did not have additional low-curve threats that fit the deck's current constraints.")
+        current_price = deck.estimated_price_usd or 0
+        if intent.budget is not None:
+            budget: float | None = intent.budget
+        elif intent.scale_budget_by is not None and current_price > 0:
+            budget = current_price * intent.scale_budget_by
         else:
-            refinement_notes.append("Refinement bias: commander refinements are explanation-first for now because the local sample pool is still shallow.")
+            budget = None
 
-        validation = self.validator.validate(
-            ValidateDeckRequest(
-                format=updated.format,
-                mainboard=updated.mainboard,
-                sideboard=updated.sideboard,
-                commander=updated.commander,
-            )
+        original_tags = deck.playstyle_tags or ["midrange"]
+        playstyle_tags = [t for t in original_tags if t not in intent.remove_playstyle_tags]
+        for tag in intent.add_playstyle_tags:
+            if tag not in playstyle_tags:
+                playstyle_tags.append(tag)
+        if not playstyle_tags:
+            playstyle_tags = ["midrange"]
+
+        commander_lower = (deck.commander or "").lower()
+        exclude_set = {name.lower() for name in intent.exclude_cards}
+        seed_cards = [
+            ref for ref in deck.mainboard
+            if ref.name.lower() != commander_lower and ref.name.lower() not in exclude_set
+        ]
+        for name in intent.include_cards:
+            if not any(ref.name.lower() == name.lower() for ref in seed_cards):
+                resolved = self.repository.get_card(name)
+                seed_cards.append(CardRef(name=resolved.name if resolved else name, quantity=1))
+
+        colors = list(dict.fromkeys(deck.colors + intent.color_changes))
+
+        forced_includes = ([deck.commander] if deck.commander else []) + intent.include_cards
+
+        request = GenerateDeckRequest(
+            format=deck.format,
+            colors=colors,
+            playstyle_tags=playstyle_tags,
+            theme_tags=deck.theme_tags or [],
+            budget=budget,
+            commander_name=deck.commander,
+            include_cards=list(dict.fromkeys(forced_includes)),
+            seed_cards=seed_cards,
+            mode="constraint-aware",
+            experience_level="beginner",
         )
-        updated.is_legal = validation.is_legal
-        updated.validation_errors = validation.errors
-        updated.warnings = validation.warnings
-        updated.score = validation.score
-        if ("cheaper" in lower_prompt or "budget" in lower_prompt) and deck_changed:
-            updated.score.budget_fit = min(100, updated.score.budget_fit + 8)
-        if ("control" in lower_prompt or "interaction" in lower_prompt) and deck_changed:
-            updated.score.competitiveness = min(100, updated.score.competitiveness + 3)
-        if ("aggressive" in lower_prompt or "faster" in lower_prompt) and deck_changed:
-            updated.score.prompt_fit = min(100, updated.score.prompt_fit + 5)
-        updated.score.total = (
-            updated.score.legality
-            + updated.score.mana
-            + updated.score.synergy
-            + updated.score.prompt_fit
-            + updated.score.competitiveness
-            + updated.score.budget_fit
-        ) // 6
-        updated.estimated_price_usd = self._estimate_price(updated.mainboard, updated.sideboard, updated.commander)
-        updated.card_notes = self._build_card_notes(updated.mainboard)
-        updated.explanation.extend(refinement_notes)
-
-        updated.title = f"{deck.title} - Refined"
-        return updated
+        regenerated = self.generate(request)
+        regenerated.title = f"{deck.title} - Refined"
+        if prompt:
+            regenerated.explanation.append(f"Refinement applied: {prompt}")
+        return regenerated
 
     def export_plain(self, deck: DeckResponse) -> str:
         lines = [deck.title, f"Format: {deck.format}"]
@@ -199,28 +194,19 @@ class DeckGenerator:
         return self.export_plain(deck)
 
     def _retrieve_archetypes(self, request: GenerateDeckRequest) -> list[ArchetypeRecord]:
-        requested_tags = {self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags}
-        scored: list[tuple[int, ArchetypeRecord]] = []
-        for archetype in self.repository.archetypes_for_format(request.format):
-            score = 0
-            if request.colors:
-                requested_colors = set(request.colors)
-                archetype_colors = set(archetype.colors)
-                overlap = len(requested_colors & archetype_colors)
-                score += overlap * 8
-                if requested_colors and requested_colors.issubset(archetype_colors):
-                    score += 12
-                elif overlap == 0:
-                    score -= 20
-            tag_overlap = len(requested_tags & {self._canonicalize_tag(tag) for tag in archetype.tags})
-            score += tag_overlap * 10
-            if not request.colors:
-                score += 5
-            if not requested_tags:
-                score += 5
-            scored.append((score, archetype))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        return [archetype for _, archetype in scored] or []
+        if request.format == "commander" and request.commander_name:
+            exact_matches = self.repository.commander_archetypes_for_name(request.commander_name)
+            if exact_matches:
+                return exact_matches
+        archetypes = self.repository.top_archetypes(
+            format_name=request.format,
+            colors=request.colors,
+            theme_tags=request.playstyle_tags + request.theme_tags,
+            limit=8,
+        )
+        if archetypes:
+            return archetypes
+        return self.repository.archetypes_for_format(request.format)
 
     def _fallback_archetype(self, request: GenerateDeckRequest) -> ArchetypeRecord:
         archetypes = self.repository.archetypes_for_format(request.format)
@@ -228,281 +214,383 @@ class DeckGenerator:
             return archetypes[0]
         raise ValueError(f"No archetypes available for format {request.format}")
 
-    def _adapt_mainboard(self, archetype: ArchetypeRecord, request: GenerateDeckRequest) -> list[CardRef]:
-        if request.format == "commander":
-            return self._build_commander_mainboard(archetype, request)
-
-        filtered: list[CardRef] = []
-        excluded = {card.lower() for card in request.exclude_cards}
-        for ref in archetype.mainboard:
-            if ref.name.lower() in excluded:
-                continue
-            if not self._matches_color_request(ref.name, request.colors):
-                continue
-            if not self._is_card_legal(ref.name, request.format):
-                continue
-            if not self._fits_budget_request(ref, request.budget):
-                continue
-            if self.repository.get_card(ref.name):
-                filtered.append(ref)
-
-        if request.include_cards:
-            include_names = [name for name in request.include_cards if self.repository.get_card(name)]
-            for name in include_names:
-                if request.colors and not self._matches_color_request(name, request.colors):
-                    continue
-                if not self._is_card_legal(name, request.format):
-                    continue
-                filtered.insert(0, CardRef(name=name, quantity=1 if request.format == "commander" else 2))
-
-        compacted = self._merge_refs(filtered, request.format)
-        deck = self._normalize_constructed_counts(
-            compacted,
-            request.colors or archetype.colors,
-            request.format,
-            request.budget,
-            excluded,
+    def _use_requested_commander(
+        self,
+        request: GenerateDeckRequest,
+        requested_tags: list[str],
+    ) -> tuple[str, str, ArchetypeRecord]:
+        if not request.commander_name:
+            raise ValueError("A commander name is required for explicit commander selection.")
+        profile = self.repository.get_commander_profile(request.commander_name)
+        if not profile:
+            raise ValueError(f"{request.commander_name} is not a legal commander in the local card corpus.")
+        colors = list(profile.colors or request.colors)
+        exact_matches = self.repository.commander_archetypes_for_name(profile.card.name)
+        if exact_matches:
+            selected = sorted(exact_matches, key=lambda archetype: archetype.source_count, reverse=True)[0]
+        else:
+            selected = ArchetypeRecord(
+                id=f"commander::{profile.card.name.lower().replace(' ', '-')}",
+                name=f"{profile.card.name} Commander Shell",
+                format="commander",
+                colors=colors,
+                tags=profile.tags,
+                strategy=profile.strategy_summary,
+                commander=profile.card.name,
+                mainboard=[],
+                sideboard=[],
+                source_count=max(1, int(profile.popularity)),
+                avg_placement=None,
+                metadata=ArchetypeMetadata(
+                    archetype_type="commander",
+                    color_profile=colors,
+                    core_cards=profile.signature_cards,
+                    flex_cards=profile.synergy_packages,
+                    land_packages=profile.land_package,
+                    commander_package=self._profile_to_commander_package(profile),
+                ),
+            )
+        reason = (
+            f"Selected {profile.card.name} because you explicitly chose it as the commander. "
+            f"The build uses its color identity and commander profile packages instead of overriding the choice."
         )
-        return deck
+        return profile.card.name, reason, selected
 
-    def _adapt_sideboard(
+    def _build_constructed_mainboard(
         self,
         archetype: ArchetypeRecord,
         request: GenerateDeckRequest,
+        colors: list[str],
+        requested_tags: list[str],
+    ) -> list[CardRef]:
+        excluded = {name.lower() for name in request.exclude_cards}
+        counts = Counter[str]()
+        core_names = {package.name for package in archetype.metadata.core_cards[:18]}
+
+        for ref in archetype.mainboard:
+            card = self.repository.get_card(ref.name)
+            if not card or ref.name.lower() in excluded:
+                continue
+            if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
+                continue
+            if not self._fits_budget_request(card, request.budget):
+                continue
+            desired_qty = max(ref.quantity, 2 if ref.name in core_names and "Land" not in card.type_line else ref.quantity)
+            counts[card.name] = min(desired_qty, self._copy_limit(card, request.format) or desired_qty)
+
+        for include_name in request.include_cards:
+            card = self.repository.get_card(include_name)
+            if card and self._matches_color_request(card, colors) and self._is_card_legal_record(card, request.format):
+                counts[card.name] = max(counts[card.name], 2)
+
+        # Seed from prior deck (refine path): preserve original quantities for cards that still pass all filters
+        for ref in request.seed_cards:
+            card = self.repository.get_card(ref.name)
+            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+                continue
+            if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
+                continue
+            if not self._fits_budget_request(card, request.budget):
+                continue
+            limit = self._copy_limit(card, request.format)
+            counts[card.name] = min(ref.quantity, limit or ref.quantity)
+
+        target_lands = self._target_land_count(archetype, requested_tags)
+        package_candidates = self.repository.card_packages_by_role_theme(
+            format_name=request.format,
+            role="engine",
+            theme_tags=requested_tags,
+            limit=20,
+        )
+        ranked_candidates = [item["name"] for item in package_candidates] + self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
+        while self._nonland_total(counts) < nonland_target:
+            if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
+                break
+        self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format)
+        while self._total_cards(counts) > CONSTRUCTED_DECK_SIZE:
+            self._trim_excess_land_or_spell(counts, colors)
+        max_fill_iters = 200
+        for _ in range(max_fill_iters):
+            if self._total_cards(counts) >= CONSTRUCTED_DECK_SIZE:
+                break
+            self._add_best_remaining(counts, ranked_candidates, request.format)
+        return self._counts_to_refs(counts)
+
+    def _build_sideboard(
+        self,
+        archetype: ArchetypeRecord,
+        request: GenerateDeckRequest,
+        colors: list[str],
+        requested_tags: list[str],
         mainboard: list[CardRef],
     ) -> list[CardRef]:
-        if request.format == "commander":
-            return []
-        excluded = {card.lower() for card in request.exclude_cards}
-        mainboard_counts = Counter({card.name: card.quantity for card in mainboard})
-        allowed_cards: list[CardRef] = []
-        for ref in archetype.sideboard:
-            if not self._matches_color_request(ref.name, request.colors):
-                continue
-            if ref.name.lower() in excluded:
-                continue
-            if not self._is_card_legal(ref.name, request.format):
-                continue
-            card = self.repository.get_card(ref.name)
-            if not card:
-                continue
-            if "Basic Land" in card.type_line:
-                allowed_cards.append(ref)
-                continue
-
-            copy_limit = self._copy_limit(card, request.format) or ref.quantity
-            remaining_copies = max(0, copy_limit - mainboard_counts[ref.name])
-            if remaining_copies:
-                allowed_cards.append(CardRef(name=ref.name, quantity=min(ref.quantity, remaining_copies)))
-
-        compacted = self._merge_refs(allowed_cards, request.format)
-        if sum(card.quantity for card in compacted) >= 15:
-            return self._trim_to_total(compacted, 15)
-        return self._pad_sideboard(compacted, 15, request.format, request.colors or archetype.colors, mainboard, excluded)
-
-    def _build_commander_mainboard(self, archetype: ArchetypeRecord, request: GenerateDeckRequest) -> list[CardRef]:
-        requested_colors = request.colors or archetype.colors
-        commander_identity = self._commander_identity(archetype.commander, requested_colors)
-        result = self._merge_refs(archetype.mainboard, request.format)
-        known_names = {ref.name for ref in result}
-
-        for card in self.repository.all_cards():
-            if card.name == archetype.commander:
-                continue
-            if card.name in known_names:
+        counts = Counter[str]()
+        main_counts: Counter[str] = Counter()
+        for ref in mainboard:
+            resolved = self.repository.get_card(ref.name)
+            main_counts[resolved.name if resolved else ref.name] += ref.quantity
+        preferred_packages = archetype.metadata.sideboard_packages or archetype.metadata.matchup_tech_packages
+        for package in preferred_packages:
+            card = self.repository.get_card(package.name)
+            if not card or not self._matches_color_request(card, colors):
                 continue
             if not self._is_card_legal_record(card, request.format):
                 continue
-            if not self._fits_commander_identity(card, commander_identity):
-                continue
-            if requested_colors and not self._matches_color_request(card.name, requested_colors):
-                continue
-            result.append(CardRef(name=card.name, quantity=1))
-            known_names.add(card.name)
+            remaining = max(0, (self._copy_limit(card, request.format) or 4) - main_counts[card.name])
+            if remaining:
+                counts[card.name] = min(int(round(package.average_quantity or 1)), remaining)
 
-        basic_land_names = self._basic_lands_for_colors(list(commander_identity or requested_colors))
-        if not basic_land_names:
-            basic_land_names = ["Mountain"]
-        while sum(card.quantity for card in result) < 99:
-            name = basic_land_names[(sum(card.quantity for card in result)) % len(basic_land_names)]
-            result.append(CardRef(name=name, quantity=1))
-        return self._trim_to_total(self._merge_refs(result, request.format), 99)
-
-    def _merge_refs(self, refs: list[CardRef], format_name: str) -> list[CardRef]:
-        counter = Counter[str]()
-        for ref in refs:
-            counter[ref.name] += ref.quantity
-        merged: list[CardRef] = []
-        for name, quantity in counter.items():
-            card = self.repository.get_card(name)
-            if not card or not self._is_card_legal_record(card, format_name):
-                continue
-            copy_limit = self._copy_limit(card, format_name)
-            if copy_limit is not None:
-                quantity = min(quantity, copy_limit)
-            merged.append(CardRef(name=name, quantity=quantity))
-        return merged
-
-    def _normalize_constructed_counts(
-        self,
-        refs: list[CardRef],
-        colors: list[str],
-        format_name: str,
-        budget: float | None,
-        excluded_cards: set[str],
-    ) -> list[CardRef]:
-        total = sum(card.quantity for card in refs)
-        refs = refs[:]
-        if total > 60:
-            return self._trim_to_total(refs, 60)
-        padding_candidates = self._constructed_padding_candidates(format_name, colors, budget, excluded_cards)
-        stalled_passes = 0
-        while total < 60 and padding_candidates:
-            added_this_pass = False
-            merged = Counter[str]()
-            for ref in refs:
-                merged[ref.name] += ref.quantity
-            for candidate_name in padding_candidates:
-                card = self.repository.get_card(candidate_name)
-                if not card:
-                    continue
-                copy_limit = self._copy_limit(card, format_name)
-                current_quantity = merged[candidate_name]
-                if copy_limit is not None and current_quantity >= copy_limit:
-                    continue
-                refs.append(CardRef(name=candidate_name, quantity=1))
-                total += 1
-                added_this_pass = True
-                merged[candidate_name] += 1
-                if total >= 60:
-                    break
-            if added_this_pass:
-                stalled_passes = 0
-            else:
-                stalled_passes += 1
-                if stalled_passes > 1:
-                    break
-        fallback_basics = self._basic_lands_for_colors(colors)
-        while total < 60:
-            land_name = fallback_basics[total % len(fallback_basics)]
-            refs.append(CardRef(name=land_name, quantity=1))
-            total += 1
-        return self._merge_refs(refs, format_name)
-
-    def _trim_to_total(self, refs: list[CardRef], target: int) -> list[CardRef]:
-        result: list[CardRef] = []
-        total = 0
-        for ref in refs:
-            if total >= target:
+        fallback_names = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="interaction", theme_tags=requested_tags, limit=20)]
+        while self._total_cards(counts) < SIDEBOARD_SIZE:
+            if not self._add_ranked_candidate(counts, fallback_names, request.format, colors, request.budget, set(), main_counts):
                 break
-            quantity = min(ref.quantity, target - total)
-            result.append(CardRef(name=ref.name, quantity=quantity))
-            total += quantity
-        return result
+        while self._total_cards(counts) < SIDEBOARD_SIZE:
+            for basic_land in self._basic_lands_for_colors(colors):
+                counts[basic_land] += 1
+                if self._total_cards(counts) >= SIDEBOARD_SIZE:
+                    break
+        return self._counts_to_refs(counts)
 
-    def _pad_sideboard(
+    def _select_commander(
         self,
-        refs: list[CardRef],
-        target: int,
-        format_name: str,
+        archetype: ArchetypeRecord,
+        request: GenerateDeckRequest,
         colors: list[str],
-        mainboard: list[CardRef],
-        excluded_cards: set[str],
-    ) -> list[CardRef]:
-        total = sum(card.quantity for card in refs)
-        fallback_options = self._sideboard_fallbacks(format_name, colors, excluded_cards)
-        mainboard_counts = Counter({card.name: card.quantity for card in mainboard})
-        sideboard_counts = Counter({card.name: card.quantity for card in refs})
-        stalled_passes = 0
-
-        while total < target and fallback_options:
-            added_this_pass = False
-            for fallback_name in fallback_options:
-                if total >= target:
-                    break
-                fallback_card = self.repository.get_card(fallback_name)
-                if not fallback_card or not self._is_card_legal_record(fallback_card, format_name):
-                    continue
-                copy_limit = self._copy_limit(fallback_card, format_name)
-                combined_quantity = mainboard_counts[fallback_name] + sideboard_counts[fallback_name]
-                if copy_limit is not None and combined_quantity >= copy_limit:
-                    continue
-                sideboard_counts[fallback_name] += 1
-                total += 1
-                added_this_pass = True
-            if added_this_pass:
-                stalled_passes = 0
-            else:
-                stalled_passes += 1
-                if stalled_passes > 1:
-                    break
-
-        fallback_basics = self._basic_lands_for_colors(colors)
-        idx = 0
-        while total < target and fallback_basics:
-            fallback_name = fallback_basics[idx % len(fallback_basics)]
-            sideboard_counts[fallback_name] += 1
-            total += 1
-            idx += 1
-        return [CardRef(name=name, quantity=quantity) for name, quantity in sideboard_counts.items() if quantity > 0]
-
-    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord) -> str:
-        archetype_words = {word.lower() for word in archetype.name.replace("-", " ").split()}
-        theme_parts: list[str] = []
-        seen_tags: set[str] = set()
-        for tag in request.theme_tags + request.playstyle_tags:
-            normalized = tag.strip().lower()
-            if not normalized or normalized in seen_tags or normalized in archetype_words:
+        requested_tags: list[str],
+    ) -> tuple[str | None, str | None, ArchetypeRecord]:
+        candidates = self.repository.candidate_commander_packages(colors=colors, theme_tags=requested_tags, limit=6)
+        if not candidates and archetype.commander:
+            return archetype.commander, f"Selected {archetype.commander} because no stronger commander corpus match was available.", archetype
+        best_score = float("-inf")
+        best_choice: ArchetypeRecord | None = None
+        best_reason = ""
+        requested_color_set = set(colors)
+        requested_tag_set = set(requested_tags)
+        for candidate in candidates:
+            package = candidate.metadata.commander_package
+            if not candidate.commander or package is None:
                 continue
-            theme_parts.append(tag.title())
-            seen_tags.add(normalized)
-            if len(theme_parts) == 2:
+            color_fit = len(requested_color_set & set(candidate.colors))
+            exact_color_fit = requested_color_set.issubset(set(candidate.colors)) if requested_color_set else True
+            theme_fit = len(requested_tag_set & {self._canonicalize_tag(tag) for tag in candidate.tags})
+            support_depth = package.support_depth
+            package_tags = {self._canonicalize_tag(tag) for pkg in package.synergy_packages for tag in pkg.tags}
+            package_fit = len(requested_tag_set & package_tags)
+            mechanical_coherence = len(package.signature_cards) + len(package.ramp_package) + len(package.draw_package) + len(package.interaction_package)
+            score = color_fit * 8 + theme_fit * 12 + package_fit * 8 + support_depth * 2 + mechanical_coherence * 0.5
+            if exact_color_fit:
+                score += 12
+            if request.include_cards and candidate.commander in request.include_cards:
+                score += 25
+            if score > best_score:
+                best_score = score
+                best_choice = candidate
+                best_reason = (
+                    f"Selected {candidate.commander} for color fit ({color_fit}), theme fit ({theme_fit}), "
+                    f"support depth ({support_depth}), and commander package coherence ({mechanical_coherence:.0f})."
+                )
+        pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags)
+        if pool_commander is not None:
+            pool_score = 18 + len(requested_color_set & set(self._commander_identity(pool_commander, colors))) * 8
+            pool_score += len(requested_tag_set & {self._canonicalize_tag(tag) for tag in (self.repository.get_card(pool_commander).tags if self.repository.get_card(pool_commander) else [])}) * 8
+            if pool_score > best_score:
+                return pool_commander, pool_reason, archetype
+        if best_choice:
+            return best_choice.commander, best_reason, best_choice
+        return archetype.commander, None, archetype
+
+    def _build_commander_mainboard(
+        self,
+        archetype: ArchetypeRecord,
+        request: GenerateDeckRequest,
+        colors: list[str],
+        requested_tags: list[str],
+        commander: str | None,
+    ) -> list[CardRef]:
+        counts = Counter[str]()
+        commander_identity = self._commander_identity(commander, colors)
+        excluded = {name.lower() for name in request.exclude_cards}
+        package = archetype.metadata.commander_package
+        if package:
+            self._add_package_cards(counts, package.ramp_package, target=COMMANDER_ROLE_TARGETS["ramp"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.draw_package, target=COMMANDER_ROLE_TARGETS["draw"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.interaction_package, target=COMMANDER_ROLE_TARGETS["interaction"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.synergy_packages, target=COMMANDER_ROLE_TARGETS["engine"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.signature_cards, target=COMMANDER_ROLE_TARGETS["payoff"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+
+        # Seed from prior deck (refine path): preserve original quantities for cards that pass all filters
+        for ref in request.seed_cards:
+            card = self.repository.get_card(ref.name)
+            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+                continue
+            if card.name == commander:
+                continue
+            if not self._is_card_legal_record(card, request.format):
+                continue
+            if not self.repository.fits_color_identity(card, commander_identity):
+                continue
+            if not self._fits_budget_request(card, request.budget):
+                continue
+            if counts[card.name] == 0:
+                counts[card.name] = 1  # Commander format is singleton; skip if already added from packages
+
+        themed_candidates = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="engine", theme_tags=requested_tags, limit=30)]
+        fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded)
+        seen = set()
+        ranked_nonlands = []
+        for name in themed_candidates + fallback_ranked:
+            if name in seen:
+                continue
+            seen.add(name)
+            ranked_nonlands.append(name)
+        while self._nonland_total(counts) < 62:
+            if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
                 break
-        theme = " ".join(theme_parts).strip()
-        return f"{theme + ' ' if theme else ''}{archetype.name}".strip()
+
+        self._add_lands_from_packages(counts, list(commander_identity), LAND_TARGET_COMMANDER, package.land_package if package else [], request.format)
+        while self._total_cards(counts) > COMMANDER_DECK_SIZE:
+            self._trim_excess_land_or_spell(counts, list(commander_identity))
+        while self._total_cards(counts) < COMMANDER_DECK_SIZE:
+            self._add_basic_land(counts, list(commander_identity))
+        return self._counts_to_refs(counts)
+
+    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None) -> str:
+        modifiers = [tag.title() for tag in request.theme_tags[:1] + request.playstyle_tags[:1] if tag]
+        anchor = commander or archetype.name
+        return f"{' '.join(modifiers + [anchor, archetype.name if commander and archetype.name != commander else '']).strip()}".strip()
 
     def _build_explanation(
         self,
-        request: GenerateDeckRequest,
         archetype: ArchetypeRecord,
+        request: GenerateDeckRequest,
+        colors: list[str],
+        mainboard: list[CardRef],
+        sideboard: list[CardRef],
         warnings: list[str],
-        deck_price: float | None,
+        commander_reason: str | None,
     ) -> list[str]:
+        total_lands = sum(ref.quantity for ref in mainboard if (card := self.repository.get_card(ref.name)) and "Land" in card.type_line)
+        role_summary = self._build_role_summary(mainboard)
         notes = [
-            f"This list starts from the {archetype.name} shell because it best matches the requested {request.format} constraints.",
-            "The generator keeps the core game plan intact, then adapts around colors, themes, and requested play patterns.",
-            "Every list is passed through deterministic legality and deck-size validation before it is returned.",
+            f"Generation started from the retrieved {archetype.name} shell because it ranked highest for the requested colors and themes.",
+            f"The final list carries {total_lands} lands and was assembled around retrieved packages rather than independent card picks.",
+            f"Role balance snapshot: {', '.join(f'{item.role} {item.total_cards}' for item in role_summary[:4])}.",
         ]
-        if request.playstyle_tags or request.theme_tags:
-            notes.append(
-                f"Prompt fit focus: {', '.join(request.playstyle_tags + request.theme_tags)}."
-            )
+        if request.format == "commander" and commander_reason:
+            notes.append(commander_reason)
+        if sideboard:
+            notes.append("The sideboard leans on retrieved matchup packages and fallback interaction packages.")
         if request.budget is not None:
-            notes.append(f"Budget target acknowledged at ${request.budget:.0f}; premium staples should be reviewed against live prices before purchase.")
-        if deck_price is not None:
-            notes.append(f"Estimated paper price from cached card data: about ${deck_price:.2f}.")
+            notes.append("Budget sensitivity was applied while choosing retrieval candidates and fallbacks.")
         if warnings:
-            notes.append(f"Current warnings: {'; '.join(warnings)}")
+            notes.append(f"Open issues still worth reviewing: {'; '.join(warnings[:3])}")
         return notes
 
-    def _build_card_notes(self, refs: list[CardRef]) -> list[DeckCardExplanation]:
-        notes: list[DeckCardExplanation] = []
-        for ref in refs[:10]:
+    def _build_sections(
+        self,
+        archetype: ArchetypeRecord,
+        request: GenerateDeckRequest,
+        mainboard: list[CardRef],
+        sideboard: list[CardRef],
+        commander: str | None,
+        warnings: list[str],
+        commander_reason: str | None,
+    ) -> list[DeckSectionSummary]:
+        sections = [
+            DeckSectionSummary(
+                title="Game Plan",
+                summary=archetype.strategy,
+                bullets=[
+                    f"Primary colors: {' / '.join(request.colors or archetype.colors) or 'open'}",
+                    f"Retrieved shell: {archetype.name}",
+                    "Final list assembled from legal retrieved packages with deterministic fallback rules.",
+                ],
+            ),
+            DeckSectionSummary(
+                title="Retrieved Packages",
+                summary="Core, flex, land, and support packages shaped the final list.",
+                bullets=[
+                    f"Core package count: {len(archetype.metadata.core_cards)}",
+                    f"Flex package count: {len(archetype.metadata.flex_cards)}",
+                    f"Land package count: {len(archetype.metadata.land_packages)}",
+                    f"Commander package: {'yes' if archetype.metadata.commander_package else 'no'}",
+                ],
+            ),
+        ]
+        if commander_reason:
+            sections.append(DeckSectionSummary(title="Commander Choice", summary=commander_reason, bullets=[f"Commander: {commander or 'n/a'}"]))
+        sections.append(
+            DeckSectionSummary(
+                title="Configuration",
+                summary="Mana base and support package were adjusted after retrieval.",
+                bullets=[
+                    f"Mainboard cards: {sum(ref.quantity for ref in mainboard)}",
+                    f"Sideboard cards: {sum(ref.quantity for ref in sideboard)}",
+                    f"Commander: {commander or 'n/a'}",
+                ],
+            )
+        )
+        if warnings:
+            sections.append(DeckSectionSummary(title="Watchouts", summary="A few structural risks remain worth testing in games.", bullets=warnings[:4]))
+        return sections
+
+    def _build_mechanics(self, mainboard: list[CardRef], commander: str | None) -> list[DeckMechanic]:
+        tag_to_cards: defaultdict[str, list[str]] = defaultdict(list)
+        for ref in mainboard:
+            card = self.repository.get_card(ref.name)
+            if not card or "Land" in card.type_line:
+                continue
+            for tag in card.tags:
+                if tag in {"interaction", "draw", "ramp", "prowess", "tokens", "lifegain", "graveyard", "tribal", "spells"}:
+                    tag_to_cards[tag].append(card.name)
+        mechanics: list[DeckMechanic] = []
+        for tag, cards in sorted(tag_to_cards.items(), key=lambda item: len(item[1]), reverse=True)[:4]:
+            summary = f"The deck uses {tag} as a recurring axis rather than a one-off inclusion."
+            if commander:
+                summary = f"The commander shell reinforces {tag} through retrieved support packages and signature cards."
+            mechanics.append(DeckMechanic(label=tag.title(), summary=summary, cards=cards[:5]))
+        return mechanics
+
+    def _build_role_summary(self, refs: list[CardRef]) -> list[DeckRoleSummary]:
+        counts: defaultdict[str, int] = defaultdict(int)
+        key_cards: defaultdict[str, list[str]] = defaultdict(list)
+        for ref in refs:
             card = self.repository.get_card(ref.name)
             if not card:
                 continue
-            role = "flex slot"
-            for tag in card.tags:
-                if tag in ROLE_MAP:
-                    role = ROLE_MAP[tag]
-                    break
+            role = self._primary_role(card)
+            counts[role] += ref.quantity
+            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and "Land" not in card.type_line:
+                key_cards[role].append(card.name)
+        ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+        return [DeckRoleSummary(role=role, total_cards=total, key_cards=key_cards[role]) for role, total in ordered]
+
+    def _build_mana_curve(self, refs: list[CardRef]) -> list[ManaCurvePoint]:
+        buckets = Counter[int]()
+        for ref in refs:
+            card = self.repository.get_card(ref.name)
+            if not card or "Land" in card.type_line:
+                continue
+            buckets[min(6, int(card.mana_value))] += ref.quantity
+        return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
+
+    def _build_card_notes(self, refs: list[CardRef]) -> list[DeckCardExplanation]:
+        notes: list[DeckCardExplanation] = []
+        for ref in refs:
+            card = self.repository.get_card(ref.name)
+            if not card or "Land" in card.type_line:
+                continue
+            role = self._primary_role(card)
             notes.append(
                 DeckCardExplanation(
-                    name=ref.name,
+                    name=card.name,
                     role=role,
-                    reason=f"Included as a {role} that supports the deck's core plan.",
+                    reason=f"{card.name} is included as a {role} from the retrieved shell or package set.",
                 )
             )
+            if len(notes) >= 10:
+                break
         return notes
 
     @staticmethod
@@ -510,14 +598,59 @@ class DeckGenerator:
         normalized = tag.strip().lower()
         return CANONICAL_TAGS.get(normalized, normalized)
 
+    def _rank_cards(
+        self,
+        format_name: str,
+        colors: list[str],
+        requested_tags: list[str],
+        budget: float | None,
+        excluded_cards: set[str],
+    ) -> list[str]:
+        preferred_tags = set(requested_tags)
+        expanded_tags: set[str] = set(preferred_tags)
+        for tag in preferred_tags:
+            expanded_tags.update(THEME_TO_TAGS.get(tag, {tag}))
+        scored: list[tuple[float, str]] = []
+        for card in self.repository.all_cards():
+            if card.name.lower() in excluded_cards:
+                continue
+            if not self._is_card_legal_record(card, format_name):
+                continue
+            if not self._matches_color_request(card, colors):
+                continue
+            if budget is not None and not self._fits_budget_request(card, budget):
+                continue
+            score = len(expanded_tags & set(card.tags)) * 9
+            score += 2 if "Land" in card.type_line else max(0, 5 - card.mana_value)
+            if "interaction" in card.tags:
+                score += 3
+            if "draw" in card.tags or "ramp" in card.tags:
+                score += 2
+            scored.append((score, card.name))
+        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [name for _, name in scored]
+
     def _is_card_legal_record(self, card: CardRecord, format_name: str) -> bool:
         return card.legalities.get(format_name, "not_legal") in {"legal", "restricted"}
 
-    def _is_card_legal(self, card_name: str, format_name: str) -> bool:
-        card = self.repository.get_card(card_name)
-        return bool(card and self._is_card_legal_record(card, format_name))
+    def _check_include_cards(self, request: GenerateDeckRequest) -> list[str]:
+        warnings: list[str] = []
+        unresolved: list[str] = []
+        over_budget: list[str] = []
+        for name in request.include_cards:
+            card = self.repository.get_card(name)
+            if not card:
+                unresolved.append(name)
+            elif request.budget is not None and not self._fits_budget_request(card, request.budget):
+                over_budget.append(card.name)
+        if unresolved:
+            warnings.append(f"Could not find card(s) to include: {', '.join(unresolved)}. Check spelling.")
+        if over_budget:
+            warnings.append(f"Forced card(s) exceed requested budget: {', '.join(over_budget)}.")
+        return warnings
 
-    def _copy_limit(self, card: CardRecord, format_name: str) -> int | None:
+    @staticmethod
+    def _copy_limit(card: CardRecord, format_name: str) -> int | None:
         if "Basic Land" in card.type_line:
             return None
         legality = card.legalities.get(format_name, "not_legal")
@@ -533,29 +666,33 @@ class DeckGenerator:
             return set(fallback_colors)
         return set(commander.color_identity or commander.colors or fallback_colors)
 
-    @staticmethod
-    def _fits_commander_identity(card: CardRecord, commander_identity: set[str]) -> bool:
-        identity = set(card.color_identity or card.colors)
-        return not identity or identity.issubset(commander_identity)
+    def _ordered_commander_identity(self, commander_name: str | None, fallback_colors: list[str]) -> list[str]:
+        if not commander_name:
+            return fallback_colors
+        commander = self.repository.get_card(commander_name)
+        if not commander:
+            return fallback_colors
+        return list(commander.color_identity or commander.colors or fallback_colors)
 
-    def _matches_color_request(self, card_name: str, requested_colors: list[str]) -> bool:
+    @staticmethod
+    def _matches_color_request(card: CardRecord, requested_colors: list[str]) -> bool:
         if not requested_colors:
             return True
-        card = self.repository.get_card(card_name)
-        if not card:
-            return False
         identity = set(card.color_identity or card.colors)
         requested = set(requested_colors)
+        wants_colorless = "C" in requested
+        requested_colored = requested - {"C"}
+        if wants_colorless and not requested_colored:
+            return not identity
+        if wants_colorless and requested_colored:
+            return not identity or identity.issubset(requested_colored)
         return not identity or identity.issubset(requested)
 
-    def _fits_budget_request(self, ref: CardRef, budget: float | None) -> bool:
-        if budget is None:
+    @staticmethod
+    def _fits_budget_request(card: CardRecord, budget: float | None) -> bool:
+        if budget is None or card.price_usd is None:
             return True
-        card = self.repository.get_card(ref.name)
-        if not card or card.price_usd is None:
-            return True
-        per_card_cap = max(3.0, budget / 15.0)
-        return card.price_usd <= per_card_cap or "Land" in card.type_line
+        return card.price_usd <= max(3.0, budget / 12.0) or "Land" in card.type_line
 
     def _estimate_price(self, mainboard: list[CardRef], sideboard: list[CardRef], commander: str | None) -> float | None:
         total = 0.0
@@ -573,270 +710,220 @@ class DeckGenerator:
                 priced_cards += 1
         return round(total, 2) if priced_cards else None
 
+    def _target_land_count(self, archetype: ArchetypeRecord, requested_tags: list[str]) -> int:
+        if {"aggro", "tempo", "spells"} & set(requested_tags):
+            return LAND_TARGET_AGGRO
+        if {"control", "midrange", "combo"} & set(requested_tags):
+            return LAND_TARGET_DEFAULT
+        if "ramp" in requested_tags:
+            return LAND_TARGET_RAMP
+        curve = {int(item["mana_value"]): float(item["weight"]) for item in archetype.metadata.mana_curve_profile if "mana_value" in item}
+        high_end = curve.get(4, 0) + curve.get(5, 0) + curve.get(6, 0)
+        return LAND_TARGET_DEFAULT if high_end > 10 else LAND_TARGET_DEFAULT - 1
+
+    @staticmethod
+    def _profile_to_commander_package(profile) -> CommanderPackageSummary:
+        return CommanderPackageSummary(
+            commander_name=profile.card.name,
+            popularity=profile.popularity,
+            support_depth=profile.support_depth,
+            average_lands=profile.average_lands,
+            average_ramp=profile.average_ramp,
+            average_draw=profile.average_draw,
+            average_interaction=profile.average_interaction,
+            signature_cards=profile.signature_cards,
+            synergy_packages=profile.synergy_packages,
+            ramp_package=profile.ramp_package,
+            draw_package=profile.draw_package,
+            interaction_package=profile.interaction_package,
+            land_package=profile.land_package,
+        )
+
+    def _add_lands_from_packages(self, counts: Counter[str], colors: list[str], target_lands: int, packages: list[ArchetypePackage], format_name: str = "modern") -> None:
+        for package in packages:
+            if self._land_total(counts) >= target_lands:
+                break
+            card = self.repository.get_card(package.name)
+            if not card or "Land" not in card.type_line:
+                continue
+            limit = self._copy_limit(card, format_name)
+            if limit is not None and counts[card.name] >= limit:
+                continue
+            desired = max(1, int(round(package.average_quantity or 1)))
+            if limit is not None:
+                desired = min(desired, limit - counts[card.name])
+            counts[card.name] += desired
+        self._add_lands(counts, colors, target_lands)
+
+    def _add_lands(self, counts: Counter[str], colors: list[str], target_lands: int) -> None:
+        basics = self._basic_lands_for_colors(colors) or ["Mountain"]
+        while self._land_total(counts) < target_lands:
+            land_name = basics[self._land_total(counts) % len(basics)]
+            counts[land_name] += 1
+
+    def _add_basic_land(self, counts: Counter[str], colors: list[str]) -> None:
+        basics = self._basic_lands_for_colors(colors) or ["Mountain"]
+        counts[basics[self._total_cards(counts) % len(basics)]] += 1
+
     def _basic_lands_for_colors(self, colors: list[str]) -> list[str]:
         mapping = {"W": "Plains", "U": "Island", "B": "Swamp", "R": "Mountain", "G": "Forest"}
         lands = [mapping[color] for color in colors if color in mapping and self.repository.get_card(mapping[color])]
-        if lands:
-            return lands
+        return lands or [name for name in ("Plains", "Island", "Swamp", "Mountain", "Forest") if self.repository.get_card(name)]
 
-        fallback_basics = [name for name in ("Plains", "Island", "Mountain", "Swamp", "Forest") if self.repository.get_card(name)]
-        return fallback_basics or ["Mountain"]
-
-    def _sideboard_fallbacks(self, format_name: str, colors: list[str], excluded_cards: set[str]) -> list[str]:
-        scored: list[tuple[int, str]] = []
-        for card in self.repository.all_cards():
-            if card.name.lower() in excluded_cards:
-                continue
-            if not self._is_card_legal_record(card, format_name):
-                continue
-            if not self._matches_color_request(card.name, colors):
-                continue
-            if "Land" in card.type_line:
-                continue
-            score = 0
-            if "interaction" in card.tags or "removal" in card.tags:
-                score += 20
-            if "tempo" in card.tags or "spells" in card.tags:
-                score += 10
-            score -= int(card.mana_value)
-            scored.append((score, card.name))
-
-        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for _, name in scored:
-            if name in seen:
-                continue
-            ordered.append(name)
-            seen.add(name)
-        for basic_land in self._basic_lands_for_colors(colors):
-            if basic_land not in seen:
-                ordered.append(basic_land)
-        return ordered or ["Mountain"]
-
-    def _downgrade_expensive_mana_base(self, deck: DeckResponse, max_swaps: int) -> int:
-        counts, order = self._counts_from_refs(deck.mainboard)
-        basic_lands = self._basic_lands_for_colors(deck.colors)
-        if not basic_lands:
-            return 0
-
-        swaps = 0
-        nonbasic_lands = sorted(
-            (
-                ref
-                for ref in deck.mainboard
-                if (card := self.repository.get_card(ref.name))
-                and "Land" in card.type_line
-                and "Basic Land" not in card.type_line
-                and (card.price_usd or 0) > 0
-            ),
-            key=lambda ref: self.repository.get_card(ref.name).price_usd or 0,
-            reverse=True,
-        )
-        for ref in nonbasic_lands:
-            while counts[ref.name] > 0 and swaps < max_swaps:
-                replacement_name = basic_lands[swaps % len(basic_lands)]
-                counts[ref.name] -= 1
-                if replacement_name not in order:
-                    order.append(replacement_name)
-                counts[replacement_name] += 1
-                swaps += 1
-            if swaps >= max_swaps:
-                break
-
-        if swaps:
-            deck.mainboard = self._counts_to_refs(counts, order)
-        return swaps
-
-    def _swap_expensive_spells_for_cheaper_options(self, deck: DeckResponse, max_swaps: int) -> int:
-        counts, order = self._counts_from_refs(deck.mainboard)
-        swaps = 0
-        candidates = self._constructed_padding_candidates(deck.format, deck.colors, None, set())
-        expensive_refs = sorted(
-            (
-                ref
-                for ref in deck.mainboard
-                if (card := self.repository.get_card(ref.name))
-                and "Land" not in card.type_line
-                and (card.price_usd or 0) > 0
-            ),
-            key=lambda ref: self.repository.get_card(ref.name).price_usd or 0,
-            reverse=True,
-        )
-
-        for ref in expensive_refs:
-            current_card = self.repository.get_card(ref.name)
-            if not current_card:
-                continue
-            replacement_name = self._find_cheaper_replacement(deck, counts, current_card, candidates)
-            if not replacement_name:
-                continue
-            counts[ref.name] -= 1
-            if replacement_name not in order:
-                order.append(replacement_name)
-            counts[replacement_name] += 1
-            swaps += 1
-            if swaps >= max_swaps:
-                break
-
-        if swaps:
-            deck.mainboard = self._counts_to_refs(counts, order)
-        return swaps
-
-    def _find_cheaper_replacement(
+    def _add_package_cards(
         self,
-        deck: DeckResponse,
         counts: Counter[str],
-        current_card: CardRecord,
-        candidates: list[str],
-    ) -> str | None:
-        current_price = current_card.price_usd or 0
-        current_tags = set(current_card.tags)
-        for candidate_name in candidates:
-            if candidate_name == current_card.name:
-                continue
-            candidate = self.repository.get_card(candidate_name)
-            if not candidate or "Land" in candidate.type_line:
-                continue
-            if (candidate.price_usd or 0) >= current_price:
-                continue
-            copy_limit = self._copy_limit(candidate, deck.format)
-            if copy_limit is not None and counts[candidate.name] >= copy_limit:
-                continue
-            if current_tags and not current_tags.intersection(candidate.tags):
-                continue
-            return candidate.name
-        return None
-
-    def _swap_basic_lands_for_candidates(
-        self,
-        deck: DeckResponse,
-        desired_tags: set[str],
-        max_swaps: int,
-        max_mana_value: int | None = None,
-    ) -> int:
-        counts, order = self._counts_from_refs(deck.mainboard)
-        candidate_names = self._refinement_candidates(deck, desired_tags, max_mana_value)
-        basic_lands = [name for name in self._basic_lands_for_colors(deck.colors) if counts[name] > 0]
-        if not candidate_names or not basic_lands:
-            return 0
-
-        swaps = 0
-        basic_index = 0
-        for candidate_name in candidate_names:
-            candidate = self.repository.get_card(candidate_name)
-            if not candidate:
-                continue
-            copy_limit = self._copy_limit(candidate, deck.format)
-            while swaps < max_swaps and basic_index < len(basic_lands):
-                if copy_limit is not None and counts[candidate_name] >= copy_limit:
-                    break
-                land_name = basic_lands[basic_index]
-                if counts[land_name] <= 0:
-                    basic_index += 1
-                    continue
-                counts[land_name] -= 1
-                if candidate_name not in order:
-                    order.append(candidate_name)
-                counts[candidate_name] += 1
-                swaps += 1
-                if counts[land_name] <= 0:
-                    basic_index += 1
-                if swaps >= max_swaps:
-                    break
-            if swaps >= max_swaps:
+        packages: list[ArchetypePackage],
+        *,
+        target: int,
+        format_name: str,
+        colors: list[str],
+        excluded: set[str],
+    ) -> None:
+        # Count only cards added by this specific call so targets are independent across roles.
+        added = 0
+        for package in packages:
+            if added >= target:
                 break
+            card = self.repository.get_card(package.name)
+            if not card or package.name.lower() in excluded:
+                continue
+            if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
+                continue
+            if counts[card.name] >= (self._copy_limit(card, format_name) or 99):
+                continue
+            counts[card.name] += 1
+            added += 1
 
-        if swaps:
-            deck.mainboard = self._counts_to_refs(counts, order)
-        return swaps
-
-    def _refinement_candidates(
+    def _add_ranked_candidate(
         self,
-        deck: DeckResponse,
-        desired_tags: set[str],
-        max_mana_value: int | None,
-    ) -> list[str]:
-        scored: list[tuple[int, str]] = []
-        counts, _ = self._counts_from_refs(deck.mainboard)
-        for card in self.repository.all_cards():
-            if not self._is_card_legal_record(card, deck.format):
-                continue
-            if not self._matches_color_request(card.name, deck.colors):
-                continue
-            if "Land" in card.type_line:
-                continue
-            copy_limit = self._copy_limit(card, deck.format)
-            if copy_limit is not None and counts[card.name] >= copy_limit:
-                continue
-            if max_mana_value is not None and card.mana_value > max_mana_value:
-                continue
-            if desired_tags and not desired_tags.intersection(card.tags):
-                continue
-            score = len(desired_tags.intersection(card.tags)) * 10
-            score -= int(card.mana_value)
-            scored.append((score, card.name))
-
-        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for _, name in scored:
-            if name in seen:
-                continue
-            ordered.append(name)
-            seen.add(name)
-        return ordered
-
-    @staticmethod
-    def _counts_from_refs(refs: list[CardRef]) -> tuple[Counter[str], list[str]]:
-        counts = Counter[str]()
-        order: list[str] = []
-        for ref in refs:
-            if ref.name not in counts:
-                order.append(ref.name)
-            counts[ref.name] += ref.quantity
-        return counts, order
-
-    @staticmethod
-    def _counts_to_refs(counts: Counter[str], order: list[str]) -> list[CardRef]:
-        return [CardRef(name=name, quantity=counts[name]) for name in order if counts[name] > 0]
-
-    def _constructed_padding_candidates(
-        self,
+        counts: Counter[str],
+        ranked_candidates: list[str],
         format_name: str,
         colors: list[str],
         budget: float | None,
         excluded_cards: set[str],
-    ) -> list[str]:
-        scored: list[tuple[int, str]] = []
-        for card in self.repository.all_cards():
-            if card.name.lower() in excluded_cards:
+        main_counts: Counter[str] | None = None,
+        commander_name: str | None = None,
+        allow_lands: bool = False,
+    ) -> bool:
+        main_counts = main_counts or Counter()
+        for candidate_name in ranked_candidates:
+            card = self.repository.get_card(candidate_name)
+            if not card or candidate_name.lower() in excluded_cards:
                 continue
-            if not self._is_card_legal_record(card, format_name):
+            if not allow_lands and "Land" in card.type_line:
                 continue
-            if "Land" in card.type_line:
+            if commander_name and card.name == commander_name:
                 continue
-            if not self._matches_color_request(card.name, colors):
+            if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
                 continue
-            if budget is not None and not self._fits_budget_request(CardRef(name=card.name, quantity=1), budget):
+            if budget is not None and not self._fits_budget_request(card, budget):
                 continue
-            score = 0
-            if "creature" in card.tags or "payoff" in card.tags:
-                score += 8
-            if "interaction" in card.tags or "spells" in card.tags:
-                score += 5
-            score -= int(card.mana_value)
-            scored.append((score, card.name))
+            if format_name == "commander" and not self.repository.fits_color_identity(card, set(colors)):
+                continue
+            limit = self._copy_limit(card, format_name)
+            if limit is not None and counts[card.name] + main_counts[card.name] >= limit:
+                continue
+            counts[card.name] += 1
+            return True
+        return False
 
-        scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for _, name in scored:
-            if name in seen:
+    def _best_card_pool_commander(self, colors: list[str], requested_tags: list[str]) -> tuple[str | None, str | None]:
+        requested_color_set = set(colors)
+        expanded_tags = set(requested_tags)
+        for tag in requested_tags:
+            expanded_tags.update(THEME_TO_TAGS.get(tag, {tag}))
+        best_name: str | None = None
+        best_score = float("-inf")
+        for card in self.repository.all_cards():
+            if not self.repository.is_legal_commander(card):
                 continue
-            ordered.append(name)
-            seen.add(name)
-        return ordered
+            identity = set(card.color_identity or card.colors)
+            if requested_color_set and (not identity or not identity.issubset(requested_color_set)):
+                continue
+            tag_score = len(expanded_tags & set(card.tags)) * 12
+            color_score = len(identity) * 2
+            cost_score = max(0, 6 - card.mana_value)
+            score = tag_score + color_score + cost_score
+            if score > best_score:
+                best_score = score
+                best_name = card.name
+        if best_name is None:
+            return None, None
+        return best_name, f"Selected {best_name} from the full commander card pool because it fit the requested colors and had the deepest matching support pool."
+
+    def _decrement_least_important(self, counts: Counter[str], format_name: str) -> None:
+        removable: list[tuple[float, str]] = []
+        for name, quantity in counts.items():
+            if quantity <= 0:
+                continue
+            card = self.repository.get_card(name)
+            if not card or "Basic Land" in card.type_line:
+                continue
+            weight = 100.0 if "Land" in card.type_line else 10.0 + card.mana_value
+            if "interaction" in card.tags:
+                weight = 35.0
+            elif "creature" in card.tags:
+                weight = 20.0
+            removable.append((weight, name))
+        if removable:
+            _, name = sorted(removable, reverse=True)[0]
+            counts[name] -= 1
+            if counts[name] <= 0:
+                del counts[name]
+
+    def _trim_excess_land_or_spell(self, counts: Counter[str], colors: list[str]) -> None:
+        for basic_land in reversed(self._basic_lands_for_colors(colors)):
+            if counts[basic_land] > 0:
+                counts[basic_land] -= 1
+                if counts[basic_land] <= 0:
+                    del counts[basic_land]
+                return
+        self._decrement_least_important(counts, "modern")
+
+    def _add_best_remaining(self, counts: Counter[str], ranked_candidates: list[str], format_name: str) -> None:
+        for candidate_name in ranked_candidates:
+            card = self.repository.get_card(candidate_name)
+            if not card:
+                continue
+            limit = self._copy_limit(card, format_name)
+            if limit is not None and counts[card.name] >= limit:
+                continue
+            counts[card.name] += 1
+            return
+        self._add_basic_land(counts, ["R"])
+
+    def _primary_role(self, card: CardRecord | None) -> str:
+        if not card:
+            return "flex slot"
+        for tag in card.tags:
+            if tag in ROLE_MAP:
+                return ROLE_MAP[tag]
+        if "Land" in card.type_line:
+            return "mana base"
+        if "Creature" in card.type_line:
+            return "threat"
+        return "flex slot"
+
+    @staticmethod
+    def _counts_to_refs(counts: Counter[str]) -> list[CardRef]:
+        return [CardRef(name=name, quantity=quantity) for name, quantity in sorted(counts.items()) if quantity > 0]
+
+    @staticmethod
+    def _total_cards(counts: Counter[str]) -> int:
+        return sum(counts.values())
+
+    def _land_total(self, counts: Counter[str]) -> int:
+        total = 0
+        for name, quantity in counts.items():
+            card = self.repository.get_card(name)
+            if card and "Land" in card.type_line:
+                total += quantity
+        return total
+
+    def _nonland_total(self, counts: Counter[str]) -> int:
+        return self._total_cards(counts) - self._land_total(counts)
 
     def _export_arena(self, deck: DeckResponse) -> str:
         lines = [deck.title, ""]
@@ -863,12 +950,13 @@ class DeckGenerator:
         return "\n".join(lines)
 
     def _export_moxfield(self, deck: DeckResponse) -> str:
-        lines = [deck.title]
+        lines = [deck.title, ""]
         if deck.commander:
-            lines.append(f"Commander: 1 {deck.commander}")
-        lines.append("Mainboard:")
+            lines.append(f"1 {deck.commander}")
+            lines.append("")
         lines.extend(f"{card.quantity} {card.name}" for card in deck.mainboard)
         if deck.sideboard:
-            lines.append("Sideboard:")
+            lines.append("")
+            lines.append("Sideboard")
             lines.extend(f"{card.quantity} {card.name}" for card in deck.sideboard)
         return "\n".join(lines)

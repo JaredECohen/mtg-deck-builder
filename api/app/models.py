@@ -15,11 +15,76 @@ class CardRef(BaseModel):
     quantity: int = Field(ge=1, le=100)
 
 
+class TournamentDeckIngestMetadata(BaseModel):
+    raw_source: str = "unknown"
+    ingested_from: str = ""
+    source_url: str | None = None
+    format_season: str | None = None
+    event_tier: str | None = None
+    event_size: int | None = None
+    finish_label: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+
+
+class NormalizedTournamentDeckRecord(BaseModel):
+    id: str
+    source: str
+    dedupe_key: str
+    source_url: str | None = None
+    event_name: str
+    event_date: str | None = None
+    format: FormatName
+    format_season: str | None = None
+    event_tier: str | None = None
+    event_size: int | None = None
+    finish_label: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    player_name: str | None = None
+    placement: int | None = None
+    wins: int | None = None
+    losses: int | None = None
+    draws: int | None = None
+    colors: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    commander: str | None = None
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    metadata: TournamentDeckIngestMetadata = Field(default_factory=TournamentDeckIngestMetadata)
+
+
 class ArchetypePackage(BaseModel):
     name: str
     inclusion_rate: float | None = None
     average_quantity: float | None = None
     tags: list[str] = Field(default_factory=list)
+
+
+class WeightedCardProfile(BaseModel):
+    name: str
+    weight: float
+    average_quantity: float | None = None
+    role: str | None = None
+
+
+class RoleProfilePoint(BaseModel):
+    role: str
+    weight: float
+
+
+class CommanderPackageSummary(BaseModel):
+    commander_name: str
+    popularity: float = 0
+    support_depth: int = 0
+    average_lands: float | None = None
+    average_ramp: float | None = None
+    average_draw: float | None = None
+    average_interaction: float | None = None
+    signature_cards: list[ArchetypePackage] = Field(default_factory=list)
+    synergy_packages: list[ArchetypePackage] = Field(default_factory=list)
+    ramp_package: list[ArchetypePackage] = Field(default_factory=list)
+    draw_package: list[ArchetypePackage] = Field(default_factory=list)
+    interaction_package: list[ArchetypePackage] = Field(default_factory=list)
+    land_package: list[ArchetypePackage] = Field(default_factory=list)
 
 
 class ArchetypeMetadata(BaseModel):
@@ -28,30 +93,85 @@ class ArchetypeMetadata(BaseModel):
     sample_deck_ids: list[str] = Field(default_factory=list)
     core_cards: list[ArchetypePackage] = Field(default_factory=list)
     flex_cards: list[ArchetypePackage] = Field(default_factory=list)
+    land_packages: list[ArchetypePackage] = Field(default_factory=list)
     sideboard_packages: list[ArchetypePackage] = Field(default_factory=list)
+    matchup_tech_packages: list[ArchetypePackage] = Field(default_factory=list)
     top_weighted_decks: list[dict[str, str | float]] = Field(default_factory=list)
     similarity_threshold: float | None = None
+    archetype_type: Literal["constructed", "commander"] = "constructed"
+    color_profile: list[str] = Field(default_factory=list)
+    tag_vector: list[WeightedCardProfile] = Field(default_factory=list)
+    signature_cards: list[WeightedCardProfile] = Field(default_factory=list)
+    normalized_card_vector: list[WeightedCardProfile] = Field(default_factory=list)
+    mana_curve_profile: list[dict[str, int | float]] = Field(default_factory=list)
+    role_profile: list[RoleProfilePoint] = Field(default_factory=list)
+    commander_package: CommanderPackageSummary | None = None
+
+
+class CardFaceRecord(BaseModel):
+    name: str | None = None
+    mana_cost: str = ""
+    type_line: str = ""
+    oracle_text: str = ""
+    image_uri: str | None = None
+
+
+class CardPurchaseLinks(BaseModel):
+    scryfall: str | None = None
+    amazon_search: str | None = None
 
 
 class CardRecord(BaseModel):
     oracle_id: str | None = None
+    scryfall_id: str | None = None
     name: str
+    normalized_name: str | None = None
     mana_cost: str = ""
     mana_value: float = 0
     colors: list[str] = Field(default_factory=list)
     color_identity: list[str] = Field(default_factory=list)
     type_line: str
     oracle_text: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    layout: str | None = None
+    rarity: str | None = None
     set_code: str | None = None
     released_at: str | None = None
     image_uri: str | None = None
+    image_uris: dict[str, str] = Field(default_factory=dict)
+    faces: list[CardFaceRecord] = Field(default_factory=list)
     legalities: dict[str, str] = Field(default_factory=dict)
     price_usd: float | None = None
+    price_usd_foil: float | None = None
     tags: list[str] = Field(default_factory=list)
+    purchase_links: CardPurchaseLinks = Field(default_factory=CardPurchaseLinks)
 
 
 class CardDetailResponse(BaseModel):
     card: CardRecord
+
+
+class CardSearchResult(BaseModel):
+    name: str
+    type_line: str
+    mana_cost: str = ""
+    image_uri: str | None = None
+    colors: list[str] = Field(default_factory=list)
+    color_identity: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class CardSearchResponse(BaseModel):
+    cards: list[CardSearchResult]
+
+
+class DataStatusResponse(BaseModel):
+    card_source: Literal["database", "sample"]
+    card_count: int
+    archetype_source: Literal["database", "sample"]
+    archetype_count: int
+    database_url: str
+    scryfall_ingested: bool
 
 
 class ArchetypeRecord(BaseModel):
@@ -72,11 +192,13 @@ class ArchetypeRecord(BaseModel):
 class GenerateDeckRequest(BaseModel):
     format: FormatName
     colors: list[str] = Field(default_factory=list)
+    commander_name: str | None = None
     playstyle_tags: list[str] = Field(default_factory=list)
     theme_tags: list[str] = Field(default_factory=list)
     budget: float | None = Field(default=None, ge=0)
     include_cards: list[str] = Field(default_factory=list)
     exclude_cards: list[str] = Field(default_factory=list)
+    seed_cards: list[CardRef] = Field(default_factory=list)
     mode: ModeName = "constraint-aware"
     experience_level: ExperienceLevel = "beginner"
     prompt: str = ""
@@ -94,6 +216,27 @@ class ValidateDeckRequest(BaseModel):
     commander: str | None = None
 
 
+class AnalyzeDeckRequest(BaseModel):
+    format: FormatName
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    commander: str | None = None
+    notes: str = ""
+
+
+class ParseDecklistRequest(BaseModel):
+    format: FormatName
+    deck_text: str
+
+
+class ParsedDecklistResponse(BaseModel):
+    format: FormatName
+    commander: str | None = None
+    mainboard: list[CardRef] = Field(default_factory=list)
+    sideboard: list[CardRef] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ExportDeckRequest(BaseModel):
     deck: "DeckResponse"
     target: Literal["arena", "plain", "csv", "moxfield"] = "plain"
@@ -106,6 +249,8 @@ class ScoreBreakdown(BaseModel):
     prompt_fit: int
     competitiveness: int
     budget_fit: int
+    role_balance: int = 0
+    curve: int = 0
     total: int
 
 
@@ -122,6 +267,29 @@ class DeckCardExplanation(BaseModel):
     reason: str
 
 
+class DeckMechanic(BaseModel):
+    label: str
+    summary: str
+    cards: list[str] = Field(default_factory=list)
+
+
+class DeckSectionSummary(BaseModel):
+    title: str
+    summary: str
+    bullets: list[str] = Field(default_factory=list)
+
+
+class DeckRoleSummary(BaseModel):
+    role: str
+    total_cards: int
+    key_cards: list[str] = Field(default_factory=list)
+
+
+class ManaCurvePoint(BaseModel):
+    mana_value: int
+    card_count: int
+
+
 class DeckResponse(BaseModel):
     format: FormatName
     title: str
@@ -136,9 +304,15 @@ class DeckResponse(BaseModel):
     score: ScoreBreakdown
     explanation: list[str]
     card_notes: list[DeckCardExplanation]
+    sections: list[DeckSectionSummary] = Field(default_factory=list)
+    mechanics: list[DeckMechanic] = Field(default_factory=list)
+    role_summary: list[DeckRoleSummary] = Field(default_factory=list)
+    mana_curve: list[ManaCurvePoint] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     source_archetypes: list[str] = Field(default_factory=list)
     selected_archetype: ArchetypeRecord | None = None
+    playstyle_tags: list[str] = Field(default_factory=list)
+    theme_tags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def check_deck_sizes(self) -> "DeckResponse":
@@ -149,9 +323,105 @@ class DeckResponse(BaseModel):
         return self
 
 
+class DeckAdviceGroup(BaseModel):
+    keep_doing: list[str] = Field(default_factory=list)
+    watch_out_for: list[str] = Field(default_factory=list)
+    add_more_of: list[str] = Field(default_factory=list)
+    cut_some_of: list[str] = Field(default_factory=list)
+    possible_upgrades: list[str] = Field(default_factory=list)
+
+
+class DeckImprovementSuggestion(BaseModel):
+    category: str
+    summary: str
+    candidate_cards: list[str] = Field(default_factory=list)
+
+
+class DeckSwapRecommendation(BaseModel):
+    category: str
+    cut_card: str
+    add_card: str
+    reason: str
+
+
+class NearestShellComparison(BaseModel):
+    shell_name: str
+    confidence: float
+    overlap_cards: list[str] = Field(default_factory=list)
+    missing_cards: list[str] = Field(default_factory=list)
+    off_plan_cards: list[str] = Field(default_factory=list)
+
+
+class DeckAnalysisResponse(BaseModel):
+    format: FormatName
+    commander: str | None = None
+    deck_health: Literal["well-structured", "promising but unfinished", "coherent but underpowered", "structurally flawed"]
+    deck_health_explanation: str = ""
+    inferred_style: str
+    inferred_archetype: str
+    similarity_label: str
+    nearest_archetypes: list[str] = Field(default_factory=list)
+    nearest_shell_comparison: NearestShellComparison | None = None
+    game_plan_summary: str
+    play_pattern_summary: str
+    ai_coaching_note: str = ""
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    synergy_observations: list[str] = Field(default_factory=list)
+    package_observations: list[str] = Field(default_factory=list)
+    advice: DeckAdviceGroup = Field(default_factory=DeckAdviceGroup)
+    improvement_suggestions: list[DeckImprovementSuggestion] = Field(default_factory=list)
+    swap_recommendations: list[DeckSwapRecommendation] = Field(default_factory=list)
+    validation: ValidationResult
+    role_summary: list[DeckRoleSummary] = Field(default_factory=list)
+    mana_curve: list[ManaCurvePoint] = Field(default_factory=list)
+    card_notes: list[DeckCardExplanation] = Field(default_factory=list)
+
+
 class MetaSummaryResponse(BaseModel):
     format: FormatName
     archetypes: list[ArchetypeRecord]
+
+
+class CommanderSearchResult(BaseModel):
+    name: str
+    colors: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    strategy_summary: str
+    popularity: float = 0
+    support_depth: int = 0
+    package_richness: int = 0
+    ranking_score: float = 0
+    image_uri: str | None = None
+
+
+class CommanderProfile(BaseModel):
+    card: CardRecord
+    strategy_summary: str
+    colors: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    popularity: float = 0
+    support_depth: int = 0
+    package_richness: int = 0
+    average_lands: float | None = None
+    average_ramp: float | None = None
+    average_draw: float | None = None
+    average_interaction: float | None = None
+    signature_cards: list[ArchetypePackage] = Field(default_factory=list)
+    synergy_packages: list[ArchetypePackage] = Field(default_factory=list)
+    ramp_package: list[ArchetypePackage] = Field(default_factory=list)
+    draw_package: list[ArchetypePackage] = Field(default_factory=list)
+    interaction_package: list[ArchetypePackage] = Field(default_factory=list)
+    land_package: list[ArchetypePackage] = Field(default_factory=list)
+    related_archetypes: list[str] = Field(default_factory=list)
+
+
+class CommanderSearchResponse(BaseModel):
+    commanders: list[CommanderSearchResult]
+
+
+class CommanderProfileResponse(BaseModel):
+    commander: CommanderProfile
 
 
 RefineDeckRequest.model_rebuild()
