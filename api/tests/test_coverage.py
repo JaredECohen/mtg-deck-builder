@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.rate_limiter import deck_rate_limiter
 from app.scripts.build_archetypes import main as build_archetypes_main
 from app.scripts.ingest_tournament_decks import main as ingest_tournament_main
 
@@ -17,6 +18,7 @@ client = TestClient(app)
 def setup_module() -> None:
     ingest_tournament_main([])
     build_archetypes_main()
+    deck_rate_limiter.reset()
 
 
 # ── Format × colour coverage ───────────────────────────────────────────────────
@@ -527,3 +529,152 @@ def test_generate_with_nonexistent_include_card() -> None:
     warnings = payload.get("warnings", [])
     assert any("Absolutely Fake" in w or "Could not find" in w for w in warnings), \
         f"Expected an unresolved-include warning, got warnings: {warnings}"
+
+
+VALID_HEALTH_LABELS = {"well-structured", "promising but unfinished", "coherent but underpowered", "structurally flawed"}
+
+
+def test_generate_refine_analyze_pipeline() -> None:
+    """Full generate → refine → analyze pipeline should produce valid output at each step."""
+    deck_rate_limiter.reset()
+    gen = client.post("/v1/decks/generate", json={
+        "format": "modern",
+        "colors": ["R", "W"],
+        "playstyle_tags": ["aggro"],
+        "theme_tags": [],
+    })
+    assert gen.status_code == 200
+    deck = gen.json()
+    refined = client.post("/v1/decks/refine", json={"deck": deck, "refinement_prompt": "make it faster"})
+    assert refined.status_code == 200
+    r = refined.json()
+    assert r["format"] == deck["format"]
+    assert sum(c["quantity"] for c in r["mainboard"]) == 60
+    analysis = client.post("/v1/decks/analyze", json={
+        "format": r["format"],
+        "commander": None,
+        "mainboard": r["mainboard"],
+        "sideboard": r["sideboard"],
+    })
+    assert analysis.status_code == 200
+    assert analysis.json()["deck_health"] in VALID_HEALTH_LABELS
+
+
+def test_analyze_generated_deck() -> None:
+    """Analyzing a generated deck should produce non-empty role_summary and correct mana curve length."""
+    deck_rate_limiter.reset()
+    gen = client.post("/v1/decks/generate", json={
+        "format": "modern",
+        "colors": ["R", "G"],
+        "playstyle_tags": ["midrange"],
+        "theme_tags": [],
+    })
+    assert gen.status_code == 200
+    deck = gen.json()
+    analysis = client.post("/v1/decks/analyze", json={
+        "format": deck["format"],
+        "commander": None,
+        "mainboard": deck["mainboard"],
+        "sideboard": deck["sideboard"],
+    })
+    assert analysis.status_code == 200
+    payload = analysis.json()
+    assert len(payload["role_summary"]) > 0
+    assert len(payload["mana_curve"]) == 7
+
+
+def test_commander_search_color_filter() -> None:
+    """Commander search with a color filter should return results that include that color."""
+    response = client.get("/v1/commanders", params={"colors": "R"})
+    assert response.status_code == 200
+    commanders = response.json()["commanders"]
+    if commanders:
+        for c in commanders:
+            assert "R" in c["colors"] or not c["colors"], f"Expected R in colors, got {c['colors']}"
+
+
+def test_analyze_commander_with_color_identity_violation() -> None:
+    """Mountains in a Aminatou (WUB) deck should fail color identity check."""
+    response = client.post("/v1/decks/analyze", json={
+        "format": "commander",
+        "commander": "Aminatou, the Fateshifter",
+        "mainboard": [{"name": "Mountain", "quantity": 99}],
+        "sideboard": [],
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert not payload["validation"]["is_legal"] or any(
+        "identity" in err.lower() or "mountain" in err.lower()
+        for err in payload["validation"]["errors"]
+    )
+
+
+def test_parse_zero_quantity_line() -> None:
+    """A line starting with 0 is rejected (CardRef ge=1) or skipped; normal lines still parse."""
+    response = client.post("/v1/decks/parse", json={
+        "deck_text": "0 Lightning Bolt\n4 Mountain",
+        "format": "modern",
+    })
+    # Parser may return 400 for invalid quantity or 200 with zero-qty skipped
+    assert response.status_code in {200, 400}
+    if response.status_code == 200:
+        names = [c["name"] for c in response.json()["mainboard"]]
+        assert "Mountain" in names
+        assert "Lightning Bolt" not in names
+
+
+def test_refine_title_does_not_accumulate() -> None:
+    """Refining a deck twice should not produce 'Refined - Refined' in the title."""
+    deck_rate_limiter.reset()
+    gen = client.post("/v1/decks/generate", json={
+        "format": "modern",
+        "colors": ["R"],
+        "playstyle_tags": ["aggro"],
+        "theme_tags": [],
+    })
+    assert gen.status_code == 200
+    deck = gen.json()
+    r1 = client.post("/v1/decks/refine", json={"deck": deck, "refinement_prompt": "faster"})
+    assert r1.status_code == 200
+    r1_deck = r1.json()
+    r2 = client.post("/v1/decks/refine", json={"deck": r1_deck, "refinement_prompt": "cheaper"})
+    assert r2.status_code == 200
+    r2_title = r2.json()["title"]
+    assert r2_title.count("Refined") <= 1, f"Title accumulated: {r2_title}"
+
+
+def test_validate_commander_with_sideboard_warns_not_errors() -> None:
+    """Commander format with a sideboard should produce a warning, not an error."""
+    deck_rate_limiter.reset()
+    gen = client.post("/v1/decks/generate", json={
+        "format": "commander",
+        "colors": ["G", "U"],
+        "playstyle_tags": ["ramp"],
+        "theme_tags": [],
+    })
+    assert gen.status_code == 200
+    deck = gen.json()
+    response = client.post("/v1/decks/validate", json={
+        "format": "commander",
+        "commander": deck.get("commander"),
+        "mainboard": deck["mainboard"],
+        "sideboard": [{"name": "Forest", "quantity": 1}],
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert any("sideboard" in w.lower() for w in payload["warnings"])
+
+
+def test_validation_score_total_in_range() -> None:
+    """Score total should be 0-100 and legality should be 0 or 100."""
+    deck_rate_limiter.reset()
+    gen = client.post("/v1/decks/generate", json={
+        "format": "modern",
+        "colors": ["U"],
+        "playstyle_tags": ["control"],
+        "theme_tags": [],
+    })
+    assert gen.status_code == 200
+    deck = gen.json()
+    assert 0 <= deck["score"]["total"] <= 100, f"Score out of range: {deck['score']['total']}"
+    assert deck["score"]["legality"] in {0, 100}

@@ -357,7 +357,7 @@ class DeckAnalysisService:
             card = self.repository.get_card(ref.name)
             if not card or "Land" in card.type_line:
                 continue
-            buckets[min(6, int(card.mana_value))] += ref.quantity
+            buckets[min(6, int(card.mana_value or 0))] += ref.quantity
         return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
 
     def _build_card_notes(self, refs: list) -> list[DeckCardExplanation]:

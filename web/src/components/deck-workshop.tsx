@@ -174,6 +174,7 @@ export function DeckWorkshop() {
   const [analysis, setAnalysis] = useState<DeckAnalysisResponse | null>(null);
   const [manualImportText, setManualImportText] = useState("");
   const [manualSearchIndex, setManualSearchIndex] = useState(0);
+  const [expertMode, setExpertMode] = useState(false);
 
   const generateAbortRef = useRef<AbortController | null>(null);
   const refineAbortRef = useRef<AbortController | null>(null);
@@ -230,6 +231,7 @@ export function DeckWorkshop() {
         sideboard?: CardRef[];
         commander?: string;
         notes?: string;
+        refinePrompt?: string;
       };
       if (parsed.format) {
         setFormat(parsed.format);
@@ -238,6 +240,7 @@ export function DeckWorkshop() {
       setManualSideboard(parsed.sideboard ?? []);
       setManualCommander(parsed.commander ?? "");
       setManualNotes(parsed.notes ?? "Tell me how this deck plays, what shell it resembles, and what I should improve.");
+      if (parsed.refinePrompt) setRefinePrompt(parsed.refinePrompt);
     } catch {
       // ignore local draft parse failures
     }
@@ -251,10 +254,11 @@ export function DeckWorkshop() {
         mainboard: manualMainboard,
         sideboard: manualSideboard,
         commander: manualCommander,
-        notes: manualNotes
+        notes: manualNotes,
+        refinePrompt
       })
     );
-  }, [format, manualCommander, manualMainboard, manualNotes, manualSideboard]);
+  }, [format, manualCommander, manualMainboard, manualNotes, manualSideboard, refinePrompt]);
 
   useEffect(() => {
     if (format !== "commander") {
@@ -288,6 +292,7 @@ export function DeckWorkshop() {
         setCommanders(payload.commanders);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
+        setError("Could not load commanders — check your connection.");
       } finally {
         setCommanderLoading(false);
       }
@@ -302,19 +307,32 @@ export function DeckWorkshop() {
       return;
     }
 
+    const controller = new AbortController();
+
     async function fetchCommanderProfile() {
-      const response = await fetch(`${API_BASE}/v1/commanders/${encodeURIComponent(selectedCommanderName)}`);
-      if (!response.ok) {
-        return;
-      }
-      const payload = (await response.json()) as CommanderProfileResponse;
-      setSelectedCommanderProfile(payload.commander);
-      if (payload.commander.colors.length) {
-        setColors(payload.commander.colors);
+      try {
+        const response = await fetch(
+          `${API_BASE}/v1/commanders/${encodeURIComponent(selectedCommanderName)}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) {
+          setSelectedCommanderProfile(null);
+          return;
+        }
+        const payload = (await response.json()) as CommanderProfileResponse;
+        setSelectedCommanderProfile(payload.commander);
+        if (payload.commander.colors.length) {
+          setColors(payload.commander.colors);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setSelectedCommanderProfile(null);
+        setError("Could not load commander profile — check your connection.");
       }
     }
 
     void fetchCommanderProfile();
+    return () => controller.abort();
   }, [format, selectedCommanderName]);
 
   useEffect(() => {
@@ -348,8 +366,8 @@ export function DeckWorkshop() {
       }
     }
 
-    void fetchCards();
-    return () => controller.abort();
+    const debounceTimer = setTimeout(() => { void fetchCards(); }, 300);
+    return () => { clearTimeout(debounceTimer); controller.abort(); };
   }, [builderMode, format, manualQuery]);
 
   // Reset keyboard-nav index whenever results list changes to prevent stale index.
@@ -507,6 +525,10 @@ export function DeckWorkshop() {
   }
 
   async function analyzeManualDeck() {
+    if (!manualMainboard.length) {
+      setError("Add at least one card to your deck before analyzing.");
+      return;
+    }
     setLoading(true);
     setError(null);
     setExportContent("");
@@ -811,14 +833,38 @@ export function DeckWorkshop() {
 
         {builderMode === "generate" ? (
           <>
-            <div className="panel form-card">
-              <label className="label" htmlFor="budget">Budget</label>
-              <input id="budget" className="input" value={budget} onChange={(event) => setBudget(event.target.value)} />
+            <div className="panel form-card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.9rem" }}>
+                <input
+                  type="checkbox"
+                  checked={expertMode}
+                  onChange={(e) => setExpertMode(e.target.checked)}
+                  style={{ accentColor: "var(--accent, #6366f1)", width: 16, height: 16 }}
+                />
+                Expert mode
+              </label>
+              {expertMode ? <span className="muted" style={{ fontSize: "0.8rem" }}>Budget, prompt, and advanced options unlocked</span> : null}
             </div>
 
+            {expertMode ? (
+              <div className="panel form-card">
+                <label className="label" htmlFor="budget">Budget (USD)</label>
+                <input id="budget" className="input" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="e.g. 100" />
+              </div>
+            ) : null}
+
             <div className="panel form-card">
-              <label className="label" htmlFor="prompt">Build Brief</label>
-              <textarea id="prompt" className="textarea" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <label className="label" htmlFor="prompt">Build Brief</label>
+                <span style={{ fontSize: "0.75rem", color: prompt.length > 1200 ? "orange" : "#9ca3af" }}>{prompt.length}/1500</span>
+              </div>
+              <textarea
+                id="prompt"
+                className="textarea"
+                value={prompt}
+                maxLength={1500}
+                onChange={(event) => setPrompt(event.target.value)}
+              />
             </div>
 
             <button type="button" className="button" onClick={generateDeck} disabled={loading}>
@@ -1271,8 +1317,17 @@ export function DeckWorkshop() {
             ) : null}
 
             <div className="panel results-card">
-              <label className="label" htmlFor="refine">Refine Deck</label>
-              <textarea id="refine" className="textarea" value={refinePrompt} onChange={(event) => setRefinePrompt(event.target.value)} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <label className="label" htmlFor="refine">Refine Deck</label>
+                <span style={{ fontSize: "0.75rem", color: refinePrompt.length > 1200 ? "orange" : "#9ca3af" }}>{refinePrompt.length}/1500</span>
+              </div>
+              <textarea
+                id="refine"
+                className="textarea"
+                value={refinePrompt}
+                maxLength={1500}
+                onChange={(event) => setRefinePrompt(event.target.value)}
+              />
               <button type="button" className="button secondary" onClick={refineDeck} disabled={loading} style={{ marginTop: 12 }}>
                 Apply Refinement
               </button>

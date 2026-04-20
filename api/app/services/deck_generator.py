@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 
 from app.models import (
@@ -164,7 +165,8 @@ class DeckGenerator:
             experience_level="beginner",
         )
         regenerated = self.generate(request)
-        regenerated.title = f"{deck.title} - Refined"
+        base_title = re.sub(r"( - Refined)+$", "", deck.title)
+        regenerated.title = f"{base_title} - Refined"
         if prompt:
             regenerated.explanation.append(f"Refinement applied: {prompt}")
         return regenerated
@@ -579,7 +581,7 @@ class DeckGenerator:
         notes: list[DeckCardExplanation] = []
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or "Basic Land" in card.type_line:
                 continue
             role = self._primary_role(card)
             notes.append(
@@ -589,7 +591,7 @@ class DeckGenerator:
                     reason=f"{card.name} is included as a {role} from the retrieved shell or package set.",
                 )
             )
-            if len(notes) >= 10:
+            if len(notes) >= 15:
                 break
         return notes
 
@@ -692,7 +694,8 @@ class DeckGenerator:
     def _fits_budget_request(card: CardRecord, budget: float | None) -> bool:
         if budget is None or card.price_usd is None:
             return True
-        return card.price_usd <= max(3.0, budget / 12.0) or "Land" in card.type_line
+        per_card_cap = max(0.50, min(budget / 20.0, budget * 0.12))
+        return card.price_usd <= per_card_cap or "Land" in card.type_line
 
     def _estimate_price(self, mainboard: list[CardRef], sideboard: list[CardRef], commander: str | None) -> float | None:
         total = 0.0
