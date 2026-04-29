@@ -222,6 +222,7 @@ class AnalyzeDeckRequest(BaseModel):
     sideboard: list[CardRef] = Field(default_factory=list)
     commander: str | None = None
     notes: str = ""
+    deep_analysis: bool = True
 
 
 class ParseDecklistRequest(BaseModel):
@@ -246,9 +247,7 @@ class ScoreBreakdown(BaseModel):
     legality: int
     mana: int
     synergy: int
-    prompt_fit: int
     competitiveness: int
-    budget_fit: int
     role_balance: int = 0
     curve: int = 0
     total: int
@@ -290,6 +289,47 @@ class ManaCurvePoint(BaseModel):
     card_count: int
 
 
+SourceType = Literal["corpus", "fallback", "hybrid"]
+
+# Primary categorization for deck breakdown UI. Order matters: a card with
+# multiple types (e.g. Artifact Creature) is bucketed by the first match in
+# this precedence list.
+PrimaryCardType = Literal[
+    "Creature",
+    "Planeswalker",
+    "Instant",
+    "Sorcery",
+    "Enchantment",
+    "Artifact",
+    "Battle",
+    "Land",
+    "Other",
+]
+
+
+class DeckProvenance(BaseModel):
+    """Honest, auditable record of where a generated deck came from.
+
+    `source_type`:
+      - `corpus`   — at least one archetype in the corpus matched the request
+                     and seeded the deck (commander archetype or themed shell).
+      - `fallback` — no corpus archetype matched; the deck was assembled from
+                     the card pool by deterministic role/color/tag heuristics.
+      - `hybrid`   — corpus shell seeded the build but most slots were filled
+                     by fallback heuristics.
+
+    `confidence` is in [0.0, 1.0]. For corpus sources it scales with the
+    number and quality of supporting decks; for fallback it is conservative.
+    """
+
+    source_type: SourceType
+    confidence: float = Field(ge=0, le=1)
+    evidence_count: int = 0
+    retrieved_from: list[str] = Field(default_factory=list)
+    fallback_used: bool = False
+    notes: list[str] = Field(default_factory=list)
+
+
 class DeckResponse(BaseModel):
     format: FormatName
     title: str
@@ -311,8 +351,12 @@ class DeckResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     source_archetypes: list[str] = Field(default_factory=list)
     selected_archetype: ArchetypeRecord | None = None
+    provenance: DeckProvenance
     playstyle_tags: list[str] = Field(default_factory=list)
     theme_tags: list[str] = Field(default_factory=list)
+    # Map of card name -> primary type bucket. Used by the UI to group the
+    # mainboard/sideboard into Creatures / Spells / Lands sections.
+    card_types: dict[str, PrimaryCardType] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def check_deck_sizes(self) -> "DeckResponse":
@@ -376,6 +420,9 @@ class DeckAnalysisResponse(BaseModel):
     role_summary: list[DeckRoleSummary] = Field(default_factory=list)
     mana_curve: list[ManaCurvePoint] = Field(default_factory=list)
     card_notes: list[DeckCardExplanation] = Field(default_factory=list)
+    provenance: DeckProvenance
+    deep_analysis_used: bool = False
+    card_types: dict[str, PrimaryCardType] = Field(default_factory=dict)
 
 
 class MetaSummaryResponse(BaseModel):

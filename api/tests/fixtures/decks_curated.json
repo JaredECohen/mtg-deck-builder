@@ -1,0 +1,29 @@
+{
+  "decks": [
+    {
+      "id": "json-modern-1",
+      "source": "curated_json",
+      "source_url": "https://example.com/json-modern-1",
+      "event_name": "Modern RCQ",
+      "event_date": "2025-02-08",
+      "format": "modern",
+      "format_season": "2025-q1",
+      "event_tier": "rcq",
+      "event_size": 56,
+      "finish_label": "Winner",
+      "confidence": 0.81,
+      "player_name": "Json Pilot",
+      "placement": 1,
+      "wins": 6,
+      "losses": 1,
+      "draws": 0,
+      "mainboard": [
+        { "name": "Lightning Bolt", "quantity": 4 },
+        { "name": "Consider", "quantity": 4 }
+      ],
+      "sideboard": [
+        { "name": "Swords to Plowshares", "quantity": 2 }
+      ]
+    }
+  ]
+}

@@ -176,15 +176,15 @@ class DeckValidator:
             mana_score -= 8
 
         legality_score = 100 if not errors else 0
-        total = max(
-            0,
-            legality_score
-            + mana_score
-            + synergy_score
-            + competitiveness
-            + role_balance_score
-            + curve_score,
-        ) // 6
+        components = [
+            legality_score,
+            max(0, min(100, mana_score)),
+            max(0, min(100, synergy_score)),
+            max(0, min(100, competitiveness)),
+            max(0, min(100, role_balance_score)),
+            max(0, min(100, curve_score)),
+        ]
+        total = sum(components) // len(components)
 
         return ValidationResult(
             is_legal=not errors,
@@ -192,13 +192,11 @@ class DeckValidator:
             warnings=warnings,
             score=ScoreBreakdown(
                 legality=legality_score,
-                mana=mana_score,
-                synergy=synergy_score,
-                prompt_fit=0,
-                competitiveness=competitiveness,
-                budget_fit=0,
-                role_balance=role_balance_score,
-                curve=curve_score,
+                mana=components[1],
+                synergy=components[2],
+                competitiveness=components[3],
+                role_balance=components[4],
+                curve=components[5],
                 total=total,
             ),
         )

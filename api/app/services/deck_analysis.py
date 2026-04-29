@@ -9,6 +9,7 @@ from app.models import (
     DeckAnalysisResponse,
     DeckCardExplanation,
     DeckImprovementSuggestion,
+    DeckProvenance,
     DeckRoleSummary,
     DeckSwapRecommendation,
     ManaCurvePoint,
@@ -71,7 +72,10 @@ class DeckAnalysisService:
             mana_curve_summary=", ".join(f"{p.mana_value}mv:{p.card_count}" for p in mana_curve if p.card_count),
             nearest_archetype=nearest_archetype.name if nearest_archetype else None,
             existing_warnings=validation.warnings,
+            enabled=request.deep_analysis,
         )
+
+        provenance = self._build_provenance(nearest, similarity, enrichment is not None)
 
         return DeckAnalysisResponse(
             format=request.format,
@@ -97,6 +101,54 @@ class DeckAnalysisService:
             role_summary=role_summary,
             mana_curve=mana_curve,
             card_notes=card_notes,
+            provenance=provenance,
+            deep_analysis_used=enrichment is not None,
+            card_types=self.repository.card_types_for(
+                request.mainboard + request.sideboard, request.commander
+            ),
+        )
+
+    @staticmethod
+    def _build_provenance(nearest, similarity: float, enrichment_used: bool) -> DeckProvenance:
+        """Honest provenance for analyze: where the comparison came from.
+
+        For analyze, "corpus" means the deck overlapped meaningfully with at
+        least one retrieved archetype; "fallback" means the analysis is purely
+        heuristic with no shell to anchor against.
+        """
+        retrieved_from = [archetype.name for archetype, _ in nearest][:3]
+        evidence_count = sum(max(1, archetype.source_count) for archetype, _ in nearest[:3])
+        notes: list[str] = []
+        if enrichment_used:
+            notes.append("Coaching narrative augmented by Claude.")
+        if not nearest:
+            return DeckProvenance(
+                source_type="fallback",
+                confidence=0.2,
+                evidence_count=0,
+                retrieved_from=[],
+                fallback_used=True,
+                notes=["No corpus archetype overlapped with this deck; analysis is purely heuristic."] + notes,
+            )
+        if similarity >= SIMILARITY_HIGH:
+            source_type = "corpus"
+            confidence = min(1.0, 0.65 + similarity * 0.3)
+            notes.append(f"Strong overlap with {retrieved_from[0]} (similarity {similarity:.2f}).")
+        elif similarity >= SIMILARITY_MEDIUM:
+            source_type = "hybrid"
+            confidence = 0.45 + similarity * 0.4
+            notes.append(f"Partial overlap with {retrieved_from[0]} (similarity {similarity:.2f}); other slots are read off heuristics.")
+        else:
+            source_type = "fallback"
+            confidence = max(0.2, similarity * 0.5)
+            notes.append("No archetype overlapped meaningfully; analysis falls back on role/curve heuristics.")
+        return DeckProvenance(
+            source_type=source_type,
+            confidence=round(confidence, 3),
+            evidence_count=evidence_count,
+            retrieved_from=retrieved_from,
+            fallback_used=source_type != "corpus",
+            notes=notes,
         )
 
     def _infer_style(self, request: AnalyzeDeckRequest, archetype_name: str | None, similarity: float) -> tuple[str, str, str]:

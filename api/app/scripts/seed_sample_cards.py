@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-
-from sqlalchemy.dialects.postgresql import insert
+from urllib.parse import quote_plus
 
 from app.config import CARD_CACHE_PATH
 from app.db import session_scope
@@ -17,44 +16,34 @@ def main() -> None:
 
     with session_scope() as session:
         for card in cards:
+            name = card["name"]
             payload = {
-                "oracle_id": card.get("oracle_id") or f"sample::{card['name'].lower()}",
-                "name": card["name"],
-                "normalized_name": card["name"].lower(),
+                "oracle_id": card.get("oracle_id") or f"sample::{name.lower()}",
+                "name": name,
+                "normalized_name": " ".join(name.lower().split()),
                 "mana_cost": card.get("mana_cost", ""),
                 "mana_value": float(card.get("mana_value", 0)),
                 "colors": card.get("colors", []),
                 "color_identity": card.get("color_identity", []),
                 "type_line": card["type_line"],
                 "oracle_text": card.get("oracle_text", ""),
+                "keywords": card.get("keywords", []),
+                "layout": card.get("layout"),
+                "rarity": card.get("rarity"),
                 "legalities": card.get("legalities", {}),
                 "price_usd": card.get("price_usd"),
+                "price_usd_foil": card.get("price_usd_foil"),
                 "tags": card.get("tags", []),
                 "set_code": card.get("set_code"),
                 "released_at": card.get("released_at"),
                 "image_uri": card.get("image_uri"),
-            }
-            stmt = insert(Card).values(**payload)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[Card.oracle_id],
-                set_={
-                    "name": stmt.excluded.name,
-                    "normalized_name": stmt.excluded.normalized_name,
-                    "mana_cost": stmt.excluded.mana_cost,
-                    "mana_value": stmt.excluded.mana_value,
-                    "colors": stmt.excluded.colors,
-                    "color_identity": stmt.excluded.color_identity,
-                    "type_line": stmt.excluded.type_line,
-                    "oracle_text": stmt.excluded.oracle_text,
-                    "legalities": stmt.excluded.legalities,
-                    "price_usd": stmt.excluded.price_usd,
-                    "tags": stmt.excluded.tags,
-                    "set_code": stmt.excluded.set_code,
-                    "released_at": stmt.excluded.released_at,
-                    "image_uri": stmt.excluded.image_uri,
+                "image_uris": card.get("image_uris", {}),
+                "card_faces": card.get("faces", []),
+                "purchase_links": {
+                    "amazon_search": f"https://www.amazon.com/s?k={quote_plus(name)}+magic+the+gathering+card",
                 },
-            )
-            session.execute(stmt)
+            }
+            session.merge(Card(**payload))
 
 
 if __name__ == "__main__":

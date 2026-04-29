@@ -1,0 +1,177 @@
+[
+  {
+    "id": "standard-aggro",
+    "request": {
+      "format": "standard",
+      "colors": ["R", "W"],
+      "playstyle_tags": ["aggro"],
+      "theme_tags": ["tokens"],
+      "mode": "constraint-aware",
+      "experience_level": "beginner",
+      "prompt": "Build a proactive Standard deck that wins with pressure and token scaling."
+    },
+    "expectations": {
+      "archetype_tags": ["aggro", "tokens"],
+      "mechanic_tags": ["tokens"],
+      "required_roles": ["threat", "interaction", "mana base"]
+    }
+  },
+  {
+    "id": "standard-control",
+    "request": {
+      "format": "standard",
+      "colors": ["U", "W"],
+      "playstyle_tags": ["control"],
+      "theme_tags": [],
+      "mode": "constraint-aware",
+      "experience_level": "expert",
+      "prompt": "Build a controlling Standard deck with interaction and a clear late-game plan."
+    },
+    "expectations": {
+      "archetype_tags": ["control"],
+      "mechanic_tags": ["interaction", "draw"],
+      "required_roles": ["interaction", "card advantage", "mana base"]
+    }
+  },
+  {
+    "id": "modern-prowess",
+    "request": {
+      "format": "modern",
+      "colors": ["U", "R"],
+      "playstyle_tags": ["aggro", "spells", "tempo"],
+      "theme_tags": ["prowess"],
+      "mode": "constraint-aware",
+      "experience_level": "beginner",
+      "prompt": "Build a strong Modern prowess deck that feels explosive but coherent."
+    },
+    "expectations": {
+      "archetype_tags": ["tempo", "spells", "prowess"],
+      "mechanic_tags": ["prowess", "spells"],
+      "required_roles": ["threat", "engine", "interaction"]
+    }
+  },
+  {
+    "id": "modern-midrange-budget",
+    "request": {
+      "format": "modern",
+      "colors": ["B", "G"],
+      "playstyle_tags": ["midrange"],
+      "theme_tags": [],
+      "budget": 150,
+      "mode": "constraint-aware",
+      "experience_level": "expert",
+      "prompt": "Build a budget-conscious Modern midrange deck with solid interaction."
+    },
+    "expectations": {
+      "archetype_tags": ["midrange"],
+      "mechanic_tags": ["interaction"],
+      "required_roles": ["threat", "interaction", "mana base"]
+    }
+  },
+  {
+    "id": "legacy-tempo",
+    "request": {
+      "format": "legacy",
+      "colors": ["U", "R"],
+      "playstyle_tags": ["tempo", "spells"],
+      "theme_tags": [],
+      "mode": "fast-competitive",
+      "experience_level": "expert",
+      "prompt": "Build a Legacy tempo deck with efficient threats and stack interaction."
+    },
+    "expectations": {
+      "archetype_tags": ["tempo", "spells"],
+      "mechanic_tags": ["spells", "interaction"],
+      "required_roles": ["threat", "interaction", "engine"]
+    }
+  },
+  {
+    "id": "legacy-combo",
+    "request": {
+      "format": "legacy",
+      "colors": ["B", "U"],
+      "playstyle_tags": ["combo"],
+      "theme_tags": ["graveyard"],
+      "mode": "creative-but-viable",
+      "experience_level": "expert",
+      "prompt": "Build a Legacy combo shell with a believable engine and backup interaction."
+    },
+    "expectations": {
+      "archetype_tags": ["combo", "graveyard"],
+      "mechanic_tags": ["graveyard"],
+      "required_roles": ["engine", "payoff", "interaction"]
+    }
+  },
+  {
+    "id": "commander-ramp",
+    "request": {
+      "format": "commander",
+      "colors": ["G", "U"],
+      "playstyle_tags": ["ramp"],
+      "theme_tags": [],
+      "mode": "constraint-aware",
+      "experience_level": "beginner",
+      "prompt": "Build a Commander ramp deck that turns mana advantage into real finishers."
+    },
+    "expectations": {
+      "archetype_tags": ["ramp"],
+      "mechanic_tags": ["ramp"],
+      "commander_tags": ["ramp"],
+      "required_roles": ["mana development", "card advantage", "payoff", "mana base"]
+    }
+  },
+  {
+    "id": "commander-lifegain",
+    "request": {
+      "format": "commander",
+      "colors": ["W", "B"],
+      "playstyle_tags": ["lifegain"],
+      "theme_tags": ["lifegain"],
+      "mode": "constraint-aware",
+      "experience_level": "beginner",
+      "prompt": "Build a Commander lifegain deck with enough payoffs that the theme matters."
+    },
+    "expectations": {
+      "archetype_tags": ["lifegain"],
+      "mechanic_tags": ["lifegain"],
+      "commander_tags": ["lifegain"],
+      "required_roles": ["payoff", "card advantage", "interaction", "mana base"]
+    }
+  },
+  {
+    "id": "commander-tribal",
+    "request": {
+      "format": "commander",
+      "colors": ["W", "U", "B", "R", "G"],
+      "playstyle_tags": ["tribal"],
+      "theme_tags": ["slivers"],
+      "mode": "creative-but-viable",
+      "experience_level": "expert",
+      "prompt": "Build a five-color Commander tribal deck with a real synergy backbone."
+    },
+    "expectations": {
+      "archetype_tags": ["tribal", "slivers"],
+      "mechanic_tags": ["tribal"],
+      "commander_tags": ["tribal", "slivers"],
+      "required_roles": ["engine", "payoff", "interaction", "mana base"]
+    }
+  },
+  {
+    "id": "modern-narrow-theme",
+    "request": {
+      "format": "modern",
+      "colors": ["W", "B"],
+      "playstyle_tags": ["sacrifice"],
+      "theme_tags": ["lifegain"],
+      "budget": 120,
+      "mode": "creative-but-viable",
+      "experience_level": "beginner",
+      "prompt": "Build a narrow but viable Modern sacrifice deck with lifegain overlap."
+    },
+    "expectations": {
+      "archetype_tags": ["sacrifice", "lifegain"],
+      "mechanic_tags": ["lifegain"],
+      "required_roles": ["engine", "payoff", "interaction"]
+    }
+  }
+]

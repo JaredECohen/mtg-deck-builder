@@ -1,15 +1,48 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import threading
+import time
+from collections import OrderedDict
 from typing import Any
 
 import anthropic
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+# ── In-process LRU cache for LLM enrichment ──────────────────────────────────
+# Same deck (same cards, role mix, archetype, format, commander) re-analyzed
+# back-to-back hits the cache instead of paying the LLM round-trip again.
+_ENRICHMENT_CACHE_MAX = 256
+_ENRICHMENT_CACHE_TTL_SEC = 30 * 60  # 30 minutes — enough for an interactive session
+_enrichment_cache: "OrderedDict[str, tuple[float, dict[str, Any]]]" = OrderedDict()
+_enrichment_cache_lock = threading.Lock()
+
+
+def _enrichment_cache_get(key: str) -> dict[str, Any] | None:
+    with _enrichment_cache_lock:
+        entry = _enrichment_cache.get(key)
+        if entry is None:
+            return None
+        timestamp, value = entry
+        if time.monotonic() - timestamp > _ENRICHMENT_CACHE_TTL_SEC:
+            _enrichment_cache.pop(key, None)
+            return None
+        _enrichment_cache.move_to_end(key)
+        return value
+
+
+def _enrichment_cache_put(key: str, value: dict[str, Any]) -> None:
+    with _enrichment_cache_lock:
+        _enrichment_cache[key] = (time.monotonic(), value)
+        _enrichment_cache.move_to_end(key)
+        while len(_enrichment_cache) > _ENRICHMENT_CACHE_MAX:
+            _enrichment_cache.popitem(last=False)
 
 # Haiku for fast structured extraction; configurable for richer analysis
 _FAST_MODEL = os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5")
@@ -206,12 +239,22 @@ def enrich_deck_analysis(
     mana_curve_summary: str,
     nearest_archetype: str | None,
     existing_warnings: list[str],
+    enabled: bool = True,
 ) -> DeckEnrichment | None:
     """Ask Claude for a richer analysis narrative and coaching note.
 
-    Returns None if the API key is absent or the call fails, allowing the
-    caller to fall back to rule-based output transparently.
+    Returns None when:
+      - `enabled=False` (caller opted out — used by the UI's "deep analysis"
+        toggle so we don't pay the LLM round-trip on every keystroke)
+      - the API key is absent
+      - the call fails
+
+    Successful results are cached for 30 minutes keyed by a hash of the
+    request payload, so re-analyzing the same deck (e.g. after toggling notes)
+    does not re-bill the LLM.
     """
+    if not enabled:
+        return None
     client = _get_client()
     if not client:
         return None
@@ -229,6 +272,17 @@ def enrich_deck_analysis(
         + f"\n\nStructural warnings:\n{warnings_text}"
     )
 
+    cache_key = hashlib.sha256(
+        f"{_ANALYSIS_MODEL}\n{user_content}".encode("utf-8")
+    ).hexdigest()
+    cached = _enrichment_cache_get(cache_key)
+    if cached is not None:
+        try:
+            return DeckEnrichment.model_validate(cached)
+        except Exception:
+            # Bad cache entry; fall through and refetch.
+            pass
+
     try:
         response = client.messages.create(
             model=_ANALYSIS_MODEL,
@@ -237,7 +291,9 @@ def enrich_deck_analysis(
             messages=[{"role": "user", "content": user_content}],
         )
         data: dict[str, Any] = _extract_json(response)
-        return DeckEnrichment.model_validate(data)
+        enrichment = DeckEnrichment.model_validate(data)
+        _enrichment_cache_put(cache_key, enrichment.model_dump())
+        return enrichment
     except Exception:
         logger.warning("LLM deck analysis enrichment failed; using rule-based output", exc_info=True)
         return None

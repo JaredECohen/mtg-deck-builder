@@ -118,13 +118,35 @@ export type ScoreBreakdown = {
   legality: number;
   mana: number;
   synergy: number;
-  prompt_fit: number;
   competitiveness: number;
-  budget_fit: number;
   role_balance: number;
   curve: number;
   total: number;
 };
+
+export type SourceType = "corpus" | "fallback" | "hybrid";
+
+export type DeckProvenance = {
+  source_type: SourceType;
+  confidence: number;
+  evidence_count: number;
+  retrieved_from: string[];
+  fallback_used: boolean;
+  notes: string[];
+};
+
+export type PrimaryCardType =
+  | "Creature"
+  | "Planeswalker"
+  | "Instant"
+  | "Sorcery"
+  | "Enchantment"
+  | "Artifact"
+  | "Battle"
+  | "Land"
+  | "Other";
+
+export type CardTypeMap = Record<string, PrimaryCardType>;
 
 export type DeckCardExplanation = {
   name: string;
@@ -176,8 +198,10 @@ export type DeckResponse = {
   warnings: string[];
   source_archetypes: string[];
   selected_archetype?: ArchetypeRecord | null;
+  provenance: DeckProvenance;
   playstyle_tags: string[];
   theme_tags: string[];
+  card_types: CardTypeMap;
 };
 
 export type MetaSummaryResponse = {
@@ -250,6 +274,9 @@ export type DeckAnalysisResponse = {
   role_summary: DeckRoleSummary[];
   mana_curve: ManaCurvePoint[];
   card_notes: DeckCardExplanation[];
+  provenance: DeckProvenance;
+  deep_analysis_used: boolean;
+  card_types: CardTypeMap;
 };
 
 export type ParsedDecklistResponse = {
@@ -299,4 +326,69 @@ export type CommanderSearchResponse = {
 
 export type CommanderProfileResponse = {
   commander: CommanderProfile;
+};
+
+// --- Phase 8: optimizer / rationale types ---
+
+export type OptimizerJobRequest = {
+  format: "modern";
+  colors?: string[];
+  deck_size?: number;
+  budget_usd?: number | null;
+  include_cards?: string[];
+  exclude_cards?: string[];
+  archetype_recipes?: Array<{ id?: string; label?: string; card_quotas?: Record<string, number> }>;
+  rounds?: number;
+  proposals_per_round?: number;
+  sim_runs_per_eval?: number;
+  seed?: number;
+};
+
+export type OptimizerJobResponse = {
+  job_id: string;
+  status: string;
+  cached: boolean;
+  poll_url: string;
+};
+
+export type JobRecord = {
+  id: string;
+  name: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "cached";
+  created_at: number;
+  started_at: number | null;
+  finished_at: number | null;
+  result: unknown;
+  error: string | null;
+  progress: Record<string, unknown>;
+};
+
+export type DeckRationaleData = {
+  headline: string;
+  archetype: string;
+  avg_kill_turn: number;
+  win_rate: number;
+  why_this_wins: string[];
+  key_turns: { turn: number; description: string }[];
+  mulligan_guide: {
+    keep_examples: string[];
+    mulligan_examples: string[];
+    keep_threshold_summary: string;
+  };
+  soft_matchups: {
+    opponent_archetype: string;
+    win_rate: number;
+    plan: string;
+    sideboard_in: string[];
+    sideboard_out: string[];
+  }[];
+  sideboard_priorities: string[];
+  critic_transcript: {
+    round: number;
+    flagged: string[];
+    fixed: string[];
+  }[];
+  weakness_callouts: string[];
+  fitness_breakdown: Record<string, number>;
+  cards_breakdown: Record<string, string[]>;
 };

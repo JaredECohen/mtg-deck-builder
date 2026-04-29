@@ -3,6 +3,7 @@
   --bg-muted: #131b25;
   --panel: rgba(19, 27, 37, 0.8);
   --panel-strong: rgba(11, 18, 28, 0.92);
+  --panel-error: rgba(127, 29, 29, 0.55);
   --line: rgba(255, 255, 255, 0.12);
   --text: #edf3fb;
   --muted: #a9b5c5;
@@ -20,6 +21,7 @@ body {
   padding: 0;
   margin: 0;
   min-height: 100%;
+  max-width: 100%;
   background:
     radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 32%),
     radial-gradient(circle at top right, rgba(249, 115, 22, 0.18), transparent 28%),
@@ -30,6 +32,15 @@ body {
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Default flex/grid items to allow shrinking below content size — without this,
+   a long unbreakable string in a chip description forces its parent to expand
+   past the viewport and clips siblings on the right edge. */
+.builder *,
+.shell * {
+  min-width: 0;
 }
 
 a {
@@ -43,6 +54,15 @@ textarea {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
 .shell {
   max-width: 1320px;
   margin: 0 auto;
@@ -53,7 +73,45 @@ textarea {
   display: grid;
   gap: 24px;
   grid-template-columns: 1.2fr 0.8fr;
-  align-items: start;
+  align-items: flex-start;
+}
+
+/* Compact hero so the actual workshop is closer to the fold, especially on mobile. */
+.hero-compact {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.hero-copy .eyebrow {
+  margin-bottom: 4px;
+}
+
+.hero-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.hero-bullets li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.hero-bullets li strong {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.hero-bullets li span {
+  color: var(--muted);
 }
 
 .panel {
@@ -68,6 +126,11 @@ textarea {
   background: var(--panel-strong);
 }
 
+.panel-error {
+  background: var(--panel-error);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
 .eyebrow {
   color: var(--accent-2);
   text-transform: uppercase;
@@ -76,20 +139,23 @@ textarea {
 }
 
 .headline {
-  font-size: clamp(42px, 8vw, 80px);
-  line-height: 0.95;
-  margin: 12px 0;
+  font-size: clamp(26px, 4.4vw, 56px);
+  line-height: 1.1;
+  margin: 8px 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .subhead {
   color: var(--muted);
-  font-size: 18px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.5;
   max-width: 60ch;
+  overflow-wrap: break-word;
 }
 
 .builder {
-  margin-top: 28px;
+  margin-top: 20px;
   display: grid;
   grid-template-columns: 420px 1fr;
   gap: 24px;
@@ -99,6 +165,7 @@ textarea {
 .results-grid {
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 
 .form-card,
@@ -144,6 +211,7 @@ textarea {
   background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
   cursor: pointer;
+  min-height: 36px;
 }
 
 .chip strong,
@@ -162,6 +230,7 @@ textarea {
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.4;
+  overflow-wrap: break-word;
 }
 
 .chip.active {
@@ -174,16 +243,18 @@ textarea {
   width: 100%;
   border: 0;
   border-radius: 16px;
-  padding: 14px 18px;
+  padding: 16px 18px;
   cursor: pointer;
   color: white;
   background: linear-gradient(90deg, var(--accent), #fb7185, var(--accent-2));
   font-weight: 700;
+  min-height: 52px;
 }
 
 .button.secondary {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--line);
+  color: var(--text);
 }
 
 .validation-banner {
@@ -264,6 +335,11 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+.card-row.active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.08);
+}
+
 .card-row-action {
   padding: 0;
 }
@@ -279,6 +355,11 @@ textarea {
   cursor: pointer;
   background: transparent;
   text-align: left;
+}
+
+.card-button.active {
+  background: rgba(56, 189, 248, 0.08);
+  border-radius: 14px;
 }
 
 .export-row {
@@ -321,7 +402,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .card-modal-grid {
@@ -359,11 +440,72 @@ textarea {
   color: var(--muted);
 }
 
+.provenance-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 6px;
+}
+
+.provenance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.provenance-notes {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.deck-type-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.deck-type-section {
+  display: grid;
+  gap: 6px;
+}
+
+.deck-type-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
 @media (max-width: 980px) {
+  .shell {
+    padding: 16px 14px 48px;
+  }
+
   .hero,
+  .hero-compact,
   .builder,
   .deck-columns {
     grid-template-columns: 1fr;
+  }
+
+  .headline {
+    font-size: clamp(24px, 6.5vw, 36px);
+  }
+
+  .subhead {
+    font-size: 15px;
   }
 
   .stats,
@@ -375,5 +517,75 @@ textarea {
 
   .export-row {
     grid-template-columns: 1fr;
+  }
+
+  /* Action-first mobile: hide the marketing bullets so the workshop is at the
+     top of the viewport. The headline + one-line value prop stay. */
+  .hero-bullets {
+    display: none;
+  }
+
+  .hero-compact {
+    margin-bottom: 0;
+  }
+
+  .builder {
+    margin-top: 16px;
+    gap: 16px;
+  }
+
+  .form-card,
+  .results-card {
+    padding: 16px;
+  }
+
+  .chip {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  .chip-rich {
+    max-width: none;
+  }
+
+  .button {
+    /* Bigger tap target and stays sticky-feeling on long forms */
+    padding: 16px 20px;
+    font-size: 16px;
+  }
+
+  .stat strong {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 540px) {
+  .deck-columns {
+    gap: 12px;
+  }
+
+  .card-modal {
+    padding: 16px;
+  }
+
+  .card-image-shell {
+    min-height: 280px;
+  }
+
+  .headline {
+    font-size: clamp(22px, 7.2vw, 30px);
+  }
+
+  .form-card,
+  .results-card {
+    padding: 14px;
+  }
+
+  .chip-rich strong {
+    font-size: 14px;
+  }
+
+  .chip-rich span {
+    font-size: 12px;
   }
 }

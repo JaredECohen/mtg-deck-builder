@@ -1,110 +1,155 @@
 from __future__ import annotations
 
+import argparse
 import json
-from collections import Counter
+from pathlib import Path
 
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select
 
 from app.config import TOURNAMENT_DECK_PATH
 from app.db import session_scope
 from app.db_models import IngestionRun, TournamentDeck
+from app.scripts.ingest_deck_source import normalize_raw_deck, normalized_record_payload
+from app.scripts.sources import load_csv_decks, load_json_decks
 from app.services.card_repository import CardRepository
 from app.services.database_bootstrap import create_schema
 
 
-def merge_refs(refs: list[dict[str, object]]) -> list[dict[str, object]]:
-    counts = Counter[str]()
-    for ref in refs:
-        counts[str(ref["name"])] += int(ref["quantity"])
-    return [{"name": name, "quantity": quantity} for name, quantity in counts.items()]
+SOURCE_PRIORITY = {
+    "commander_csv": 40,
+    "curated_csv": 35,
+    "curated_json": 30,
+    "sample": 10,
+}
 
 
-def infer_colors_and_tags(repository: CardRepository, refs: list[dict[str, object]], commander: str | None) -> tuple[list[str], list[str]]:
-    colors: set[str] = set()
-    tags: Counter[str] = Counter()
-    names = [str(ref["name"]) for ref in refs]
-    if commander:
-        names.append(commander)
-    for card in repository.get_cards(names):
-        colors.update(card.color_identity or card.colors)
-        for tag in card.tags:
-            if tag != "land":
-                tags[tag] += 1
-    top_tags = [tag for tag, _ in tags.most_common(6)]
-    return sorted(colors), top_tags
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Ingest tournament or commander deck corpora.")
+    parser.add_argument("--source-path", action="append", help="Path to a JSON or CSV deck source.")
+    parser.add_argument("--source-format", choices=["json", "csv"], help="Force a source format.")
+    parser.add_argument("--source-name", help="Override the logical source name for all provided paths.")
+    return parser.parse_args(argv)
 
 
-def normalize_deck(repository: CardRepository, raw_deck: dict[str, object]) -> dict[str, object]:
-    mainboard = merge_refs(list(raw_deck.get("mainboard", [])))
-    sideboard = merge_refs(list(raw_deck.get("sideboard", [])))
-    commander = raw_deck.get("commander")
-    colors, tags = infer_colors_and_tags(repository, mainboard, commander if isinstance(commander, str) else None)
+def resolve_sources(args: argparse.Namespace) -> list[tuple[Path, str, str]]:
+    if not args.source_path:
+        return [(TOURNAMENT_DECK_PATH, "json", "sample")]
 
-    return {
-        "id": raw_deck["id"],
-        "source": raw_deck.get("source", "unknown"),
-        "event_name": raw_deck["event_name"],
-        "event_date": raw_deck.get("event_date"),
-        "format": raw_deck["format"],
-        "player_name": raw_deck.get("player_name"),
-        "placement": raw_deck.get("placement"),
-        "wins": raw_deck.get("wins"),
-        "losses": raw_deck.get("losses"),
-        "draws": raw_deck.get("draws"),
-        "colors": colors,
-        "tags": tags,
-        "commander": commander if isinstance(commander, str) else None,
-        "mainboard": mainboard,
-        "sideboard": sideboard,
-        "metadata": {
-            "raw_source": raw_deck.get("source", "unknown"),
-            "ingested_from": str(TOURNAMENT_DECK_PATH),
-        },
-    }
+    resolved: list[tuple[Path, str, str]] = []
+    for raw_path in args.source_path:
+        path = Path(raw_path).resolve()
+        source_format = args.source_format or infer_format(path)
+        source_name = args.source_name or infer_source_name(path, source_format)
+        resolved.append((path, source_format, source_name))
+    return resolved
 
 
-def main() -> None:
+def infer_format(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        return "json"
+    if suffix == ".csv":
+        return "csv"
+    raise ValueError(f"Unsupported source format for {path}")
+
+
+def infer_source_name(path: Path, source_format: str) -> str:
+    stem = path.stem.lower()
+    if "commander" in stem and source_format == "csv":
+        return "commander_csv"
+    if source_format == "csv":
+        return "curated_csv"
+    return "curated_json"
+
+
+def load_source(path: Path, source_format: str) -> list[dict[str, object]]:
+    if source_format == "json":
+        return load_json_decks(path)
+    if source_format == "csv":
+        return load_csv_decks(path)
+    raise ValueError(f"Unsupported source format {source_format}")
+
+
+def should_replace(existing: TournamentDeck, incoming_payload: dict[str, object], incoming_source: str) -> bool:
+    existing_priority = SOURCE_PRIORITY.get(existing.source, 0)
+    incoming_priority = SOURCE_PRIORITY.get(incoming_source, 0)
+    existing_confidence = existing.confidence or 0.0
+    incoming_confidence = float(incoming_payload.get("confidence") or 0.0)
+    if incoming_priority != existing_priority:
+        return incoming_priority > existing_priority
+    if incoming_confidence != existing_confidence:
+        return incoming_confidence > existing_confidence
+    incoming_event_date = str(incoming_payload.get("event_date") or "")
+    existing_event_date = existing.event_date or ""
+    return incoming_event_date >= existing_event_date
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    sources = resolve_sources(args)
+    result = ingest_sources(sources)
+    print(json.dumps(result))
+
+
+def ingest_sources(sources: list[tuple[Path, str, str]]) -> dict[str, object]:
     create_schema()
     repository = CardRepository()
-    with TOURNAMENT_DECK_PATH.open() as handle:
-        raw_decks = json.load(handle)
 
     processed = 0
+    inserted = 0
+    replaced = 0
+    skipped = 0
     with session_scope() as session:
         run = IngestionRun(source="tournament_decks", status="running", records_processed=0)
         session.add(run)
         session.flush()
 
-        for raw_deck in raw_decks:
-            normalized = normalize_deck(repository, raw_deck)
-            stmt = insert(TournamentDeck).values(**normalized)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[TournamentDeck.id],
-                set_={
-                    "source": stmt.excluded.source,
-                    "event_name": stmt.excluded.event_name,
-                    "event_date": stmt.excluded.event_date,
-                    "format": stmt.excluded.format,
-                    "player_name": stmt.excluded.player_name,
-                    "placement": stmt.excluded.placement,
-                    "wins": stmt.excluded.wins,
-                    "losses": stmt.excluded.losses,
-                    "draws": stmt.excluded.draws,
-                    "colors": stmt.excluded.colors,
-                    "tags": stmt.excluded.tags,
-                    "commander": stmt.excluded.commander,
-                    "mainboard": stmt.excluded.mainboard,
-                    "sideboard": stmt.excluded.sideboard,
-                    "metadata_json": stmt.excluded.metadata_json,
-                },
-            )
-            session.execute(stmt)
-            processed += 1
+        for path, source_format, source_name in sources:
+            raw_decks = load_source(path, source_format)
+            for raw_deck in raw_decks:
+                normalized = normalize_raw_deck(
+                    repository,
+                    raw_deck,
+                    source_name=source_name,
+                    ingested_from=path,
+                )
+                payload = normalized_record_payload(normalized)
+                existing = session.scalar(
+                    select(TournamentDeck).where(TournamentDeck.dedupe_key == normalized.dedupe_key)
+                )
+                if existing is not None:
+                    if not should_replace(existing, payload, source_name):
+                        skipped += 1
+                        processed += 1
+                        continue
+                    payload["id"] = existing.id
+                    replaced += 1
+                else:
+                    inserted += 1
+                session.merge(TournamentDeck(**payload))
+                processed += 1
 
         run.status = "completed"
         run.records_processed = processed
+        run.notes = json.dumps(
+            {
+                "sources": [
+                    {"path": str(path), "format": source_format, "source_name": source_name}
+                    for path, source_format, source_name in sources
+                ],
+                "inserted": inserted,
+                "replaced": replaced,
+                "skipped": skipped,
+            }
+        )
 
-    print(json.dumps({"status": "ok", "records_processed": processed}))
+    return {
+        "status": "ok",
+        "records_processed": processed,
+        "inserted": inserted,
+        "replaced": replaced,
+        "skipped": skipped,
+    }
 
 
 if __name__ == "__main__":

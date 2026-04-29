@@ -1,0 +1,2 @@
+id,source,source_url,event_name,event_date,format,format_season,event_tier,event_size,finish_label,confidence,player_name,placement,wins,losses,draws,commander,mainboard,sideboard
+commander-csv-1,commander_csv,https://example.com/commander-csv-1,Commander League,2025-03-02,commander,2025-s1,league,32,Top 4,0.93,CSV Pilot,3,4,1,0,The First Sliver,"1 Cultivate|1 Forest|1 Sol Ring",""

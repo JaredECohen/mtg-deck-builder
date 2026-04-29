@@ -1,3 +1,5 @@
+.env
+.env.local
 .DS_Store
 .next
 node_modules
@@ -10,3 +12,6 @@ build
 api/.mypy_cache
 api/data
 *.db
+*.tsbuildinfo
+qa/__pycache__
+qa/artifacts
