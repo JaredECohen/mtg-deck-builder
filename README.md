@@ -137,10 +137,15 @@ out-of-loop with results cached so generation stays fast and deterministic.
 - Burn-vs-Burn matchup ≈ 50% (symmetric self-play, with on-the-play alternation)
 - Matchup matrix differentiates archetypes: Burn 71.8% avg vs the meta, Murktide loses to Burn 16% (fast-clock vs. tempo)
 - All 5 formats (Modern / Standard / Pioneer / Legacy / Commander) flag size, color, and playset violations correctly
-- Synergy graph is cached by deck identity — same deck → same instance
+- Synergy graph is cached by deck identity + profile_version — same deck → same instance
 - Goldfish ETB-tapped lands are tracked per-turn (not just T1)
 - Match simulator's instant interaction taps mana — no infinite removal
 - Commander matchups use (3-5) ideal lands (format mulligan floor), not Modern's (2-5)
+- Cross-format matchups apply the opponent's *native* format mulligan profile
+  (e.g. Commander candidate vs Modern Burn opponent each mulligan correctly)
+- Sideboard generator targets losing matchups first; produces 15 deduped slots
+  with rationales tagged by matchup
+- Coach prose moved off the hot path — fetched lazily via `POST /v1/jobs/{id}/prose`
 
 ## Pending / not yet wired
 
@@ -148,13 +153,11 @@ These are intentional gaps remaining after the format expansion + LLM/Celery
 + matchup pass. Each is tractable in its own follow-up.
 
 ### Optimizer ↔ legacy generator
-- `/v1/decks/generate` still routes through the legacy heuristic generator;
-  `/v1/jobs/optimize` is parallel and exposed in the UI as the "Run optimizer"
-  button. Next: feature-flag swap so optimizer becomes the default.
-
-### Sideboard generation
-- The optimizer ignores sideboard slots. Next: add a sideboard pass that
-  evolves a 15-card response set to the matchup matrix's worst entries.
+- `/v1/decks/generate` still defaults to the legacy heuristic generator. Set
+  `MTG_USE_OPTIMIZER_DEFAULT=true` to route requests through the optimizer
+  pipeline (synchronous wrapper, falls back to legacy on error).
+- Next: flip the default once the optimizer-default path has been
+  exercised in staging.
 
 ### Synergy registry
 - `KNOWN_COMBOS` in [api/app/synergy/builder.py](api/app/synergy/builder.py)

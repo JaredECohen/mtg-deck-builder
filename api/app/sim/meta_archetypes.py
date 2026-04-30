@@ -252,3 +252,14 @@ META_DECKS: dict[str, list[tuple[CardProfile, str]]] = {
     "Tron": tron(),
     "Living End": living_end(),
 }
+
+# Each meta deck's native format. Used by the matchup simulator so that
+# a Commander candidate vs. these Modern decks doesn't accidentally
+# apply Commander mulligan rules to the opponent. Add new entries when
+# expanding the meta to other formats.
+META_DECK_FORMATS: dict[str, str] = {
+    "Burn": "modern",
+    "Murktide (UR Tempo)": "modern",
+    "Tron": "modern",
+    "Living End": "modern",
+}

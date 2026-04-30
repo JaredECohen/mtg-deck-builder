@@ -93,9 +93,27 @@ def data_status() -> DataStatusResponse:
 
 @app.post("/v1/decks/generate", response_model=DeckResponse)
 def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
+    """Generate a deck.
+
+    By default routes to the legacy heuristic generator. When
+    ``MTG_USE_OPTIMIZER_DEFAULT=true`` is set, routes to the
+    simulator-driven optimizer with a synchronous wrapper that returns
+    the same ``DeckResponse`` shape. Falls back to legacy on optimizer
+    errors so users never see a stack trace.
+    """
+    import os
     client_ip = req.client.host if req.client else "unknown"
     if not deck_rate_limiter.is_allowed(f"generate:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait before trying again.")
+
+    use_optimizer = os.getenv("MTG_USE_OPTIMIZER_DEFAULT", "").lower() in {"1", "true", "yes"}
+    if use_optimizer and request.format == "modern":
+        try:
+            from app.services.optimizer_default_path import generate_via_optimizer
+            return generate_via_optimizer(request, repository=repository, validator=validator)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("optimizer-default path failed (%s); falling back to legacy", exc)
+
     try:
         return generator.generate(request)
     except ValueError as exc:
@@ -163,6 +181,27 @@ def get_job(job_id: str) -> dict:
     except (JobNotFound, KeyError) as exc:
         raise HTTPException(status_code=404, detail=f"job {job_id!r} not found") from exc
     return job.to_dict()
+
+
+@app.post("/v1/jobs/{job_id}/prose")
+def get_job_prose(job_id: str) -> dict:
+    """Lazily produce LLM-narrated coach prose for a completed
+    optimizer job. Returns 202 if the job hasn't completed yet, 404 if
+    unknown, 200 with prose=null when the LLM is disabled or the API
+    key is absent (graceful fallback)."""
+    from app.services.deck_rationale import prose_for_rationale_dict
+    try:
+        job = get_job_queue().get(job_id)
+    except (JobNotFound, KeyError) as exc:
+        raise HTTPException(status_code=404, detail=f"job {job_id!r} not found") from exc
+    if job.status not in {"succeeded", "cached"}:
+        raise HTTPException(status_code=409, detail=f"job not yet complete (status={job.status})")
+    result = job.result or {}
+    rationale = result.get("rationale")
+    if rationale is None:
+        raise HTTPException(status_code=404, detail="no rationale on this job")
+    prose = prose_for_rationale_dict(rationale)
+    return {"job_id": job_id, "prose": prose.to_dict() if prose else None}
 
 
 @app.get("/v1/meta/summary", response_model=MetaSummaryResponse)

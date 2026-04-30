@@ -122,16 +122,27 @@ def _build_pool(
     )
 
     cards = repository.list_cards_for_format(fmt) if hasattr(repository, "list_cards_for_format") else []
-    cached_profiles = _load_cached_profiles()  # name -> dict (may be empty)
 
-    pool: list[tuple[CardProfile, str]] = []
+    # First pass: filter cards by color identity and collect names that
+    # need profiles. We *don't* load profiles for cards we won't use.
+    candidates: list[tuple[dict, str]] = []
     target_colors = set(colors or [])
+    needed_names: set[str] = set()
     for card in cards:
         type_line = card.get("type_line", "") if isinstance(card, dict) else getattr(card, "type_line", "")
         record = card if isinstance(card, dict) else _card_record_to_dict(card)
         identity = set(record.get("color_identity") or [])
         if target_colors and not identity.issubset(target_colors) and identity:
             continue
+        candidates.append((record, type_line))
+        name = record.get("name")
+        if name:
+            needed_names.add(name)
+
+    cached_profiles = _load_cached_profiles(needed_names) if needed_names else {}
+
+    pool: list[tuple[CardProfile, str]] = []
+    for record, type_line in candidates:
         cached = cached_profiles.get(record.get("name"))
         if cached and cached.get("profile_version") == PROFILE_VERSION:
             profile = _hydrate_profile(cached)
@@ -141,10 +152,18 @@ def _build_pool(
     return pool
 
 
-def _load_cached_profiles() -> dict[str, dict]:
-    """Load all card profiles from the DB into an in-memory map. Returns
-    an empty dict if the DB read fails — callers fall back to on-the-fly
-    profiling."""
+def _load_cached_profiles(names: set[str] | None = None) -> dict[str, dict]:
+    """Load card profiles from the DB.
+
+    When ``names`` is given, fetches only matching rows — avoiding
+    pulling 25k profiles when the request only touches a few hundred.
+    When ``names`` is None or empty, returns an empty dict (callers
+    fall back to on-the-fly profiling).
+
+    Returns an empty dict if the DB read fails for any reason.
+    """
+    if not names:
+        return {}
     try:
         from app.db import session_scope
         from app.db_models import CardProfile as CardProfileRow
@@ -153,7 +172,8 @@ def _load_cached_profiles() -> dict[str, dict]:
     try:
         out: dict[str, dict] = {}
         with session_scope() as session:
-            for row in session.query(CardProfileRow).all():
+            query = session.query(CardProfileRow).filter(CardProfileRow.name.in_(list(names)))
+            for row in query:
                 out[row.name] = {
                     "card_id": row.card_id,
                     "name": row.name,

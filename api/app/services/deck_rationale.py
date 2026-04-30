@@ -216,13 +216,38 @@ def clear_prose_cache() -> None:
         _PROSE_CACHE.clear()
 
 
+def prose_for_rationale_dict(rationale_dict: dict[str, Any]) -> CoachProse | None:
+    """Build coach prose from a serialized rationale dict — used by the
+    lazy ``/v1/jobs/{id}/prose`` endpoint. The rationale_dict is the
+    same shape that ``DeckRationale.to_dict()`` produces; we hydrate a
+    minimal shim object only to feed the existing Skill prompt."""
+    rationale = DeckRationale(
+        headline=rationale_dict.get("headline", ""),
+        archetype=rationale_dict.get("archetype", ""),
+        avg_kill_turn=float(rationale_dict.get("avg_kill_turn", 0.0)),
+        win_rate=float(rationale_dict.get("win_rate", 0.0)),
+        why_this_wins=list(rationale_dict.get("why_this_wins") or []),
+        weakness_callouts=list(rationale_dict.get("weakness_callouts") or []),
+        fitness_breakdown=dict(rationale_dict.get("fitness_breakdown") or {}),
+        cards_breakdown=dict(rationale_dict.get("cards_breakdown") or {}),
+    )
+    return _invoke_goldfish_coach(rationale)
+
+
 def build_deck_rationale(
     candidate: OptimizerCandidate,
     *,
     final_envelope: DeckEnvelope | None = None,
     critic_rounds: list | None = None,
-    invoke_coach: bool = True,
+    invoke_coach: bool = False,
 ) -> DeckRationale:
+    """Build the structured rationale.
+
+    ``invoke_coach`` is now ``False`` by default — calling the LLM
+    inline blocks the optimizer worker for ~1-2s per deck. Use the
+    ``/v1/jobs/{id}/prose`` endpoint to lazily produce coach prose
+    on demand. Tests that want prose can opt in explicitly.
+    """
     """Compose a DeckRationale from optimizer + critic outputs."""
     fitness = candidate.fitness.to_dict() if candidate.fitness else {}
     archetype = fitness.get("archetype", "midrange")

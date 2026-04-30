@@ -9,6 +9,7 @@ from typing import Any
 from app.optimizer import (
     AnnealConfig,
     OptimizerConstraints,
+    build_sideboard,
     optimize_deck,
 )
 from app.optimizer.fitness import _aggregate_role_profile
@@ -59,6 +60,21 @@ def optimize_deck_task(
 
     rationale = build_deck_rationale(result.best)
 
+    # Build a sideboard plan from the matchup matrix the optimizer
+    # collected (raw['matchup_matrix']). When the matrix is empty
+    # (matchups not enabled), build_sideboard returns an empty plan.
+    matchup_matrix: dict[str, float] = {}
+    if result.best.fitness and result.best.fitness.raw:
+        raw_matrix = result.best.fitness.raw.get("matchup_matrix") or {}
+        if isinstance(raw_matrix, dict):
+            matchup_matrix = {str(k): float(v) for k, v in raw_matrix.items()}
+    sideboard_plan = build_sideboard(
+        result.best.deck,
+        pool,
+        matchup_matrix,
+        sideboard_size=constraints.sideboard_size or 15,
+    )
+
     return {
         "deck": deck_payload,
         "fitness": result.best.fitness.to_dict() if result.best.fitness else {},
@@ -69,4 +85,5 @@ def optimize_deck_task(
         "notes": result.best.notes,
         "role_profile": _aggregate_role_profile([p for p, _ in result.best.deck]),
         "rationale": rationale.to_dict(),
+        "sideboard": sideboard_plan.to_dict(),
     }

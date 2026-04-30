@@ -20,6 +20,11 @@ from app.optimizer.fitness import (
 )
 from app.optimizer.anneal import AnnealConfig, OptimizerResult, optimize_deck
 from app.optimizer.seeder import seed_candidates
+from app.optimizer.sideboard import (
+    SideboardPlan,
+    SideboardSlot,
+    build_sideboard,
+)
 from app.optimizer.swap_proposals import propose_swaps
 
 __all__ = [
@@ -28,6 +33,9 @@ __all__ = [
     "OptimizerCandidate",
     "OptimizerConstraints",
     "OptimizerResult",
+    "SideboardPlan",
+    "SideboardSlot",
+    "build_sideboard",
     "compute_fitness",
     "fitness_score",
     "optimize_deck",

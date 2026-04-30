@@ -42,6 +42,10 @@ class MatchConfig:
     starting_life: int = 20
     record_traces: bool = False
     format_id: str = "modern"
+    # Per-side format override. When None, both sides use ``format_id``
+    # — but cross-format matchups (e.g. Commander candidate vs Modern
+    # meta opponents) need separate mulligan profiles for each side.
+    opponent_format_id: str | None = None
 
 
 @dataclass
@@ -92,8 +96,12 @@ def simulate_match(
     cfg = config or MatchConfig()
     pa = policy_a or _pick_policy(deck_a)
     pb = policy_b or _pick_policy(deck_b)
+    # Player A is always the candidate; player B is the opponent. When
+    # cross-format (e.g. Commander candidate vs Modern meta deck), each
+    # side mulligans against its own format's defaults.
+    opp_fmt = cfg.opponent_format_id or cfg.format_id
     mp_a = mulligan_a or _format_mulligan_profile(cfg.format_id)
-    mp_b = mulligan_b or _format_mulligan_profile(cfg.format_id)
+    mp_b = mulligan_b or _format_mulligan_profile(opp_fmt)
 
     wins_a = wins_b = draws = 0
     game_lengths: list[int] = []
@@ -141,21 +149,31 @@ def build_matchup_matrix(
     *,
     opponents: dict[str, list[tuple[CardProfile, str]]] | None = None,
     config: MatchConfig | None = None,
+    opponent_formats: dict[str, str] | None = None,
 ) -> MatchupMatrix:
     """Run the candidate against every meta opponent; build a matrix.
 
     If ``opponents`` is None, uses :data:`META_DECKS` from
-    :mod:`meta_archetypes`. The matrix lives in the
-    :class:`DeckEnvelope.matchup_matrix` field consumed by the critic
-    (rubric R3) and the optimizer's fitness function.
+    :mod:`meta_archetypes`. ``opponent_formats`` (label -> format_id)
+    lets each opponent mulligan with its native format's profile —
+    important for cross-format matchups (Commander candidate vs Modern
+    meta decks).
     """
-    from app.sim.meta_archetypes import META_DECKS
+    from app.sim.meta_archetypes import META_DECKS, META_DECK_FORMATS
 
     opponents = opponents if opponents is not None else META_DECKS
+    if opponent_formats is None:
+        opponent_formats = META_DECK_FORMATS
     matrix = MatchupMatrix()
     by_opponent: dict[str, float] = {}
     for label, opp_deck in opponents.items():
-        result = simulate_match(candidate_deck, opp_deck, config=config)
+        opp_fmt = opponent_formats.get(label)
+        run_cfg = config
+        if opp_fmt is not None:
+            from dataclasses import replace
+            base_cfg = config or MatchConfig()
+            run_cfg = replace(base_cfg, opponent_format_id=opp_fmt)
+        result = simulate_match(candidate_deck, opp_deck, config=run_cfg)
         by_opponent[label] = result.win_rate_a
     matrix.by_opponent = by_opponent
     if by_opponent:

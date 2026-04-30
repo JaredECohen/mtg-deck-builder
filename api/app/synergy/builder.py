@@ -100,21 +100,28 @@ def extract_known_combos(card_names: Iterable[str]) -> list[tuple[str, list[str]
     return found
 
 
-_GRAPH_CACHE: "OrderedDict[frozenset, SynergyGraph]" = OrderedDict()
+_GRAPH_CACHE: "OrderedDict[tuple, SynergyGraph]" = OrderedDict()
 _GRAPH_CACHE_LOCK = RLock()
 _GRAPH_CACHE_MAX = 256
 
 
-def _graph_cache_key(profiles: list[CardProfile]) -> frozenset:
-    """Deck identity for caching = sorted (name, count) pairs.
+def _graph_cache_key(profiles: list[CardProfile]) -> tuple:
+    """Deck identity for caching = (frozenset of (name, count), max
+    profile_version).
 
-    Two decks with the same cards in different orders share a cache
-    entry. Card *order* doesn't influence the synergy graph.
+    The profile_version is included so that bumping the parser version
+    invalidates cached graphs — otherwise stale graphs survive a code
+    upgrade. Cards with mismatched versions in the same deck use the
+    *max* version; a graph computed from heterogeneous versions is
+    still consistent because the inputs are deterministic.
     """
     counts: dict[str, int] = {}
+    max_version = 0
     for p in profiles:
         counts[p.name] = counts.get(p.name, 0) + 1
-    return frozenset(counts.items())
+        if p.profile_version > max_version:
+            max_version = p.profile_version
+    return (frozenset(counts.items()), max_version)
 
 
 def build_synergy_graph(profiles: list[CardProfile]) -> SynergyGraph:
