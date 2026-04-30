@@ -157,11 +157,18 @@ def _draw(state: GameState) -> None:
 def _untap_phase(state: GameState) -> None:
     for c in state.battlefield:
         c.tapped = False
+        # Clear "entered tapped this turn" — the land is now available
+        # for mana on subsequent turns.
+        c.entered_tapped_this_turn = False
 
 
 def _gain_mana_phase(state: GameState) -> None:
     state.mana.empty()
     for land in state.untapped_lands():
+        # Skip lands that entered tapped *this turn* — they don't tap
+        # for mana the turn they came in.
+        if land.entered_tapped_this_turn:
+            continue
         # Approximate: each land taps for one mana of its produced colors.
         # Color choice is greedy — pick any color the land produces. The
         # mana-base solver handles the precise color question; goldfish
@@ -197,12 +204,40 @@ def _resolve_play_land(state: GameState, card: CardInPlay) -> None:
     if card not in state.hand:
         return
     state.hand.remove(card)
-    card.tapped = False
+    etb_tapped = _is_etb_tapped_land(card)
+    card.tapped = etb_tapped
+    card.entered_tapped_this_turn = etb_tapped
     state.battlefield.append(card)
-    # Recompute mana available now that a new land is in play (untapped).
-    produced = _produced_colors(card)
-    state.mana.add(produced[0], 1)
-    state.log(event="play_land", card=card.name)
+    # Lands that ETB tapped don't add mana the turn they come in.
+    if not etb_tapped:
+        produced = _produced_colors(card)
+        state.mana.add(produced[0], 1)
+    state.log(event="play_land", card=card.name, etb_tapped=etb_tapped)
+
+
+def _is_etb_tapped_land(card: CardInPlay) -> bool:
+    """Heuristic detection of ETB-tapped lands.
+
+    Reads the parsed oracle AST (Phase-1 output) for "enters tapped"
+    text. Conservative — basic lands and untapped duals should always
+    return False; tap-lands and conditional ETBs (checklands, fastlands)
+    should return True. The matchup/goldfish simulators only need a
+    sane *expectation*, not deterministic correctness on every card.
+    """
+    if not card.is_land:
+        return False
+    profile = card.profile
+    notes = " ".join(profile.notes or []).lower()
+    if "tapped" in notes and "untapped" not in notes:
+        return True
+    for effect in profile.oracle_ast or []:
+        text = (effect.text or "").lower()
+        if "enters tapped" in text or "enters the battlefield tapped" in text:
+            # Conditional taps ("enters tapped unless ...") are still
+            # *more often than not* tapped — return True to avoid the
+            # solver overestimating mana availability.
+            return True
+    return False
 
 
 def _resolve_cast(state: GameState, card: CardInPlay) -> None:

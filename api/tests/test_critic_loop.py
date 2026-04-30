@@ -258,6 +258,29 @@ def test_retry_call_reraises_after_exhausting_attempts():
 def test_make_critic_clients_falls_back_to_mocks_without_keys(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    builder, critic = make_critic_clients_from_env()
+    builder, critic, budget = make_critic_clients_from_env()
     assert isinstance(builder, MockBuilder)
     assert isinstance(critic, MockCritic)
+    assert isinstance(budget, CostBudget)
+
+
+def test_shared_budget_is_threaded_through_loop():
+    """Critic loop with a shared CostBudget should attach it to both
+    clients so per-job spending is bounded across all rounds."""
+    envelope = make_envelope()
+    budget = CostBudget(
+        max_tokens_per_call=100,
+        max_usd_per_job=0.0001,  # tiny — would blow on first call
+    )
+    # Mocks don't actually use the budget but should still accept it.
+    critic = MockCritic(responses=[Critique(verdict=Verdict.APPROVE)])
+    builder = MockBuilder()
+
+    # Attach budget attrs so the loop's budget-sharing path runs.
+    critic.budget = CostBudget()
+    builder.budget = CostBudget()
+
+    cfg = CriticConfig(short_circuit_on_clean_rubric=True, shared_budget=budget)
+    run_critic_loop(envelope, critic=critic, builder=builder, config=cfg)
+    assert critic.budget is budget
+    assert builder.budget is budget

@@ -103,6 +103,37 @@ def test_rationale_serializes_to_dict():
     assert isinstance(d["mulligan_guide"], dict)
 
 
+def test_coach_prose_skipped_without_anthropic_key(monkeypatch):
+    """Without ANTHROPIC_API_KEY, coach_prose should be None and the
+    rationale should still build successfully."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    deck = [(_profile("X", role={"land": 1.0}), "Land")] * 60
+    fitness = FitnessVector(raw={"archetype": "aggro"})
+    candidate = OptimizerCandidate(deck=deck, fitness=fitness, score=0.5)
+    r = build_deck_rationale(candidate)
+    assert r.coach_prose is None
+
+
+def test_coach_prose_disabled_via_env(monkeypatch):
+    """Even with a fake key, MTG_COACH_DISABLE should short-circuit
+    the LLM call."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key")
+    monkeypatch.setenv("MTG_COACH_DISABLE", "true")
+    deck = [(_profile("X", role={"land": 1.0}), "Land")] * 60
+    fitness = FitnessVector(raw={"archetype": "aggro"})
+    candidate = OptimizerCandidate(deck=deck, fitness=fitness, score=0.5)
+    r = build_deck_rationale(candidate)
+    assert r.coach_prose is None
+
+
+def test_invoke_coach_false_skips_call():
+    deck = [(_profile("X", role={"land": 1.0}), "Land")] * 60
+    fitness = FitnessVector(raw={"archetype": "aggro"})
+    candidate = OptimizerCandidate(deck=deck, fitness=fitness, score=0.5)
+    r = build_deck_rationale(candidate, invoke_coach=False)
+    assert r.coach_prose is None
+
+
 def test_rationale_critic_transcript_round_summary():
     deck = [(_profile("X", role={"land": 1.0}), "Land")] * 60
     fitness = FitnessVector(raw={"archetype": "aggro"})

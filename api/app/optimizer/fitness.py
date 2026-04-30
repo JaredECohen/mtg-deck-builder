@@ -293,8 +293,13 @@ def compute_fitness(
     matchup_score = 0.5  # neutral default when not computed
     matchup_data: dict[str, float] = {}
     if include_matchup:
-        matchup_cfg = MatchConfig(games=matchup_games, max_turns=max_turns, seed=seed,
-                                  starting_life=fmt.starting_life)
+        matchup_cfg = MatchConfig(
+            games=matchup_games,
+            max_turns=max_turns,
+            seed=seed,
+            starting_life=fmt.starting_life,
+            format_id=format_id,
+        )
         matrix = build_matchup_matrix(deck, opponents=matchup_opponents, config=matchup_cfg)
         matchup_score = matrix.avg_winrate or 0.0
         matchup_data = matrix.by_opponent

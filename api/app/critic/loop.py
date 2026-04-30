@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.critic.clients import BuilderClient, CriticClient
+from app.critic.clients import BuilderClient, CostBudget, CriticClient
 from app.critic.envelope import Critique, DeckEnvelope, Verdict
 from app.critic.rubric import RUBRIC_BY_ID, run_rubric
 
@@ -15,6 +15,7 @@ class CriticConfig:
     require_each_round_improves: bool = True
     accept_best_at_max_rounds: bool = True
     short_circuit_on_clean_rubric: bool = True
+    shared_budget: CostBudget | None = None
 
 
 @dataclass
@@ -58,6 +59,13 @@ def run_critic_loop(
        highest-fitness envelope visited.
     """
     cfg = config or CriticConfig()
+    # Share a single budget across both clients so all 4 rounds × 2
+    # calls draw from the same per-job cap, not 8 separate caps.
+    if cfg.shared_budget is not None:
+        if hasattr(critic, "budget"):
+            critic.budget = cfg.shared_budget
+        if hasattr(builder, "budget"):
+            builder.budget = cfg.shared_budget
     history: list[tuple[DeckEnvelope, Critique]] = []
     rounds: list[CriticLoopRound] = []
     current = initial

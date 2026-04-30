@@ -137,17 +137,15 @@ out-of-loop with results cached so generation stays fast and deterministic.
 - Burn-vs-Burn matchup ≈ 50% (symmetric self-play, with on-the-play alternation)
 - Matchup matrix differentiates archetypes: Burn 71.8% avg vs the meta, Murktide loses to Burn 16% (fast-clock vs. tempo)
 - All 5 formats (Modern / Standard / Pioneer / Legacy / Commander) flag size, color, and playset violations correctly
+- Synergy graph is cached by deck identity — same deck → same instance
+- Goldfish ETB-tapped lands are tracked per-turn (not just T1)
+- Match simulator's instant interaction taps mana — no infinite removal
+- Commander matchups use (3-5) ideal lands (format mulligan floor), not Modern's (2-5)
 
 ## Pending / not yet wired
 
 These are intentional gaps remaining after the format expansion + LLM/Celery
 + matchup pass. Each is tractable in its own follow-up.
-
-### Card profile cache
-- [api/app/scripts/build_card_profiles.py](api/app/scripts/build_card_profiles.py)
-  exists but isn't run in the bootstrap pipeline. `optimizer_service.py`
-  currently profiles on the fly each request. Next: include profile build
-  in the bootstrap flow, read from `card_profiles` table at request time.
 
 ### Optimizer ↔ legacy generator
 - `/v1/decks/generate` still routes through the legacy heuristic generator;
@@ -179,9 +177,3 @@ These are intentional gaps remaining after the format expansion + LLM/Celery
 - Kill-turn benchmarks are pinned for Burn only. Living End, Yawgmoth, and
   Tron each need their own benchmark tests (currently their goldfish kill
   turns aren't asserted, just produced).
-
-### Critic prose layer
-- `goldfish-coach` Skill is defined but not invoked. The structured
-  `DeckRationale` ships without an LLM-narrated headline paragraph. Next:
-  wire the Skill in the rationale builder so the prose blocks are
-  populated when API keys are present.

@@ -17,11 +17,19 @@ optional and falls back to a deterministic template.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
+import os
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Any
 
 from app.critic.envelope import DeckEnvelope
 from app.optimizer.fitness import OptimizerCandidate
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -54,6 +62,30 @@ class CriticRoundSummary:
 
 
 @dataclass
+class CoachProse:
+    """Optional LLM-narrated prose blocks that decorate the structured
+    rationale. Empty/None fields signal the frontend to fall back to
+    the structured fields alone."""
+
+    headline_paragraph: str = ""
+    win_plan_summary: str = ""
+    mulligan_paragraph: str = ""
+    matchup_summaries: list[dict[str, str]] = field(default_factory=list)
+    weaknesses_paragraph: str = ""
+    critic_summary: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "headline_paragraph": self.headline_paragraph,
+            "win_plan_summary": self.win_plan_summary,
+            "mulligan_paragraph": self.mulligan_paragraph,
+            "matchup_summaries": list(self.matchup_summaries),
+            "weaknesses_paragraph": self.weaknesses_paragraph,
+            "critic_summary": self.critic_summary,
+        }
+
+
+@dataclass
 class DeckRationale:
     """Structured 'why this deck wins' payload returned with each
     optimized deck. Frontend renders sections from these fields."""
@@ -71,6 +103,7 @@ class DeckRationale:
     weakness_callouts: list[str] = field(default_factory=list)
     fitness_breakdown: dict[str, float] = field(default_factory=dict)
     cards_breakdown: dict[str, list[str]] = field(default_factory=dict)
+    coach_prose: CoachProse | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,7 +136,84 @@ class DeckRationale:
             "weakness_callouts": list(self.weakness_callouts),
             "fitness_breakdown": dict(self.fitness_breakdown),
             "cards_breakdown": {k: list(v) for k, v in self.cards_breakdown.items()},
+            "coach_prose": self.coach_prose.to_dict() if self.coach_prose else None,
         }
+
+
+_PROSE_CACHE: dict[str, CoachProse] = {}
+_PROSE_CACHE_LOCK = RLock()
+_PROSE_CACHE_MAX = 128
+
+
+def _prose_cache_key(rationale: DeckRationale) -> str:
+    payload = json.dumps(rationale.to_dict(), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _invoke_goldfish_coach(rationale: DeckRationale) -> CoachProse | None:
+    """Call the ``goldfish-coach`` Skill via the Anthropic SDK to produce
+    narrated prose blocks. Returns None if the API key is absent, the
+    SDK isn't installed, or the call fails — caller falls back to
+    structured-only rationale.
+
+    Cached by structured-rationale hash so repeat optimizer cache hits
+    don't re-spend on the LLM.
+    """
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return None
+    if os.getenv("MTG_COACH_DISABLE", "").lower() in {"1", "true", "yes"}:
+        return None
+    cache_key = _prose_cache_key(rationale)
+    with _PROSE_CACHE_LOCK:
+        cached = _PROSE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+    try:
+        from pathlib import Path
+        from anthropic import Anthropic  # lazy
+    except Exception:  # noqa: BLE001
+        return None
+    skill_path = Path(".claude/skills/goldfish-coach/SKILL.md")
+    system_prompt = skill_path.read_text() if skill_path.exists() else ""
+    if not system_prompt:
+        return None
+    try:
+        client = Anthropic()
+        message = client.messages.create(
+            model=os.getenv("MTG_COACH_MODEL", "claude-haiku-4-5-20251001"),
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{
+                "role": "user",
+                "content": json.dumps(rationale.to_dict()),
+            }],
+        )
+        text = message.content[0].text
+        payload = json.loads(text)
+        prose = CoachProse(
+            headline_paragraph=str(payload.get("headline_paragraph", "")),
+            win_plan_summary=str(payload.get("win_plan_summary", "")),
+            mulligan_paragraph=str(payload.get("mulligan_paragraph", "")),
+            matchup_summaries=list(payload.get("matchup_summaries") or []),
+            weaknesses_paragraph=str(payload.get("weaknesses_paragraph", "")),
+            critic_summary=str(payload.get("critic_summary", "")),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("goldfish-coach invocation failed: %s", exc)
+        return None
+    with _PROSE_CACHE_LOCK:
+        _PROSE_CACHE[cache_key] = prose
+        if len(_PROSE_CACHE) > _PROSE_CACHE_MAX:
+            # Drop oldest by insertion order (dict preserves it).
+            oldest = next(iter(_PROSE_CACHE))
+            del _PROSE_CACHE[oldest]
+    return prose
+
+
+def clear_prose_cache() -> None:
+    """For tests — reset the global prose cache."""
+    with _PROSE_CACHE_LOCK:
+        _PROSE_CACHE.clear()
 
 
 def build_deck_rationale(
@@ -111,6 +221,7 @@ def build_deck_rationale(
     *,
     final_envelope: DeckEnvelope | None = None,
     critic_rounds: list | None = None,
+    invoke_coach: bool = True,
 ) -> DeckRationale:
     """Compose a DeckRationale from optimizer + critic outputs."""
     fitness = candidate.fitness.to_dict() if candidate.fitness else {}
@@ -146,6 +257,9 @@ def build_deck_rationale(
 
     if critic_rounds:
         rationale.critic_transcript = _compose_critic_transcript(critic_rounds)
+
+    if invoke_coach:
+        rationale.coach_prose = _invoke_goldfish_coach(rationale)
 
     return rationale
 

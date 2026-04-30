@@ -112,6 +112,26 @@ def test_matchup_strength_skipped_when_disabled():
     assert fv.raw.get("matchup_matrix") in (None, {})
 
 
+def test_match_uses_format_mulligan_floor():
+    """Commander matches should default to (3-5) ideal lands and need
+    action by turn 4, even when caller doesn't pass mulligan_a/b."""
+    from app.sim.match import _format_mulligan_profile
+    cmd = _format_mulligan_profile("commander")
+    assert cmd.ideal_lands == (3, 5)
+    assert cmd.needs_action_by_turn == 4
+    mod = _format_mulligan_profile("modern")
+    assert mod.ideal_lands == (2, 5)
+    assert mod.needs_action_by_turn == 3
+
+
+def test_match_unknown_format_falls_back_to_default():
+    from app.sim.match import _format_mulligan_profile
+    profile = _format_mulligan_profile("vintage")  # not in FORMATS
+    # Should fall back gracefully without raising.
+    assert profile is not None
+    assert isinstance(profile.ideal_lands, tuple)
+
+
 def test_rationale_uses_matchup_matrix_from_fitness_raw():
     """When fitness.raw['matchup_matrix'] is populated, the rationale
     should surface those matchups even without an external envelope."""

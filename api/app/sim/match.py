@@ -41,6 +41,7 @@ class MatchConfig:
     seed: int = 1729
     starting_life: int = 20
     record_traces: bool = False
+    format_id: str = "modern"
 
 
 @dataclass
@@ -91,8 +92,8 @@ def simulate_match(
     cfg = config or MatchConfig()
     pa = policy_a or _pick_policy(deck_a)
     pb = policy_b or _pick_policy(deck_b)
-    mp_a = mulligan_a or MulliganProfile()
-    mp_b = mulligan_b or MulliganProfile()
+    mp_a = mulligan_a or _format_mulligan_profile(cfg.format_id)
+    mp_b = mulligan_b or _format_mulligan_profile(cfg.format_id)
 
     wins_a = wins_b = draws = 0
     game_lengths: list[int] = []
@@ -175,6 +176,21 @@ def _pick_policy(deck: list[tuple[CardProfile, str]]):
         for role, weight in profile.role_weights.to_dict().items():
             role_profile[role] = role_profile.get(role, 0) + weight
     return POLICIES[select_policy(role_profile)]
+
+
+def _format_mulligan_profile(format_id: str) -> MulliganProfile:
+    """Pull a default MulliganProfile from format config so matchup
+    games for Commander mulligan with (3-5 lands), not Modern's
+    (2-5)."""
+    try:
+        from app.optimizer.format_config import get_format_config
+        fmt = get_format_config(format_id)
+        return MulliganProfile(
+            ideal_lands=fmt.mulligan_ideal_lands,
+            needs_action_by_turn=fmt.needs_action_by_turn,
+        )
+    except (ImportError, ValueError):
+        return MulliganProfile()
 
 
 def _play_two_player(
@@ -335,7 +351,9 @@ def _creature_power(card) -> float:
 
 def _apply_opponent_instant_interaction(actor: GameState, opponent: GameState) -> None:
     """Probabilistic removal: opponent's hand has interaction with some
-    expected impact on the actor's threats."""
+    expected impact on the actor's threats. Spends one untapped land
+    of the opponent's per use — without that, opponent gets unlimited
+    free removal."""
     interaction_in_hand = [
         c for c in opponent.hand
         if c.profile.role_weights.removal >= 0.3
@@ -343,15 +361,21 @@ def _apply_opponent_instant_interaction(actor: GameState, opponent: GameState) -
     ]
     if not interaction_in_hand or not actor.creatures():
         return
-    # Remove at most one threat per turn — proxy for "opponent has 1 mana
-    # of removal up." We pick the actor's biggest creature.
+    untapped = opponent.untapped_lands()
+    interaction_card = interaction_in_hand[0]
+    cost = max(1, int(interaction_card.profile.cost_vector.cmc) or 1)
+    if len(untapped) < cost:
+        return  # Can't pay — opponent eats damage this turn.
     biggest = max(actor.creatures(), key=_creature_power)
-    if _creature_power(biggest) >= 2 and opponent.untapped_lands():
-        actor.battlefield.remove(biggest)
-        actor.graveyard.append(biggest)
-        # "Spend" the interaction by removing it from opponent's hand.
-        opponent.hand.remove(interaction_in_hand[0])
-        opponent.graveyard.append(interaction_in_hand[0])
+    if _creature_power(biggest) < 2:
+        return  # Not worth the interaction — save mana for next turn.
+    actor.battlefield.remove(biggest)
+    actor.graveyard.append(biggest)
+    # Tap exactly enough lands to pay for the spell.
+    for land in untapped[:cost]:
+        land.tapped = True
+    opponent.hand.remove(interaction_card)
+    opponent.graveyard.append(interaction_card)
 
 
 def _board_pressure(state: GameState) -> float:

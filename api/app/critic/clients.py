@@ -323,14 +323,19 @@ class OpenAICritic(CriticClient):
         return critique
 
 
-def make_critic_clients_from_env() -> tuple[BuilderClient, CriticClient]:
-    """Factory that returns production clients when API keys are set,
-    falling back to the deterministic mocks otherwise.
+def make_critic_clients_from_env(
+    *, shared_budget: CostBudget | None = None,
+) -> tuple[BuilderClient, CriticClient, CostBudget]:
+    """Factory that returns production clients (and the shared budget)
+    when API keys are set, falling back to the deterministic mocks
+    otherwise.
 
-    The fallback is intentional: a missing key should not crash the
-    server. Callers that *require* live LLMs should construct the
-    classes directly and let the missing-key error surface.
+    The shared budget is the third return value so callers can pass it
+    to :class:`CriticConfig.shared_budget` and reuse it across the
+    loop. Mocks ignore the budget but it's returned anyway for API
+    symmetry.
     """
+    budget = shared_budget or CostBudget.from_env()
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
     if not (has_anthropic and has_openai):
@@ -338,12 +343,11 @@ def make_critic_clients_from_env() -> tuple[BuilderClient, CriticClient]:
             "critic clients: missing keys (anthropic=%s, openai=%s); using mocks",
             has_anthropic, has_openai,
         )
-        return MockBuilder(), MockCritic()
-    budget = CostBudget.from_env()
+        return MockBuilder(), MockCritic(), budget
     try:
         builder: BuilderClient = AnthropicBuilder(budget=budget)
         critic: CriticClient = OpenAICritic(budget=budget)
     except Exception as exc:  # noqa: BLE001
         logger.warning("critic clients: SDK init failed (%s); using mocks", exc)
-        return MockBuilder(), MockCritic()
-    return builder, critic
+        return MockBuilder(), MockCritic(), budget
+    return builder, critic, budget

@@ -130,6 +130,33 @@ def test_criticality_signal_differs_for_load_bearing_card():
     assert by_name["Goblin Guide"].delta_kill_turn >= -0.5  # not negative
 
 
+def test_synergy_graph_cache_hit_returns_same_instance():
+    """Building the graph twice for the same deck identity should hit
+    the cache (faster, returns the same instance)."""
+    from app.synergy import build_synergy_graph, clear_synergy_cache
+
+    clear_synergy_cache()
+    pool = [
+        make_profile("Treasure Caster", produces=["mana_treasure"]),
+        make_profile("Sac Outlet", requires=["sacrifice_outlet"]),
+    ]
+    g1 = build_synergy_graph(pool)
+    g2 = build_synergy_graph(pool)
+    # Same call → cache hit → identity equality.
+    assert g1 is g2
+
+
+def test_synergy_graph_cache_differentiates_decks():
+    from app.synergy import build_synergy_graph, clear_synergy_cache
+
+    clear_synergy_cache()
+    a = [make_profile("A", produces=["mana_treasure"])]
+    b = [make_profile("B", produces=["mana_treasure"])]
+    g_a = build_synergy_graph(a)
+    g_b = build_synergy_graph(b)
+    assert g_a is not g_b
+
+
 def test_criticality_skips_lands():
     """Lands are excluded from criticality scoring — replacing a land
     with a vanilla land yields no interesting signal."""

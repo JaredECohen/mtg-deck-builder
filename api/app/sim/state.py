@@ -35,6 +35,7 @@ class CardInPlay:
     fetched_target: str | None = None
     suspended_counters: int = 0  # for Suspend cards waiting in exile
     delay_until_turn: int = 0  # earliest turn this card becomes castable
+    entered_tapped_this_turn: bool = False  # cleared at end of each turn
 
     @property
     def name(self) -> str:

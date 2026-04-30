@@ -15,6 +15,7 @@ from app.synergy.builder import (
     SynergyEdge,
     SynergyGraph,
     build_synergy_graph,
+    clear_synergy_cache,
     extract_known_combos,
 )
 from app.synergy.criticality import compute_criticality, score_card_criticality
@@ -23,6 +24,7 @@ __all__ = [
     "SynergyEdge",
     "SynergyGraph",
     "build_synergy_graph",
+    "clear_synergy_cache",
     "compute_criticality",
     "extract_known_combos",
     "score_card_criticality",

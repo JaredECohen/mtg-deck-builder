@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Iterable
 
 from app.oracle.profile import CardProfile
@@ -98,7 +100,38 @@ def extract_known_combos(card_names: Iterable[str]) -> list[tuple[str, list[str]
     return found
 
 
+_GRAPH_CACHE: "OrderedDict[frozenset, SynergyGraph]" = OrderedDict()
+_GRAPH_CACHE_LOCK = RLock()
+_GRAPH_CACHE_MAX = 256
+
+
+def _graph_cache_key(profiles: list[CardProfile]) -> frozenset:
+    """Deck identity for caching = sorted (name, count) pairs.
+
+    Two decks with the same cards in different orders share a cache
+    entry. Card *order* doesn't influence the synergy graph.
+    """
+    counts: dict[str, int] = {}
+    for p in profiles:
+        counts[p.name] = counts.get(p.name, 0) + 1
+    return frozenset(counts.items())
+
+
 def build_synergy_graph(profiles: list[CardProfile]) -> SynergyGraph:
+    """Build (or retrieve from cache) the synergy graph for ``profiles``.
+
+    The cache is global, thread-safe, and bounded. Inside the optimizer
+    annealing loop the same near-identical deck gets re-evaluated
+    dozens of times; without the cache, that's O(n²) graph rebuilds
+    per round.
+    """
+    cache_key = _graph_cache_key(profiles)
+    with _GRAPH_CACHE_LOCK:
+        cached = _GRAPH_CACHE.get(cache_key)
+        if cached is not None:
+            _GRAPH_CACHE.move_to_end(cache_key)
+            return cached
+
     graph = SynergyGraph()
     by_name: dict[str, CardProfile] = {p.name: p for p in profiles}
 
@@ -164,4 +197,14 @@ def build_synergy_graph(profiles: list[CardProfile]) -> SynergyGraph:
                     evidence=label,
                 ))
 
+    with _GRAPH_CACHE_LOCK:
+        _GRAPH_CACHE[cache_key] = graph
+        if len(_GRAPH_CACHE) > _GRAPH_CACHE_MAX:
+            _GRAPH_CACHE.popitem(last=False)
     return graph
+
+
+def clear_synergy_cache() -> None:
+    """For tests — reset the global synergy graph cache."""
+    with _GRAPH_CACHE_LOCK:
+        _GRAPH_CACHE.clear()
