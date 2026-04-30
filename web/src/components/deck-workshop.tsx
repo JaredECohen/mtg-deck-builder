@@ -6,6 +6,7 @@ import { AnalysisResults } from "./workshop/analysis-results";
 import { AnalyzeForm, type ManualZone } from "./workshop/analyze-form";
 import { CardDetailModal } from "./workshop/card-detail-modal";
 import { CommanderPicker, type CommanderMode } from "./workshop/commander-picker";
+import { DeckRationaleView } from "./workshop/deck-rationale";
 import { DeckResults } from "./workshop/deck-results";
 import { FormatColorPicker } from "./workshop/format-color-picker";
 import { GenerateForm } from "./workshop/generate-form";
@@ -14,6 +15,7 @@ import { useCardDetail } from "@/hooks/use-card-detail";
 import { useDataStatus } from "@/hooks/use-data-status";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { useDeckGenerator } from "@/hooks/use-deck-generator";
+import { useDeckRationale } from "@/hooks/use-deck-rationale";
 import type { ExportTarget } from "@/lib/api";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import { activeTags, parseBudgetInput, type StrategyId } from "@/lib/strategies";
@@ -49,6 +51,23 @@ export function DeckWorkshop() {
   const cardDetail = useCardDetail();
   const generator = useDeckGenerator();
   const analyzer = useDeckAnalyzer();
+  const rationale = useDeckRationale();
+
+  const handleRequestRationale = async () => {
+    if (format !== "modern") return;
+    rationale.submit({
+      format: "modern",
+      colors,
+      deck_size: 60,
+      budget_usd: parseBudgetInput(budget) ?? undefined,
+      include_cards: [],
+      exclude_cards: [],
+      archetype_recipes: [],
+      rounds: 8,
+      proposals_per_round: 3,
+      sim_runs_per_eval: 100,
+    });
+  };
 
   const tags = useMemo(() => activeTags(selectedStrategies), [selectedStrategies]);
   const error = generator.error ?? analyzer.error;
@@ -303,19 +322,30 @@ export function DeckWorkshop() {
         </div>
 
         {builderMode === "generate" && deck ? (
-          <DeckResults
-            deck={deck}
-            meta={generator.meta}
-            selectedCommanderName={selectedCommanderName}
-            selectedCommanderProfile={selectedCommanderProfile}
-            refinePrompt={refinePrompt}
-            onRefinePromptChange={setRefinePrompt}
-            onRefine={() => void handleRefine()}
-            onExport={(target) => void handleExport(target)}
-            exportContent={exportContent}
-            onOpenCard={(name) => void cardDetail.open(name)}
-            loading={loading}
-          />
+          <>
+            <DeckResults
+              deck={deck}
+              meta={generator.meta}
+              selectedCommanderName={selectedCommanderName}
+              selectedCommanderProfile={selectedCommanderProfile}
+              refinePrompt={refinePrompt}
+              onRefinePromptChange={setRefinePrompt}
+              onRefine={() => void handleRefine()}
+              onExport={(target) => void handleExport(target)}
+              exportContent={exportContent}
+              onOpenCard={(name) => void cardDetail.open(name)}
+              loading={loading}
+            />
+            {format === "modern" ? (
+              <RationalePanel
+                rationale={rationale.rationale}
+                status={rationale.status}
+                error={rationale.error}
+                onRequest={() => void handleRequestRationale()}
+                onReset={rationale.reset}
+              />
+            ) : null}
+          </>
         ) : null}
 
         {builderMode === "analyze" && analysis ? (
@@ -396,4 +426,73 @@ function LegalityBanner({ isLegal, errorCount, warningCount }: { isLegal: boolea
       )}
     </div>
   );
+}
+
+function RationalePanel({
+  rationale,
+  status,
+  error,
+  onRequest,
+  onReset,
+}: {
+  rationale: import("@/lib/types").DeckRationaleData | null;
+  status: "idle" | "submitting" | "polling" | "succeeded" | "failed";
+  error: string | null;
+  onRequest: () => void;
+  onReset: () => void;
+}) {
+  if (status === "idle") {
+    return (
+      <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900/40 p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-sm font-semibold text-zinc-100">Tournament-grade rationale</div>
+            <div className="text-xs text-zinc-400">
+              Run the simulator-driven optimizer to produce a structured win-plan, mulligan guide, matchup matrix, and critic transcript. ~30s.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onRequest}
+            className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-amber-400"
+          >
+            Run optimizer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "submitting" || status === "polling") {
+    return (
+      <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-900/40 p-4 text-sm text-zinc-300">
+        {status === "submitting" ? "Submitting optimizer job…" : "Optimizer running… (polling for results)"}
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="mt-4 rounded-lg border border-rose-700 bg-rose-950/40 p-4 text-sm text-rose-200">
+        Optimizer failed: {error ?? "unknown error"}
+        <button
+          type="button"
+          onClick={onReset}
+          className="ml-3 underline text-rose-100"
+        >
+          dismiss
+        </button>
+      </div>
+    );
+  }
+
+  if (rationale) {
+    return (
+      <div className="mt-4">
+        <DeckRationaleView rationale={rationale} />
+      </div>
+    );
+  }
+
+  return null;
 }

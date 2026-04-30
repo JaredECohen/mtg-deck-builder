@@ -7,7 +7,10 @@ import type {
   DeckAnalysisResponse,
   DeckResponse,
   FormatName,
+  JobRecord,
   MetaSummaryResponse,
+  OptimizerJobRequest,
+  OptimizerJobResponse,
   ParsedDecklistResponse
 } from "@/lib/types";
 
@@ -141,4 +144,18 @@ export async function fetchCardDetail(name: string): Promise<CardDetailResponse>
 export async function fetchMetaSummary(format: FormatName, signal?: AbortSignal): Promise<MetaSummaryResponse> {
   const response = await fetch(`${API_BASE}/v1/meta/summary?format=${format}`, { signal });
   return jsonOrThrow<MetaSummaryResponse>(response, "Meta summary failed");
+}
+
+export async function submitOptimizerJob(payload: OptimizerJobRequest): Promise<OptimizerJobResponse> {
+  const response = await fetch(`${API_BASE}/v1/jobs/optimize`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return jsonOrThrow<OptimizerJobResponse>(response, "Optimizer submission failed");
+}
+
+export async function fetchJob(jobId: string): Promise<JobRecord> {
+  const response = await fetch(`${API_BASE}/v1/jobs/${encodeURIComponent(jobId)}`);
+  return jsonOrThrow<JobRecord>(response, "Job poll failed");
 }

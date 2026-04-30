@@ -136,6 +136,13 @@ def build_deck_rationale(
 
     if final_envelope is not None and final_envelope.matchup_matrix:
         rationale.soft_matchups = _compose_soft_matchups(final_envelope.matchup_matrix)
+    else:
+        # Optimizer fitness may carry the matchup matrix in raw — surface it
+        # even without a critic envelope so the rationale always has matchup
+        # data when matchup simulation was enabled.
+        raw_matrix = (candidate.fitness.raw or {}).get("matchup_matrix") if candidate.fitness else None
+        if raw_matrix:
+            rationale.soft_matchups = _compose_soft_matchups(raw_matrix)
 
     if critic_rounds:
         rationale.critic_transcript = _compose_critic_transcript(critic_rounds)

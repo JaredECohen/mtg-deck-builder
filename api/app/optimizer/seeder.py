@@ -93,8 +93,10 @@ def _fill_to_size(
     for p, _ in deck:
         counts[p.name] = counts.get(p.name, 0) + 1
 
+    cap = 1 if constraints.singleton else 4
+
     def can_add(name: str) -> bool:
-        return counts.get(name, 0) < 4 or name in {"Mountain", "Island", "Swamp", "Plains", "Forest", "Wastes"}
+        return counts.get(name, 0) < cap or name in {"Mountain", "Island", "Swamp", "Plains", "Forest", "Wastes"}
 
     # Land target.
     target_lands = max(constraints.min_lands, 20)
@@ -128,16 +130,14 @@ def _fill_to_size(
         deck.append(pa)
         counts[pa[0].name] = counts.get(pa[0].name, 0) + 1
 
-    # Pad to target_size. Try non-land slots first (via 4-of cap), then
-    # basics (no cap). If that still leaves us short, allow basics
-    # beyond max_lands — the annealer will swap them out for non-lands.
-    # We never under-fill: a seed of size != deck_size is unrecoverable.
+    # Pad to target_size. Non-lands respect the playset cap; basics may
+    # repeat. We never under-fill — under-sized seeds are unrecoverable.
     while len(deck) < target_size:
         added_this_pass = False
         for pa in pool_nonland:
             if len(deck) >= target_size:
                 break
-            if counts.get(pa[0].name, 0) >= 4:
+            if counts.get(pa[0].name, 0) >= cap:
                 continue
             if constraints.colors and (set(pa[0].cost_vector.color_demand) - set(constraints.colors)):
                 continue
@@ -146,8 +146,6 @@ def _fill_to_size(
             added_this_pass = True
         if len(deck) >= target_size:
             break
-        # Pad with basics (no 4-of cap). May briefly exceed max_lands —
-        # the annealer's role-balance swaps will reduce it to legal.
         for pa in pool_lands:
             if len(deck) >= target_size:
                 break

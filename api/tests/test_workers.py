@@ -149,3 +149,33 @@ def test_get_job_404_for_unknown_id():
     client = TestClient(app)
     resp = client.get("/v1/jobs/not-a-real-uuid")
     assert resp.status_code == 404
+
+
+def test_celery_backend_imports_and_serializes_args():
+    """Lazy-import the Celery backend; without a live broker we just
+    verify the module loads, the app builds, and JSON serialization of
+    common task args succeeds. Skipped if Celery isn't installed."""
+    pytest.importorskip("celery")
+    from app.workers import celery_backend
+
+    app = celery_backend._get_app()
+    assert app is not None
+    # Dispatcher task should be registered.
+    assert hasattr(app, "_mtg_dispatch")
+
+    # Argument serializer should handle dataclasses with to_dict().
+    class WithToDict:
+        def to_dict(self):
+            return {"x": 1}
+    out = celery_backend._serialize_arg(WithToDict())
+    assert out == {"x": 1}
+
+
+def test_get_job_queue_respects_env_var(monkeypatch):
+    """get_job_queue() chooses backend by env."""
+    from app.workers.queue import get_job_queue, reset_job_queue, ThreadJobQueue
+    reset_job_queue()
+    monkeypatch.setenv("MTG_WORKER_BACKEND", "thread")
+    q = get_job_queue()
+    assert isinstance(q, ThreadJobQueue)
+    reset_job_queue()

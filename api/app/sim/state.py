@@ -92,6 +92,7 @@ class GameState:
     suspended: list[CardInPlay] = field(default_factory=list)
     life: int = 20
     opp_life: int = 20
+    starting_life: int = 20
     mana: ManaPool = field(default_factory=ManaPool)
     storm_count: int = 0
     spells_cast_this_turn: int = 0
@@ -159,6 +160,7 @@ def build_initial_state(
         hand=[],
         life=starting_life,
         opp_life=starting_life,
+        starting_life=starting_life,
         on_play=on_play,
         rng=rng,
     )

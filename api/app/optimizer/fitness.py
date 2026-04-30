@@ -26,8 +26,10 @@ from app.sim import (
     GoldfishConfig,
     LandSuite,
     ManaBaseConfig,
+    MatchConfig,
     MulliganProfile,
     build_land_suite,
+    build_matchup_matrix,
     classify_land,
     goldfish,
     select_policy,
@@ -40,7 +42,13 @@ from app.synergy import build_synergy_graph
 
 @dataclass
 class FitnessVector:
-    """Six axes the optimizer sees. Higher = better, all on [0, 1]."""
+    """Seven axes the optimizer sees. Higher = better, all on [0, 1].
+
+    ``matchup_strength`` is the average win rate across the configured
+    meta opponents; populated only when ``compute_fitness`` is called
+    with ``include_matchup=True``. When omitted the axis defaults to
+    0.5 (neutral) so the geometric-mean combine isn't penalized.
+    """
 
     kill_turn_score: float = 0.0
     mulligan_keep: float = 0.0
@@ -48,6 +56,7 @@ class FitnessVector:
     synergy_density: float = 0.0
     redundancy: float = 0.0
     role_balance: float = 0.0
+    matchup_strength: float = 0.5
     raw: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, float]:
@@ -58,11 +67,12 @@ class FitnessVector:
             "synergy_density": self.synergy_density,
             "redundancy": self.redundancy,
             "role_balance": self.role_balance,
+            "matchup_strength": self.matchup_strength,
             **self.raw,
         }
 
     def worst_axis(self) -> str:
-        # Only the six structured axes are eligible — `raw` holds
+        # Only the structured axes are eligible — `raw` holds
         # diagnostic strings/floats that aren't directly optimizable.
         axes = {
             "kill_turn_score": self.kill_turn_score,
@@ -71,6 +81,7 @@ class FitnessVector:
             "synergy_density": self.synergy_density,
             "redundancy": self.redundancy,
             "role_balance": self.role_balance,
+            "matchup_strength": self.matchup_strength,
         }
         return min(axes, key=axes.get)
 
@@ -92,39 +103,43 @@ def _archetype_weights(role_profile: dict[str, float]) -> dict[str, float]:
     archetype = select_policy(role_profile)
     if archetype == "aggro":
         return {
-            "kill_turn_score": 0.35,
-            "mulligan_keep": 0.20,
-            "mana_consistency": 0.15,
+            "kill_turn_score": 0.30,
+            "mulligan_keep": 0.15,
+            "mana_consistency": 0.10,
             "synergy_density": 0.05,
             "redundancy": 0.10,
-            "role_balance": 0.15,
+            "role_balance": 0.10,
+            "matchup_strength": 0.20,
         }
     if archetype == "combo":
         return {
-            "kill_turn_score": 0.20,
+            "kill_turn_score": 0.15,
             "mulligan_keep": 0.15,
-            "mana_consistency": 0.15,
+            "mana_consistency": 0.10,
             "synergy_density": 0.20,
-            "redundancy": 0.20,
-            "role_balance": 0.10,
+            "redundancy": 0.15,
+            "role_balance": 0.05,
+            "matchup_strength": 0.20,
         }
     if archetype == "control":
         return {
-            "kill_turn_score": 0.10,
-            "mulligan_keep": 0.20,
-            "mana_consistency": 0.25,
+            "kill_turn_score": 0.05,
+            "mulligan_keep": 0.15,
+            "mana_consistency": 0.20,
             "synergy_density": 0.10,
             "redundancy": 0.10,
-            "role_balance": 0.25,
+            "role_balance": 0.20,
+            "matchup_strength": 0.20,
         }
     # midrange
     return {
-        "kill_turn_score": 0.20,
-        "mulligan_keep": 0.20,
-        "mana_consistency": 0.20,
+        "kill_turn_score": 0.15,
+        "mulligan_keep": 0.15,
+        "mana_consistency": 0.15,
         "synergy_density": 0.10,
         "redundancy": 0.10,
-        "role_balance": 0.20,
+        "role_balance": 0.15,
+        "matchup_strength": 0.20,
     }
 
 
@@ -224,15 +239,24 @@ def compute_fitness(
     sim_runs: int = 300,
     max_turns: int = 10,
     seed: int = 1729,
+    include_matchup: bool = False,
+    matchup_games: int = 50,
+    matchup_opponents: dict | None = None,
+    format_id: str = "modern",
 ) -> FitnessVector:
     profiles = [p for p, _ in deck]
     role_profile = _aggregate_role_profile(profiles)
     archetype = select_policy(role_profile)
     policy = POLICIES[archetype]
 
+    # Format-aware life total — Commander uses 40 not 20.
+    from app.optimizer.format_config import get_format_config
+    fmt = get_format_config(format_id)
+
     # 1. Goldfish — kill turn + mulligan keep%.
-    cfg = GoldfishConfig(games=sim_runs, max_turns=max_turns, seed=seed)
-    mp = _archetype_mulligan_profile(archetype)
+    cfg = GoldfishConfig(games=sim_runs, max_turns=max_turns, seed=seed,
+                         starting_life=fmt.starting_life)
+    mp = _archetype_mulligan_profile(archetype, format_id=format_id)
     goldfish_report = goldfish(deck, policy=policy, mulligan_profile=mp, config=cfg)
     kt_score = _kill_turn_to_score(goldfish_report.avg_kill_turn, max_turns)
     mulligan_keep = 1.0 - min(1.0, goldfish_report.avg_mulligans / 2.0)
@@ -245,7 +269,15 @@ def compute_fitness(
         suite = LandSuite(entries=[])
     demand = _build_demand_for_deck(profiles)
     if suite.total_lands() and demand.per_turn_demand:
-        mana_report = solve_mana_base(suite, demand, ManaBaseConfig(sim_runs=600, seed=seed))
+        # Commander draws 7 from 100 — different deck size changes the
+        # hypergeometric on-curve probabilities. Pass format size so the
+        # solver's hand calculations are accurate.
+        mana_cfg = ManaBaseConfig(
+            deck_size=fmt.deck_size if fmt.deck_size >= 60 else 60,
+            sim_runs=600,
+            seed=seed,
+        )
+        mana_report = solve_mana_base(suite, demand, mana_cfg)
         mc_score = _mana_consistency_score(mana_report)
     else:
         mc_score = 0.5
@@ -257,6 +289,16 @@ def compute_fitness(
     # 5. Role balance.
     rb_score = _role_balance_score(profiles)
 
+    # 6. Matchup strength — gated since it's expensive (100ms-1s).
+    matchup_score = 0.5  # neutral default when not computed
+    matchup_data: dict[str, float] = {}
+    if include_matchup:
+        matchup_cfg = MatchConfig(games=matchup_games, max_turns=max_turns, seed=seed,
+                                  starting_life=fmt.starting_life)
+        matrix = build_matchup_matrix(deck, opponents=matchup_opponents, config=matchup_cfg)
+        matchup_score = matrix.avg_winrate or 0.0
+        matchup_data = matrix.by_opponent
+
     fv = FitnessVector(
         kill_turn_score=kt_score,
         mulligan_keep=mulligan_keep,
@@ -264,10 +306,12 @@ def compute_fitness(
         synergy_density=syn_score,
         redundancy=red_score,
         role_balance=rb_score,
+        matchup_strength=matchup_score,
         raw={
             "avg_kill_turn": goldfish_report.avg_kill_turn,
             "win_rate": goldfish_report.wins / max(1, goldfish_report.games_played),
             "archetype": archetype,
+            "matchup_matrix": matchup_data,
         },
     )
     return fv
@@ -286,11 +330,29 @@ def fitness_score(fv: FitnessVector, role_profile: dict[str, float]) -> float:
     return math.exp(log_acc / max(0.0001, total_weight))
 
 
-def _archetype_mulligan_profile(archetype: str) -> MulliganProfile:
+def _archetype_mulligan_profile(
+    archetype: str, format_id: str = "modern"
+) -> MulliganProfile:
+    """Build a mulligan profile from archetype + format defaults.
+
+    Format influences the *floor* — Commander wants 3-5 lands no
+    matter what archetype it is, while aggro Modern can keep 2.
+    """
+    from app.optimizer.format_config import get_format_config
+    fmt = get_format_config(format_id)
+    fmt_lo, fmt_hi = fmt.mulligan_ideal_lands
+    fmt_action_turn = fmt.needs_action_by_turn
+
     if archetype == "aggro":
-        return MulliganProfile(ideal_lands=(2, 4), needs_action_by_turn=2)
-    if archetype == "combo":
-        return MulliganProfile(ideal_lands=(2, 5), needs_action_by_turn=4)
-    if archetype == "control":
-        return MulliganProfile(ideal_lands=(3, 5), needs_action_by_turn=4)
-    return MulliganProfile(ideal_lands=(2, 5), needs_action_by_turn=3)
+        lo, hi, turn = 2, 4, 2
+    elif archetype == "combo":
+        lo, hi, turn = 2, 5, 4
+    elif archetype == "control":
+        lo, hi, turn = 3, 5, 4
+    else:
+        lo, hi, turn = 2, 5, 3
+    # Format floors override archetype defaults when stricter.
+    return MulliganProfile(
+        ideal_lands=(max(lo, fmt_lo), max(hi, fmt_hi)),
+        needs_action_by_turn=max(turn, fmt_action_turn),
+    )

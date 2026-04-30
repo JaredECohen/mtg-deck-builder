@@ -42,6 +42,9 @@ class AnnealConfig:
     sim_runs_per_eval: int = 200
     max_turns: int = 10
     seed: int = 1729
+    include_matchup: bool = False
+    matchup_games: int = 40
+    matchup_opponents: dict | None = None
 
 
 @dataclass
@@ -85,6 +88,10 @@ def optimize_deck(
             sim_runs=cfg.sim_runs_per_eval,
             max_turns=cfg.max_turns,
             seed=cfg.seed,
+            include_matchup=cfg.include_matchup,
+            matchup_games=cfg.matchup_games,
+            matchup_opponents=cfg.matchup_opponents,
+            format_id=constraints.format,
         )
         role_profile = _aggregate_role_profile([p for p, _ in seed.deck])
         score = fitness_score(fv, role_profile)
@@ -152,6 +159,10 @@ def optimize_deck(
                     sim_runs=cfg.sim_runs_per_eval,
                     max_turns=cfg.max_turns,
                     seed=cfg.seed + round_idx,
+                    include_matchup=cfg.include_matchup,
+                    matchup_games=cfg.matchup_games,
+                    matchup_opponents=cfg.matchup_opponents,
+                    format_id=constraints.format,
                 )
                 cand_role_profile = _aggregate_role_profile([p for p, _ in candidate_deck])
                 cand_score = fitness_score(cand_fv, cand_role_profile)
@@ -196,7 +207,16 @@ def optimize_deck(
         # No legal seed survived — synthesize a best-effort single candidate.
         if seeds:
             fallback = seeds[0]
-            fv = compute_fitness(fallback.deck, sim_runs=cfg.sim_runs_per_eval, max_turns=cfg.max_turns, seed=cfg.seed)
+            fv = compute_fitness(
+                fallback.deck,
+                sim_runs=cfg.sim_runs_per_eval,
+                max_turns=cfg.max_turns,
+                seed=cfg.seed,
+                include_matchup=cfg.include_matchup,
+                matchup_games=cfg.matchup_games,
+                matchup_opponents=cfg.matchup_opponents,
+                format_id=constraints.format,
+            )
             role = _aggregate_role_profile([p for p, _ in fallback.deck])
             candidates.append(OptimizerCandidate(deck=fallback.deck, fitness=fv,
                                                 score=fitness_score(fv, role),

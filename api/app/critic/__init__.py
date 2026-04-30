@@ -29,17 +29,22 @@ from app.critic.loop import (
 )
 from app.critic.clients import (
     BuilderClient,
+    CostBudget,
     CriticClient,
+    CriticResponseError,
     MockBuilder,
     MockCritic,
+    make_critic_clients_from_env,
 )
 from app.critic.rubric import RUBRIC, RubricCheck, run_rubric
 
 __all__ = [
     "BuilderClient",
+    "CostBudget",
     "CriticClient",
     "CriticConfig",
     "CriticLoopResult",
+    "CriticResponseError",
     "Critique",
     "CritiqueItem",
     "DeckEnvelope",
@@ -49,6 +54,7 @@ __all__ = [
     "RUBRIC",
     "RubricCheck",
     "Verdict",
+    "make_critic_clients_from_env",
     "run_critic_loop",
     "run_rubric",
 ]

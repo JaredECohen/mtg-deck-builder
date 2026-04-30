@@ -21,11 +21,11 @@ BASIC_NAMES = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
                "Snow-Covered Mountain", "Snow-Covered Forest"}
 
 
-def _at_playset_cap(name: str, deck: list[tuple[CardProfile, str]]) -> bool:
+def _at_playset_cap(name: str, deck: list[tuple[CardProfile, str]], cap: int = 4) -> bool:
     if name in BASIC_NAMES:
         return False
     count = sum(1 for p, _ in deck if p.name == name)
-    return count >= 4
+    return count >= cap
 
 
 def _filter_legal_adds(
@@ -33,11 +33,14 @@ def _filter_legal_adds(
     deck: list[tuple[CardProfile, str]],
     constraints=None,
 ) -> list[tuple[CardProfile, str]]:
-    """Drop pool entries that would push past 4-of, are excluded, or
-    are off-color."""
+    """Drop pool entries that would push past the playset cap, are
+    excluded, or are off-color."""
+    cap = 4
+    if constraints is not None and getattr(constraints, "singleton", False):
+        cap = 1
     out: list[tuple[CardProfile, str]] = []
     for pa in candidates:
-        if _at_playset_cap(pa[0].name, deck):
+        if _at_playset_cap(pa[0].name, deck, cap=cap):
             continue
         if constraints is not None:
             if pa[0].name in constraints.exclude_cards:

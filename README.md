@@ -89,11 +89,11 @@ At runtime, the API reads both cards and archetypes from Postgres, not JSON file
 
 It does not yet include:
 
-- live LLM orchestration in the critic loop (Claude/GPT clients are wired but
-  default to mocks in tests; production keys not provisioned)
 - pgvector retrieval
 - authentication
-- format support beyond Modern in the simulator/optimizer pipeline
+- live Redis/Celery broker (the backend is implemented and selectable via
+  `MTG_WORKER_BACKEND=celery` + `REDIS_URL`, but no broker is provisioned
+  by default — `ThreadJobQueue` is the default)
 
 ## Simulator architecture
 
@@ -110,8 +110,11 @@ last commit):
 | 4 | [api/app/synergy/](api/app/synergy/) | Synergy graph: produces→requires edges, tutor→closer edges, known combo cliques (Splinter Twin, Storm, Living End, Yawgmoth, Ad Nauseam, Hardened Scales, Devoted Druid, Goryo's, Thoracle, Scapeshift, Amulet Titan). Criticality scored via vanilla-replacement ∆kill-turn |
 | 5 | [api/app/optimizer/](api/app/optimizer/) | Simulated annealing with targeted swap proposals (driven by worst fitness axis), constraint-repair branch, monotonic violation reduction, 4-of cap enforcement |
 | 6 | [api/app/workers/](api/app/workers/) + [/v1/jobs/](api/app/main.py) | Backend-agnostic async job queue (ThreadPoolExecutor default, Celery hook ready), result caching by hash, async API endpoints |
-| 7 | [api/app/critic/](api/app/critic/) | Builder (Claude) ⇄ Critic (GPT-5.5) loop with strict JSON envelope, 6-item evidence-bound rubric, deterministic short-circuit, auto-downgrade if critic over-approves, monotonic-improvement rollback, 4-round cap |
-| 8 | [api/app/services/deck_rationale.py](api/app/services/deck_rationale.py) | Structured `DeckRationale`: headline, why-this-wins, key turns, mulligan guide, soft matchups, weakness callouts, critic transcript. Frontend renderer at [web/src/components/workshop/deck-rationale.tsx](web/src/components/workshop/deck-rationale.tsx) |
+| 7 | [api/app/critic/](api/app/critic/) | Builder (Claude) ⇄ Critic (GPT-5.5) loop with strict JSON envelope, 6-item evidence-bound rubric, deterministic short-circuit, auto-downgrade if critic over-approves, monotonic-improvement rollback, 4-round cap. Live SDK clients with retries + cost gating; falls back to deterministic mocks when API keys are absent |
+| 8 | [api/app/services/deck_rationale.py](api/app/services/deck_rationale.py) | Structured `DeckRationale`: headline, why-this-wins, key turns, mulligan guide, soft matchups, weakness callouts, critic transcript. Frontend renderer at [web/src/components/workshop/deck-rationale.tsx](web/src/components/workshop/deck-rationale.tsx), wired into [deck-workshop.tsx](web/src/components/deck-workshop.tsx) via [use-deck-rationale](web/src/hooks/use-deck-rationale.ts) |
+| 9 | [api/app/sim/match.py](api/app/sim/match.py) + [meta_archetypes.py](api/app/sim/meta_archetypes.py) | Two-player matchup simulator: parallel goldfish + simplified combat with blocking + opponent instant-removal probe. Builds the matchup matrix consumed by the critic's R3 rubric and the optimizer's `matchup_strength` fitness axis. Pre-baked Modern meta opponents (Burn, Murktide, Tron, Living End) |
+| 10 | [api/app/optimizer/format_config.py](api/app/optimizer/format_config.py) | Format-specific config: deck size, singleton rule, starting life, ideal land range, mulligan profile floor. Drives Modern, Standard, Pioneer, Legacy, **and Commander** (99-card singleton, 40 life, 35-42 lands) |
+| 11 | [api/app/workers/celery_backend.py](api/app/workers/celery_backend.py) | Celery+Redis backend behind the same `JobQueue` interface — selectable via `MTG_WORKER_BACKEND=celery`. Result caching via Redis hash; ThreadPoolExecutor remains the default for dev/tests |
 
 ### Skills (cached one-time analyses)
 
@@ -130,23 +133,15 @@ out-of-loop with results cached so generation stays fast and deterministic.
 - Murktide manabase: 19 lands, U sources hit T2 ≥ 85% / T4 ≥ 95%
 - Burn goldfish: kill-turn 4.8–5.2 (community benchmark ~4.5–5)
 - Aggro-curated deck scores higher fitness than off-curve dragon pile
-- Optimizer respects exclude-lists, color identity, and 4-of cap monotonically
+- Optimizer respects exclude-lists, color identity, and playset cap monotonically (4-of for constructed; 1-of for Commander)
+- Burn-vs-Burn matchup ≈ 50% (symmetric self-play, with on-the-play alternation)
+- Matchup matrix differentiates archetypes: Burn 71.8% avg vs the meta, Murktide loses to Burn 16% (fast-clock vs. tempo)
+- All 5 formats (Modern / Standard / Pioneer / Legacy / Commander) flag size, color, and playset violations correctly
 
 ## Pending / not yet wired
 
-These are intentional gaps from the v1 simulator pass — each is tractable in
-its own follow-up but not blocking on prior phases.
-
-### Live LLM integration
-- `AnthropicBuilder` and `OpenAICritic` clients in [api/app/critic/clients.py](api/app/critic/clients.py)
-  are wired to the real SDKs but production keys / orchestration are not yet
-  provisioned. Tests use `MockBuilder`/`MockCritic`. Next: env-driven client
-  selection + cost gating.
-
-### Worker backend
-- `ThreadJobQueue` is the default and works without infra. `CeleryJobQueue`
-  hook exists but the broker file (`celery_backend.py`) is not implemented.
-  Next: minimal Celery+Redis wiring + healthcheck.
+These are intentional gaps remaining after the format expansion + LLM/Celery
++ matchup pass. Each is tractable in its own follow-up.
 
 ### Card profile cache
 - [api/app/scripts/build_card_profiles.py](api/app/scripts/build_card_profiles.py)
@@ -156,18 +151,8 @@ its own follow-up but not blocking on prior phases.
 
 ### Optimizer ↔ legacy generator
 - `/v1/decks/generate` still routes through the legacy heuristic generator;
-  `/v1/jobs/optimize` is parallel. Next: feature-flag the new path and
-  migrate the workshop UI to it.
-
-### Frontend
-- `DeckRationaleView` component is built but not yet imported into
-  [web/src/components/deck-workshop.tsx](web/src/components/deck-workshop.tsx).
-  Next: wire it under the deck-results tab, gated on rationale presence.
-
-### Matchup matrix
-- Currently stubbed in `DeckEnvelope.matchup_matrix`; the rubric uses it but
-  no module populates it from real data. Next: add `api/app/sim/match.py`
-  that runs goldfish vs. archetype-templated opponents.
+  `/v1/jobs/optimize` is parallel and exposed in the UI as the "Run optimizer"
+  button. Next: feature-flag swap so optimizer becomes the default.
 
 ### Sideboard generation
 - The optimizer ignores sideboard slots. Next: add a sideboard pass that
@@ -178,12 +163,25 @@ its own follow-up but not blocking on prior phases.
   lists 12 well-known Modern cliques. Next: pull from a versioned data file,
   add automation to flag new clique candidates from tournament data.
 
-### Format support
-- Modern only for now. Constraints, mulligan profiles, and policies are
-  Modern-tuned. Standard / Pioneer / Commander would each need a phase-2/3
-  re-tune (different curves, mulligan thresholds, ban lists).
+### Meta archetypes per format
+- [api/app/sim/meta_archetypes.py](api/app/sim/meta_archetypes.py) contains
+  Modern opponents (Burn, Murktide, Tron, Living End). Standard / Pioneer /
+  Legacy / Commander need their own meta sets. The matchup pipeline is
+  format-aware; the data isn't.
 
-### Tournament deck benchmark
-- Phase 3's kill criterion ("kill turn matches community benchmarks") is
-  validated against Burn only. Living End, Tron, and Yawgmoth need their
-  own benchmark tests pinned.
+### Tron simulator fidelity
+- The simulator currently treats the Urza land cycle (Tower / Power Plant /
+  Mine) as basics — the "all three together = 7 mana" assembly rule is not
+  modeled. Tron's matchup numbers are pessimistic by ~20-30% as a result.
+  Next: add a multi-land combo rule to `_compute_available_mana`.
+
+### Tournament deck benchmark coverage
+- Kill-turn benchmarks are pinned for Burn only. Living End, Yawgmoth, and
+  Tron each need their own benchmark tests (currently their goldfish kill
+  turns aren't asserted, just produced).
+
+### Critic prose layer
+- `goldfish-coach` Skill is defined but not invoked. The structured
+  `DeckRationale` ships without an LLM-narrated headline paragraph. Next:
+  wire the Skill in the rationale builder so the prose blocks are
+  populated when API keys are present.

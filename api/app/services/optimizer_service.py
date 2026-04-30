@@ -22,12 +22,13 @@ from app.workers.queue import get_job_queue, make_cache_key
 
 
 class OptimizerJobRequest(BaseModel):
-    format: Literal["modern"] = "modern"  # Phase 5/6 scope: Modern only.
+    format: Literal["modern", "standard", "pioneer", "legacy", "commander"] = "modern"
     colors: list[str] = Field(default_factory=list)
-    deck_size: int = 60
+    deck_size: int | None = None  # None = pull from format config
     budget_usd: float | None = None
     include_cards: list[str] = Field(default_factory=list)
     exclude_cards: list[str] = Field(default_factory=list)
+    commander_name: str | None = None
     archetype_recipes: list[dict] = Field(default_factory=list)
     rounds: int = 12
     proposals_per_round: int = 4
@@ -50,10 +51,11 @@ def submit_optimize_job(
     constraints = OptimizerConstraints(
         format=request.format,
         colors=list(request.colors),
-        deck_size=request.deck_size,
+        deck_size=request.deck_size,  # None → format config default
         budget_usd=request.budget_usd,
         include_cards=list(request.include_cards),
         exclude_cards=list(request.exclude_cards),
+        commander_name=request.commander_name,
     )
     pool = _build_pool(repository, request.format, request.colors)
     if not pool:

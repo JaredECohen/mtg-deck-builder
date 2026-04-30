@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from app.optimizer.format_config import FORMATS, FormatConfig, get_format_config
 from app.oracle.profile import CardProfile
 
 
@@ -17,15 +18,34 @@ from app.oracle.profile import CardProfile
 class OptimizerConstraints:
     format: str = "modern"
     colors: list[str] = field(default_factory=list)
-    deck_size: int = 60
-    sideboard_size: int = 15
+    deck_size: int | None = None  # None = read from format config
+    sideboard_size: int | None = None
     budget_usd: float | None = None
     per_card_cap_usd: float | None = None
     include_cards: list[str] = field(default_factory=list)
     exclude_cards: list[str] = field(default_factory=list)
-    min_lands: int = 18
-    max_lands: int = 27
+    min_lands: int | None = None
+    max_lands: int | None = None
     min_creatures: int = 0
+    commander_name: str | None = None
+    singleton: bool | None = None  # None = read from format config
+
+    def __post_init__(self) -> None:
+        cfg = self.format_config
+        if self.deck_size is None:
+            self.deck_size = cfg.deck_size
+        if self.sideboard_size is None:
+            self.sideboard_size = cfg.sideboard_size
+        if self.min_lands is None:
+            self.min_lands = cfg.min_lands
+        if self.max_lands is None:
+            self.max_lands = cfg.max_lands
+        if self.singleton is None:
+            self.singleton = cfg.singleton
+
+    @property
+    def format_config(self) -> FormatConfig:
+        return get_format_config(self.format)
 
 
 @dataclass
@@ -110,19 +130,29 @@ def validate_constraints(
             detail=f"deck has {creatures} creatures, need ≥ {constraints.min_creatures}",
         ))
 
-    # 4-of rule (basics + Wastes exempt). Modern's playset cap is the
-    # tightest legality knob: violating it makes a deck unsubmittable.
+    # Playset cap. Singleton formats (Commander) limit non-basics to 1;
+    # other constructed formats limit to 4. Basics are always uncapped.
     BASIC_NAMES = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
                    "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
                    "Snow-Covered Mountain", "Snow-Covered Forest"}
+    cap = 1 if constraints.singleton else 4
     counts: dict[str, int] = {}
     for profile, _ in deck:
         counts[profile.name] = counts.get(profile.name, 0) + 1
     for name, count in counts.items():
-        if count > 4 and name not in BASIC_NAMES:
+        if count > cap and name not in BASIC_NAMES:
             out.append(ConstraintViolation(
                 code="over_playset",
-                detail=f"{name} has {count} copies (max 4)",
+                detail=f"{name} has {count} copies (max {cap})",
+            ))
+
+    # Commander-specific: requires a commander_name; commander must be a
+    # legendary creature (we trust caller for type, just check presence).
+    if constraints.format_config.has_commander:
+        if not constraints.commander_name:
+            out.append(ConstraintViolation(
+                code="missing_commander",
+                detail="commander format requires a commander_name",
             ))
 
     return out

@@ -4,16 +4,20 @@ import pytest
 
 from app.critic import (
     BuilderClient,
+    CostBudget,
     Critique,
     CritiqueItem,
     CriticConfig,
+    CriticResponseError,
     DeckEnvelope,
     MockBuilder,
     MockCritic,
     Verdict,
+    make_critic_clients_from_env,
     run_critic_loop,
     run_rubric,
 )
+from app.critic.clients import _retry_call
 
 
 def make_envelope(**kw) -> DeckEnvelope:
@@ -199,3 +203,61 @@ def test_loop_rolls_back_round_with_no_metric_improvement():
                                                 require_each_round_improves=True))
     rolled_back = [r for r in result.rounds if r.rolled_back]
     assert len(rolled_back) >= 1
+
+
+# --- live-client substitutes (cost budget + retry behavior) -----------
+
+
+def test_cost_budget_gates_overspend():
+    budget = CostBudget(
+        max_tokens_per_call=1000,
+        max_usd_per_job=0.01,  # tiny budget
+        estimated_input_cost_per_1k=0.003,
+        estimated_output_cost_per_1k=0.015,
+    )
+    # First call should fit (1000 in + 1000 out ≈ $0.018, exceeds $0.01).
+    with pytest.raises(CriticResponseError) as exc:
+        budget.gate(input_tokens=1000, output_tokens=1000)
+    assert "cost gate" in str(exc.value)
+
+
+def test_cost_budget_records_spend():
+    budget = CostBudget(max_usd_per_job=10.0)
+    budget.record(input_tokens=1000, output_tokens=500)
+    assert budget.spent_usd > 0
+
+
+def test_retry_call_succeeds_after_transient_failure():
+    calls = {"n": 0}
+
+    class APITimeoutError(Exception):
+        pass
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise APITimeoutError("timeout")
+        return "ok"
+
+    result = _retry_call(flaky, attempts=4, base_delay=0.01)
+    assert result == "ok"
+    assert calls["n"] == 3
+
+
+def test_retry_call_reraises_after_exhausting_attempts():
+    class APITimeoutError(Exception):
+        pass
+
+    def always_fails():
+        raise APITimeoutError("nope")
+
+    with pytest.raises(Exception):
+        _retry_call(always_fails, attempts=2, base_delay=0.01)
+
+
+def test_make_critic_clients_falls_back_to_mocks_without_keys(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    builder, critic = make_critic_clients_from_env()
+    assert isinstance(builder, MockBuilder)
+    assert isinstance(critic, MockCritic)
