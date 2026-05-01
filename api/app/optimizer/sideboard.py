@@ -88,6 +88,7 @@ def build_sideboard(
     sideboard_size: int = 15,
     losing_threshold: float = 0.50,
     matchup_archetypes: dict[str, str] | None = None,
+    deck_colors: list[str] | None = None,
 ) -> SideboardPlan:
     """Construct a sideboard plan.
 
@@ -96,11 +97,28 @@ def build_sideboard(
     archetype labels from the matchup label itself (a "Burn" opponent
     looks up the "burn" answer category, a "Tron" opponent the "ramp"
     category).
+
+    ``deck_colors`` constrains sideboard candidates to the deck's
+    color identity — a mono-R deck shouldn't pull a Counterspell from
+    a UR pool. When None, the function infers the colors from the
+    candidate deck's mainboard.
+
+    ``sideboard_size=0`` (Commander) returns an empty plan.
     """
     plan = SideboardPlan()
+    if sideboard_size <= 0:
+        plan.notes.append("format does not use a sideboard")
+        return plan
     if not matchup_matrix:
         plan.notes.append("no matchup matrix available — empty sideboard")
         return plan
+    if deck_colors is None:
+        deck_colors = sorted({
+            color
+            for prof, _ in candidate_deck
+            for color in prof.cost_vector.color_demand.keys()
+        })
+    deck_color_set = set(deck_colors)
 
     # Sort opponents by ascending win rate (weakest first).
     sorted_matchups = sorted(matchup_matrix.items(), key=lambda kv: kv[1])
@@ -130,7 +148,9 @@ def build_sideboard(
         for category in categories:
             if added >= slot_target:
                 break
-            for prof, type_line in _rank_pool_for_category(pool, category, deck_names, plan):
+            for prof, type_line in _rank_pool_for_category(
+                pool, category, deck_names, plan, deck_color_set
+            ):
                 if added >= slot_target:
                     break
                 if len(plan.slots) >= sideboard_size:
@@ -149,7 +169,7 @@ def build_sideboard(
 
     # Pad with flex slots (uncategorized) if we're under budget.
     while len(plan.slots) < sideboard_size and pool:
-        flex = _pick_flex_card(pool, deck_names, plan)
+        flex = _pick_flex_card(pool, deck_names, plan, deck_color_set)
         if flex is None:
             break
         plan.slots.append(SideboardSlot(
@@ -189,11 +209,13 @@ def _rank_pool_for_category(
     category: str,
     deck_names: set[str],
     plan: SideboardPlan,
+    deck_colors: set[str] | None = None,
 ) -> list[tuple[CardProfile, str]]:
     """Return pool cards ranked by their fit for the given category.
 
-    Deduped by card name — the pool may contain multiple physical
-    copies (a 4-of) but the returned list has each name at most once.
+    Deduped by card name. ``deck_colors`` filters out cards whose
+    colored mana cost requires colors the deck can't reliably produce
+    — keeps a mono-R sideboard from picking Counterspell.
     """
     already_in_sideboard = {s.card.name for s in plan.slots}
     seen_names: set[str] = set()
@@ -205,6 +227,10 @@ def _rank_pool_for_category(
             continue
         if prof.name in seen_names:
             continue
+        if deck_colors is not None and deck_colors:
+            offcolor = set(prof.cost_vector.color_demand.keys()) - deck_colors
+            if offcolor:
+                continue
         score = _category_score(prof, category)
         if score <= 0:
             continue
@@ -306,6 +332,7 @@ def _pick_flex_card(
     pool: list[tuple[CardProfile, str]],
     deck_names: set[str],
     plan: SideboardPlan,
+    deck_colors: set[str] | None = None,
 ) -> tuple[CardProfile, str] | None:
     already_sb = {s.card.name for s in plan.slots}
     for prof, type_line in pool:
@@ -315,7 +342,10 @@ def _pick_flex_card(
             continue
         if prof.name in deck_names:
             continue
-        # Prefer interaction-grade flex cards.
+        if deck_colors is not None and deck_colors:
+            offcolor = set(prof.cost_vector.color_demand.keys()) - deck_colors
+            if offcolor:
+                continue
         if prof.role_weights.removal >= 0.3 or prof.effect_vector.is_counterspell:
             return (prof, type_line)
     return None

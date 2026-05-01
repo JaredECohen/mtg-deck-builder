@@ -9,9 +9,12 @@ Responsibilities:
 
 from __future__ import annotations
 
+import logging
 from typing import Iterable, Literal
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from app.oracle import build_card_profile
 from app.oracle.profile import CardProfile
@@ -167,7 +170,8 @@ def _load_cached_profiles(names: set[str] | None = None) -> dict[str, dict]:
     try:
         from app.db import session_scope
         from app.db_models import CardProfile as CardProfileRow
-    except Exception:
+    except ImportError as exc:
+        logger.warning("profile cache: DB modules not importable (%s)", exc)
         return {}
     try:
         out: dict[str, dict] = {}
@@ -188,7 +192,13 @@ def _load_cached_profiles(names: set[str] | None = None) -> dict[str, dict]:
                     "notes": row.notes or [],
                 }
         return out
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        # SQLAlchemyError, missing tables, connection drops — log once
+        # and fall back to on-the-fly profiling. Don't silently mask.
+        logger.warning(
+            "profile cache: read failed (%s: %s); falling back to on-the-fly",
+            type(exc).__name__, exc,
+        )
         return {}
 
 

@@ -11,9 +11,6 @@ Archetypes are versioned. Updating the meta means bumping
 
 Known underdogs in the current simulator:
 
-* Tron — the simulator treats Urza lands as 1-mana basics, so the
-  "2 + 1 = 7 mana" assembly is not modeled. Tron's matchup numbers
-  are pessimistic by ~20-30% until the Tron-assembly rule is added.
 * Living End — cascade-into-Living-End is modeled as a normal cast
   on T5 rather than a T3 cascade trigger; matchups against fast aggro
   are slightly more pessimistic than reality.

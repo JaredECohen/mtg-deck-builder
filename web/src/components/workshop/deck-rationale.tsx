@@ -55,15 +55,31 @@ export type DeckRationaleData = {
   cards_breakdown: Record<string, string[]>;
 };
 
+type SideboardSlot = {
+  card_name: string;
+  type_line: string;
+  matchup_target: string;
+  answer_category: string;
+  rationale: string;
+};
+
+type SideboardPlan = {
+  slots: SideboardSlot[];
+  matchup_coverage: Record<string, number>;
+  total_cards: number;
+  notes: string[];
+};
+
 type Props = {
   rationale: DeckRationaleData;
+  sideboard?: SideboardPlan | null;
 };
 
 function formatPct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function DeckRationaleView({ rationale }: Props) {
+export function DeckRationaleView({ rationale, sideboard }: Props) {
   const winRate = rationale.win_rate ? formatPct(rationale.win_rate) : "—";
   const killTurn = rationale.avg_kill_turn ? rationale.avg_kill_turn.toFixed(1) : "—";
 
@@ -175,6 +191,29 @@ export function DeckRationaleView({ rationale }: Props) {
               </li>
             ))}
           </ul>
+        </Block>
+      )}
+
+      {sideboard && sideboard.slots.length > 0 && (
+        <Block title={`Sideboard plan (${sideboard.total_cards}/15)`}>
+          <table className="w-full text-sm">
+            <thead className="text-zinc-400">
+              <tr>
+                <th className="text-left font-normal">Card</th>
+                <th className="text-left font-normal pl-3">Vs.</th>
+                <th className="text-left font-normal pl-3">Why</th>
+              </tr>
+            </thead>
+            <tbody className="text-zinc-200">
+              {sideboard.slots.map((s, i) => (
+                <tr key={`${s.card_name}-${i}`} className="border-t border-zinc-800">
+                  <td className="py-1 font-mono">{s.card_name}</td>
+                  <td className="py-1 pl-3 text-zinc-400">{s.matchup_target}</td>
+                  <td className="py-1 pl-3 text-zinc-300">{s.rationale}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Block>
       )}
     </section>

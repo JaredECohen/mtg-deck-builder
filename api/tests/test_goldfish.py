@@ -174,6 +174,64 @@ def test_goldfish_no_lands_loses():
     assert report.wins == 0
 
 
+def test_tron_assembly_produces_seven_mana():
+    """Urza's Tower + Power Plant + Mine together should produce 7
+    colorless mana, enabling T3 7-drops."""
+    from app.sim.goldfish import _gain_mana_phase
+    from app.sim.state import CardInPlay, GameState, ManaPool
+    from app.oracle.profile import (
+        CardProfile, ComboPrimitives, CostVector, EffectVector, RoleWeights, PROFILE_VERSION
+    )
+
+    def land(name):
+        prof = CardProfile(
+            card_id=name, name=name,
+            cost_vector=CostVector(cmc=0.0),
+            effect_vector=EffectVector(),
+            role_weights=RoleWeights(land=1.0),
+            combo_primitives=ComboPrimitives(),
+            oracle_ast=[], profile_version=PROFILE_VERSION, parse_method="pattern",
+        )
+        return CardInPlay(profile=prof, is_land=True, summoning_sick=False)
+
+    state = GameState(seed=1, library=[], hand=[])
+    state.battlefield = [
+        land("Urza's Tower"),
+        land("Urza's Power Plant"),
+        land("Urza's Mine"),
+    ]
+    _gain_mana_phase(state)
+    # 7 colorless from Tron, none from anywhere else.
+    assert state.mana.total() == 7
+    assert state.mana.pool.get("C", 0) == 7
+
+
+def test_partial_tron_falls_back_to_one_mana_each():
+    """Two of the three Urza lands shouldn't trigger the assembly bonus."""
+    from app.sim.goldfish import _gain_mana_phase
+    from app.sim.state import CardInPlay, GameState
+    from app.oracle.profile import (
+        CardProfile, ComboPrimitives, CostVector, EffectVector, RoleWeights, PROFILE_VERSION
+    )
+
+    def land(name):
+        prof = CardProfile(
+            card_id=name, name=name,
+            cost_vector=CostVector(cmc=0.0),
+            effect_vector=EffectVector(),
+            role_weights=RoleWeights(land=1.0),
+            combo_primitives=ComboPrimitives(),
+            oracle_ast=[], profile_version=PROFILE_VERSION, parse_method="pattern",
+        )
+        return CardInPlay(profile=prof, is_land=True, summoning_sick=False)
+
+    state = GameState(seed=1, library=[], hand=[])
+    state.battlefield = [land("Urza's Tower"), land("Urza's Power Plant")]
+    _gain_mana_phase(state)
+    # Only 2 mana — assembly didn't kick in.
+    assert state.mana.total() == 2
+
+
 def test_aggressive_curve_kills_faster_than_slow_curve():
     """Aggro curve (1-drops) should kill measurably faster than a 4-drop curve."""
     fast = burn_deck()

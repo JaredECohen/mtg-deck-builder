@@ -162,17 +162,38 @@ def _untap_phase(state: GameState) -> None:
         c.entered_tapped_this_turn = False
 
 
+_TRON_LAND_NAMES = {"Urza's Tower", "Urza's Power Plant", "Urza's Mine"}
+
+
 def _gain_mana_phase(state: GameState) -> None:
     state.mana.empty()
-    for land in state.untapped_lands():
-        # Skip lands that entered tapped *this turn* — they don't tap
-        # for mana the turn they came in.
-        if land.entered_tapped_this_turn:
-            continue
-        # Approximate: each land taps for one mana of its produced colors.
-        # Color choice is greedy — pick any color the land produces. The
-        # mana-base solver handles the precise color question; goldfish
-        # treats lands as "one generic mana, color-flagged."
+
+    # Tron assembly: Urza's Tower + Power Plant + Mine together produce
+    # 7 colorless instead of 3. We detect by name on the battlefield.
+    available_lands = [
+        land for land in state.untapped_lands()
+        if not land.entered_tapped_this_turn
+    ]
+    tron_lands = [land for land in available_lands if land.name in _TRON_LAND_NAMES]
+    has_tron = len({land.name for land in tron_lands}) >= 3
+    if has_tron:
+        state.mana.add("C", 7)
+        # Skip the per-land iteration for the three Tron pieces; they
+        # contributed via the bundle.
+        skip = set()
+        for needed in _TRON_LAND_NAMES:
+            for land in tron_lands:
+                if land.name == needed and id(land) not in skip:
+                    skip.add(id(land))
+                    break
+        for land in available_lands:
+            if id(land) in skip:
+                continue
+            produced = _produced_colors(land)
+            state.mana.add(produced[0] if produced else "C", 1)
+        return
+
+    for land in available_lands:
         produced = _produced_colors(land)
         if produced:
             state.mana.add(produced[0], 1)

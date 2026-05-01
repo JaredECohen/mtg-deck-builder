@@ -68,11 +68,18 @@ def optimize_deck_task(
         raw_matrix = result.best.fitness.raw.get("matchup_matrix") or {}
         if isinstance(raw_matrix, dict):
             matchup_matrix = {str(k): float(v) for k, v in raw_matrix.items()}
+    # Note: 0 is a legitimate value (Commander has no sideboard) — use
+    # explicit default so we don't accidentally upgrade 0 to 15.
+    sideboard_size = (
+        constraints.sideboard_size
+        if constraints.sideboard_size is not None
+        else 15
+    )
     sideboard_plan = build_sideboard(
         result.best.deck,
         pool,
         matchup_matrix,
-        sideboard_size=constraints.sideboard_size or 15,
+        sideboard_size=sideboard_size,
     )
 
     return {

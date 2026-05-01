@@ -391,4 +391,40 @@ export type DeckRationaleData = {
   weakness_callouts: string[];
   fitness_breakdown: Record<string, number>;
   cards_breakdown: Record<string, string[]>;
+  coach_prose?: {
+    headline_paragraph: string;
+    win_plan_summary: string;
+    mulligan_paragraph: string;
+    matchup_summaries: { opponent: string; paragraph: string }[];
+    weaknesses_paragraph: string;
+    critic_summary: string;
+  } | null;
+};
+
+export type SideboardSlotData = {
+  card_name: string;
+  type_line: string;
+  matchup_target: string;
+  answer_category: string;
+  rationale: string;
+};
+
+export type SideboardPlanData = {
+  slots: SideboardSlotData[];
+  matchup_coverage: Record<string, number>;
+  total_cards: number;
+  notes: string[];
+};
+
+export type OptimizerJobResult = {
+  deck: { name: string; type_line: string; cmc: number }[];
+  fitness: Record<string, unknown>;
+  score: number;
+  accepted_swaps: number;
+  rejected_swaps: number;
+  rounds: number;
+  notes: string[];
+  role_profile: Record<string, number>;
+  rationale: DeckRationaleData;
+  sideboard?: SideboardPlanData;
 };

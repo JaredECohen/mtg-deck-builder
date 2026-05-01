@@ -218,18 +218,53 @@ def clear_prose_cache() -> None:
 
 def prose_for_rationale_dict(rationale_dict: dict[str, Any]) -> CoachProse | None:
     """Build coach prose from a serialized rationale dict — used by the
-    lazy ``/v1/jobs/{id}/prose`` endpoint. The rationale_dict is the
-    same shape that ``DeckRationale.to_dict()`` produces; we hydrate a
-    minimal shim object only to feed the existing Skill prompt."""
+    lazy ``/v1/jobs/{id}/prose`` endpoint.
+
+    Reconstructs a *full* :class:`DeckRationale` (including key turns,
+    mulligan guide, soft matchups, critic transcript) so the LLM gets
+    the same context the prose layer would have at primary-build time.
+    """
+    mg_data = rationale_dict.get("mulligan_guide") or {}
     rationale = DeckRationale(
-        headline=rationale_dict.get("headline", ""),
-        archetype=rationale_dict.get("archetype", ""),
+        headline=str(rationale_dict.get("headline", "")),
+        archetype=str(rationale_dict.get("archetype", "")),
         avg_kill_turn=float(rationale_dict.get("avg_kill_turn", 0.0)),
         win_rate=float(rationale_dict.get("win_rate", 0.0)),
         why_this_wins=list(rationale_dict.get("why_this_wins") or []),
+        key_turns=[
+            TurnPlan(turn=int(t.get("turn", 0)), description=str(t.get("description", "")))
+            for t in (rationale_dict.get("key_turns") or [])
+        ],
+        mulligan_guide=MulliganGuide(
+            keep_examples=list(mg_data.get("keep_examples") or []),
+            mulligan_examples=list(mg_data.get("mulligan_examples") or []),
+            keep_threshold_summary=str(mg_data.get("keep_threshold_summary", "")),
+        ),
+        soft_matchups=[
+            MatchupPlan(
+                opponent_archetype=str(m.get("opponent_archetype", "")),
+                win_rate=float(m.get("win_rate", 0.0)),
+                plan=str(m.get("plan", "")),
+                sideboard_in=list(m.get("sideboard_in") or []),
+                sideboard_out=list(m.get("sideboard_out") or []),
+            )
+            for m in (rationale_dict.get("soft_matchups") or [])
+        ],
+        sideboard_priorities=list(rationale_dict.get("sideboard_priorities") or []),
+        critic_transcript=[
+            CriticRoundSummary(
+                round=int(r.get("round", 0)),
+                flagged=list(r.get("flagged") or []),
+                fixed=list(r.get("fixed") or []),
+            )
+            for r in (rationale_dict.get("critic_transcript") or [])
+        ],
         weakness_callouts=list(rationale_dict.get("weakness_callouts") or []),
         fitness_breakdown=dict(rationale_dict.get("fitness_breakdown") or {}),
-        cards_breakdown=dict(rationale_dict.get("cards_breakdown") or {}),
+        cards_breakdown={
+            k: list(v or [])
+            for k, v in (rationale_dict.get("cards_breakdown") or {}).items()
+        },
     )
     return _invoke_goldfish_coach(rationale)
 

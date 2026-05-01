@@ -339,6 +339,7 @@ export function DeckWorkshop() {
             {format === "modern" ? (
               <RationalePanel
                 rationale={rationale.rationale}
+                sideboard={rationale.sideboard}
                 status={rationale.status}
                 error={rationale.error}
                 onRequest={() => void handleRequestRationale()}
@@ -430,12 +431,14 @@ function LegalityBanner({ isLegal, errorCount, warningCount }: { isLegal: boolea
 
 function RationalePanel({
   rationale,
+  sideboard,
   status,
   error,
   onRequest,
   onReset,
 }: {
   rationale: import("@/lib/types").DeckRationaleData | null;
+  sideboard: import("@/lib/types").SideboardPlanData | null;
   status: "idle" | "submitting" | "polling" | "succeeded" | "failed";
   error: string | null;
   onRequest: () => void;
@@ -489,7 +492,7 @@ function RationalePanel({
   if (rationale) {
     return (
       <div className="mt-4">
-        <DeckRationaleView rationale={rationale} />
+        <DeckRationaleView rationale={rationale} sideboard={sideboard} />
       </div>
     );
   }

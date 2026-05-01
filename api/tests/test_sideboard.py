@@ -141,6 +141,56 @@ def test_sideboard_no_dupes_above_4_of():
     assert all(c <= 1 for c in counts.values())
 
 
+def test_sideboard_zero_size_returns_empty_plan():
+    """Commander format passes sideboard_size=0 — should return empty
+    plan with an explanatory note, not pad to 15."""
+    deck = []
+    pool = [(make_profile("Bolt", cmc=1.0, pips={"R": 1},
+                          role={"removal": 1.0},
+                          effect={"damage_dealt": 3.0}), "Instant")] * 4
+    matchup = {"Opp": 0.10}
+    plan = build_sideboard(deck, pool, matchup, sideboard_size=0)
+    assert plan.total_cards == 0
+    assert plan.slots == []
+    assert any("does not use a sideboard" in n for n in plan.notes)
+
+
+def test_sideboard_filters_offcolor_candidates():
+    """A mono-R deck shouldn't pull a UU Counterspell from a UR pool."""
+    bolt = make_profile("Bolt", cmc=1.0, pips={"R": 1},
+                        role={"removal": 1.0},
+                        effect={"damage_dealt": 3.0})
+    counter = make_profile("Counterspell", cmc=2.0, pips={"U": 2},
+                           role={"disruption": 1.0},
+                           effect={"is_counterspell": True})
+    # Mainboard inferred colors: only R via the bolt mainboard cards.
+    deck = [(bolt, "Instant")] * 4
+    pool = [(bolt, "Instant")] * 4 + [(counter, "Instant")] * 4
+    matchup = {"Combo": 0.20}  # combo wants counters
+    plan = build_sideboard(deck, pool, matchup, sideboard_size=8)
+    assert "Counterspell" not in {s.card.name for s in plan.slots}
+
+
+def test_sideboard_explicit_deck_colors_overrides_inference():
+    """Caller-provided deck_colors trumps mainboard inference. Useful
+    when the mainboard hasn't been built yet but constraints declare
+    the colors."""
+    bolt = make_profile("Bolt", cmc=1.0, pips={"R": 1},
+                        role={"removal": 1.0},
+                        effect={"damage_dealt": 3.0})
+    counter = make_profile("Counterspell", cmc=2.0, pips={"U": 2},
+                           role={"disruption": 1.0},
+                           effect={"is_counterspell": True})
+    deck = []
+    pool = [(bolt, "Instant")] * 4 + [(counter, "Instant")] * 4
+    matchup = {"Combo": 0.20}
+    # Allow both U and R explicitly.
+    plan = build_sideboard(deck, pool, matchup, sideboard_size=4,
+                           deck_colors=["U", "R"])
+    names = {s.card.name for s in plan.slots}
+    assert "Counterspell" in names
+
+
 def test_sideboard_flex_padding_when_no_clear_answers():
     """When no answer category matches, pad with flex slots."""
     deck = []

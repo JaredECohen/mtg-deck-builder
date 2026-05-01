@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchJob, submitOptimizerJob } from "@/lib/api";
-import type { DeckRationaleData, JobRecord, OptimizerJobRequest } from "@/lib/types";
+import type {
+  DeckRationaleData,
+  JobRecord,
+  OptimizerJobRequest,
+  SideboardPlanData,
+} from "@/lib/types";
 
 type Status = "idle" | "submitting" | "polling" | "succeeded" | "failed";
 
@@ -12,6 +17,7 @@ const POLL_TIMEOUT_MS = 90_000;
 
 export function useDeckRationale() {
   const [rationale, setRationale] = useState<DeckRationaleData | null>(null);
+  const [sideboard, setSideboard] = useState<SideboardPlanData | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -31,6 +37,7 @@ export function useDeckRationale() {
     cancelled.current = true;
     if (pollTimer.current) clearTimeout(pollTimer.current);
     setRationale(null);
+    setSideboard(null);
     setStatus("idle");
     setError(null);
     setJobId(null);
@@ -63,8 +70,12 @@ export function useDeckRationale() {
       const job: JobRecord = await fetchJob(id);
       if (cancelled.current) return;
       if (job.status === "succeeded" || job.status === "cached") {
-        const result = (job.result ?? {}) as { rationale?: DeckRationaleData };
+        const result = (job.result ?? {}) as {
+          rationale?: DeckRationaleData;
+          sideboard?: SideboardPlanData;
+        };
         setRationale(result.rationale ?? null);
+        setSideboard(result.sideboard ?? null);
         setStatus("succeeded");
         return;
       }
@@ -87,5 +98,5 @@ export function useDeckRationale() {
     }
   }, []);
 
-  return { rationale, status, error, jobId, submit, reset };
+  return { rationale, sideboard, status, error, jobId, submit, reset };
 }

@@ -184,24 +184,38 @@ def get_job(job_id: str) -> dict:
 
 
 @app.post("/v1/jobs/{job_id}/prose")
-def get_job_prose(job_id: str) -> dict:
+def get_job_prose(job_id: str) -> Response:
     """Lazily produce LLM-narrated coach prose for a completed
-    optimizer job. Returns 202 if the job hasn't completed yet, 404 if
-    unknown, 200 with prose=null when the LLM is disabled or the API
-    key is absent (graceful fallback)."""
+    optimizer job.
+
+    * 200 — prose ready (or null when LLM is disabled / no API key)
+    * 202 — job still running; client should poll the prose endpoint
+            again after the parent job completes
+    * 404 — unknown job, or job has no rationale
+    * 409 — job failed
+    """
+    from fastapi.responses import JSONResponse
     from app.services.deck_rationale import prose_for_rationale_dict
     try:
         job = get_job_queue().get(job_id)
     except (JobNotFound, KeyError) as exc:
         raise HTTPException(status_code=404, detail=f"job {job_id!r} not found") from exc
+    if job.status == "failed":
+        raise HTTPException(status_code=409, detail=f"job failed: {job.error or 'unknown'}")
     if job.status not in {"succeeded", "cached"}:
-        raise HTTPException(status_code=409, detail=f"job not yet complete (status={job.status})")
+        return JSONResponse(
+            status_code=202,
+            content={"job_id": job_id, "status": job.status, "prose": None},
+        )
     result = job.result or {}
     rationale = result.get("rationale")
     if rationale is None:
         raise HTTPException(status_code=404, detail="no rationale on this job")
     prose = prose_for_rationale_dict(rationale)
-    return {"job_id": job_id, "prose": prose.to_dict() if prose else None}
+    return JSONResponse(
+        status_code=200,
+        content={"job_id": job_id, "prose": prose.to_dict() if prose else None},
+    )
 
 
 @app.get("/v1/meta/summary", response_model=MetaSummaryResponse)

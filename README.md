@@ -144,8 +144,13 @@ out-of-loop with results cached so generation stays fast and deterministic.
 - Cross-format matchups apply the opponent's *native* format mulligan profile
   (e.g. Commander candidate vs Modern Burn opponent each mulligan correctly)
 - Sideboard generator targets losing matchups first; produces 15 deduped slots
-  with rationales tagged by matchup
+  with rationales tagged by matchup; respects deck color identity; returns
+  empty plan for Commander (sideboard_size=0)
+- Sideboard plan is rendered in the workshop UI under the rationale section
 - Coach prose moved off the hot path — fetched lazily via `POST /v1/jobs/{id}/prose`
+  (returns 202 while parent job is still running)
+- Tron-assembly rule modeled: Urza Tower + Power Plant + Mine together produce
+  7 colorless mana, enabling T3 7-drops in goldfish runs
 
 ## Pending / not yet wired
 
@@ -169,12 +174,6 @@ These are intentional gaps remaining after the format expansion + LLM/Celery
   Modern opponents (Burn, Murktide, Tron, Living End). Standard / Pioneer /
   Legacy / Commander need their own meta sets. The matchup pipeline is
   format-aware; the data isn't.
-
-### Tron simulator fidelity
-- The simulator currently treats the Urza land cycle (Tower / Power Plant /
-  Mine) as basics — the "all three together = 7 mana" assembly rule is not
-  modeled. Tron's matchup numbers are pessimistic by ~20-30% as a result.
-  Next: add a multi-land combo rule to `_compute_available_mana`.
 
 ### Tournament deck benchmark coverage
 - Kill-turn benchmarks are pinned for Burn only. Living End, Yawgmoth, and
