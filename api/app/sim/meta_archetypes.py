@@ -29,7 +29,7 @@ from app.oracle.profile import (
     RoleWeights,
 )
 
-META_VERSION = "modern-2026.04"
+META_VERSION = "multi-format-2026.05"
 
 
 def _profile(
@@ -40,6 +40,7 @@ def _profile(
     role: dict[str, float] | None = None,
     effect: dict | None = None,
     keywords: list[str] | None = None,
+    notes: list[str] | None = None,
     closes_game: bool = False,
     is_counterspell: bool = False,
     is_tutor: bool = False,
@@ -63,6 +64,7 @@ def _profile(
         oracle_ast=[],
         profile_version=PROFILE_VERSION,
         parse_method="pattern",
+        notes=list(notes or []),
     )
 
 
@@ -243,6 +245,403 @@ def living_end() -> list[tuple[CardProfile, str]]:
     return deck[:60]
 
 
+def yawgmoth() -> list[tuple[CardProfile, str]]:
+    """Golgari Yawgmoth — grindy sacrifice/value engine combo-midrange."""
+    deck: list[tuple[CardProfile, str]] = []
+    yawg = _profile("Yawgmoth, Thran Physician", cmc=4.0, pips={"B": 1},
+                    role={"value_engine": 0.6, "payoff": 0.4},
+                    effect={"cards_drawn": 1.0, "ca_delta": 1.0, "board_impact": 3.0},
+                    closes_game=True, is_combo_payoff=True)
+    wolf = _profile("Young Wolf", cmc=1.0, pips={"G": 1},
+                    role={"enabler": 0.6, "threat": 0.4},
+                    effect={"board_impact": 1.4}, keywords=["undying"])
+    geist = _profile("Strangleroot Geist", cmc=2.0, pips={"G": 1},
+                     role={"enabler": 0.5, "threat": 0.5},
+                     effect={"board_impact": 2.8}, keywords=["haste", "undying"])
+    scavenger = _profile("Wall of Roots", cmc=2.0, pips={"G": 1},
+                         role={"fixer": 0.7, "enabler": 0.3},
+                         effect={"mana_produced": 1.0, "board_impact": 0.5},
+                         keywords=["defender"])
+    grist = _profile("Grist, the Hunger Tide", cmc=3.0, pips={"B": 1, "G": 1},
+                     role={"value_engine": 0.6, "removal": 0.4},
+                     effect={"creatures_made": 1.0, "board_impact": 2.0})
+    chord = _profile("Chord of Calling", cmc=3.0, pips={"G": 3},
+                     role={"tutor": 1.0}, effect={"interaction_window": "instant"},
+                     is_tutor=True)
+    ballista = _profile("Walking Ballista", cmc=0.0,
+                        role={"removal": 0.6, "payoff": 0.4},
+                        effect={"board_impact": 1.0, "damage_dealt": 1.0})
+    forest = _profile("Forest (Yawg)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["G"])
+    swamp = _profile("Swamp (Yawg)", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"}, keywords=["B"])
+    overgrown = _profile("Overgrown Tomb", cmc=0.0, role={"land": 1.0},
+                         effect={"interaction_window": "static"}, keywords=["B", "G"])
+    deck.extend([(yawg, "Creature — Phyrexian")] * 4)
+    deck.extend([(wolf, "Creature — Wolf")] * 4)
+    deck.extend([(geist, "Creature — Spirit")] * 4)
+    deck.extend([(scavenger, "Creature — Plant Wall")] * 4)
+    deck.extend([(grist, "Planeswalker — Grist")] * 3)
+    deck.extend([(chord, "Instant")] * 3)
+    deck.extend([(ballista, "Artifact Creature")] * 4)
+    deck.extend([(forest, "Basic Land — Forest")] * 9)
+    deck.extend([(swamp, "Basic Land — Swamp")] * 9)
+    deck.extend([(overgrown, "Land")] * 6)
+    return deck[:60]
+
+
+def amulet_titan() -> list[tuple[CardProfile, str]]:
+    """Amulet Titan — ramp combo that lands Primeval Titan fast."""
+    deck: list[tuple[CardProfile, str]] = []
+    amulet = _profile("Amulet of Vigor", cmc=1.0,
+                      role={"enabler": 1.0},
+                      effect={"mana_produced": 1.0, "interaction_window": "permanent"})
+    titan = _profile("Primeval Titan", cmc=6.0, pips={"G": 2},
+                     role={"payoff": 0.6, "threat": 0.4},
+                     effect={"board_impact": 7.0}, keywords=["trample", "haste"],
+                     closes_game=True, is_combo_payoff=True)
+    azusa = _profile("Azusa, Lost but Seeking", cmc=3.0, pips={"G": 2},
+                     role={"enabler": 1.0}, effect={"mana_produced": 2.0})
+    explore = _profile("Explore", cmc=2.0, pips={"G": 1},
+                       role={"enabler": 0.6, "value_engine": 0.4},
+                       effect={"cards_drawn": 1.0, "mana_produced": 1.0})
+    summons = _profile("Summoner's Pact", cmc=0.0, pips={"G": 2},
+                       role={"tutor": 1.0}, is_tutor=True)
+    chamber = _profile("Simic Growth Chamber", cmc=0.0, role={"land": 1.0},
+                       effect={"interaction_window": "static"},
+                       notes=["enters tapped"], keywords=["U", "G"])
+    forest = _profile("Forest (Amulet)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["G"])
+    tower = _profile("Tolaria West", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"},
+                     notes=["enters tapped"], keywords=["U"])
+    deck.extend([(amulet, "Artifact")] * 4)
+    deck.extend([(titan, "Creature — Giant")] * 4)
+    deck.extend([(azusa, "Creature — Human Monk")] * 4)
+    deck.extend([(explore, "Sorcery")] * 4)
+    deck.extend([(summons, "Instant")] * 4)
+    deck.extend([(chamber, "Land")] * 8)
+    deck.extend([(tower, "Land")] * 4)
+    deck.extend([(forest, "Basic Land — Forest")] * 18)
+    return deck[:60]
+
+
+# --- Standard meta ----------------------------------------------------
+
+
+def mono_red_std() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    heartfire = _profile("Heartfire Hero", cmc=1.0, pips={"R": 1},
+                         role={"threat": 0.9}, effect={"board_impact": 2.0})
+    monstrous = _profile("Monstrous Rage", cmc=1.0, pips={"R": 1},
+                         role={"closer": 0.6, "protection": 0.4},
+                         effect={"board_impact": 2.0})
+    boltwave = _profile("Boltwave", cmc=1.0, pips={"R": 1},
+                        role={"removal": 0.6, "closer": 0.4},
+                        effect={"damage_dealt": 2.0, "interaction_window": "instant"})
+    burst = _profile("Burst Lightning", cmc=1.0, pips={"R": 1},
+                     role={"removal": 0.5, "closer": 0.5},
+                     effect={"damage_dealt": 2.0, "interaction_window": "instant"})
+    screamer = _profile("Screaming Nemesis", cmc=3.0, pips={"R": 1},
+                        role={"threat": 0.7, "closer": 0.3},
+                        effect={"board_impact": 4.0}, keywords=["haste"])
+    mountain = _profile("Mountain (Std-R)", cmc=0.0, role={"land": 1.0},
+                        effect={"interaction_window": "static"}, keywords=["R"])
+    deck.extend([(heartfire, "Creature — Kobold")] * 4)
+    deck.extend([(monstrous, "Instant")] * 4)
+    deck.extend([(boltwave, "Instant")] * 4)
+    deck.extend([(burst, "Instant")] * 4)
+    deck.extend([(screamer, "Creature — Spirit")] * 4)
+    deck.extend([(mountain, "Basic Land — Mountain")] * 22)
+    pad = _profile("Hired Claw", cmc=1.0, pips={"R": 1}, role={"threat": 0.8},
+                   effect={"board_impact": 1.5})
+    deck.extend([(pad, "Creature — Lizard")] * 14)
+    return deck[:60]
+
+
+def domain_ramp_std() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    bug = _profile("Up the Beanstalk", cmc=2.0, pips={"G": 1},
+                   role={"value_engine": 1.0},
+                   effect={"cards_drawn": 1.5, "ca_delta": 1.5})
+    leyline = _profile("Leyline Binding", cmc=1.0, pips={"W": 1},
+                       role={"removal": 1.0},
+                       effect={"removal_scope": ["permanent"], "interaction_window": "instant"})
+    herd = _profile("Herd Migration", cmc=6.0, pips={"G": 2},
+                    role={"payoff": 0.6, "threat": 0.4},
+                    effect={"creatures_made": 3.0, "board_impact": 6.0},
+                    closes_game=True)
+    overlord = _profile("Zur, Eternal Schemer", cmc=7.0, pips={"W": 1, "U": 1, "B": 1},
+                        role={"payoff": 0.7, "removal": 0.3},
+                        effect={"board_impact": 7.0}, closes_game=True)
+    sunfall = _profile("Sunfall", cmc=5.0, pips={"W": 2},
+                       role={"removal": 1.0},
+                       effect={"removal_scope": ["creature"], "board_impact": 4.0,
+                               "interaction_window": "sorcery"})
+    triome = _profile("Triome (Domain)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"},
+                      notes=["enters tapped"], keywords=["W", "U", "G"])
+    plains = _profile("Plains (Domain)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["W"])
+    forest = _profile("Forest (Domain)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["G"])
+    deck.extend([(bug, "Enchantment")] * 4)
+    deck.extend([(leyline, "Enchantment")] * 4)
+    deck.extend([(herd, "Sorcery")] * 4)
+    deck.extend([(overlord, "Creature — God")] * 3)
+    deck.extend([(sunfall, "Sorcery")] * 4)
+    deck.extend([(triome, "Land")] * 9)
+    deck.extend([(plains, "Basic Land — Plains")] * 14)
+    deck.extend([(forest, "Basic Land — Forest")] * 14)
+    return deck[:60]
+
+
+# --- Pioneer meta -----------------------------------------------------
+
+
+def izzet_phoenix_pio() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    phoenix = _profile("Arclight Phoenix", cmc=4.0, pips={"R": 1},
+                       role={"threat": 0.9, "closer": 0.1},
+                       effect={"board_impact": 4.5}, keywords=["flying", "haste"])
+    consider = _profile("Consider (Pio)", cmc=1.0, pips={"U": 1},
+                        role={"value_engine": 1.0},
+                        effect={"cards_drawn": 1.0, "ca_delta": 1.0,
+                                "interaction_window": "instant"})
+    picklock = _profile("Picklock Prankster", cmc=1.0, pips={"U": 1},
+                        role={"value_engine": 0.8},
+                        effect={"cards_drawn": 1.0, "ca_delta": 1.0})
+    bolt = _profile("Lightning Axe", cmc=1.0, pips={"R": 1},
+                    role={"removal": 1.0},
+                    effect={"damage_dealt": 5.0, "interaction_window": "instant"})
+    treasure = _profile("Treasure Cruise", cmc=8.0, pips={"U": 1},
+                        role={"value_engine": 1.0},
+                        effect={"cards_drawn": 3.0, "ca_delta": 3.0},
+                        keywords=["delve"])
+    island = _profile("Island (Pio-UR)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["U"])
+    mountain = _profile("Mountain (Pio-UR)", cmc=0.0, role={"land": 1.0},
+                        effect={"interaction_window": "static"}, keywords=["R"])
+    spirebluff = _profile("Spirebluff Canal", cmc=0.0, role={"land": 1.0},
+                          effect={"interaction_window": "static"}, keywords=["U", "R"])
+    deck.extend([(phoenix, "Creature — Phoenix")] * 4)
+    deck.extend([(consider, "Instant")] * 4)
+    deck.extend([(picklock, "Creature — Faerie")] * 4)
+    deck.extend([(bolt, "Instant")] * 4)
+    deck.extend([(treasure, "Sorcery")] * 4)
+    deck.extend([(spirebluff, "Land")] * 4)
+    deck.extend([(island, "Basic Land — Island")] * 9)
+    deck.extend([(mountain, "Basic Land — Mountain")] * 8)
+    pad = _profile("Crackling Drake", cmc=4.0, pips={"U": 1, "R": 1},
+                   role={"threat": 0.7, "value_engine": 0.3},
+                   effect={"board_impact": 3.5, "cards_drawn": 1.0}, keywords=["flying"])
+    deck.extend([(pad, "Creature — Drake")] * 15)
+    return deck[:60]
+
+
+def mono_green_devotion_pio() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    elf = _profile("Llanowar Elves", cmc=1.0, pips={"G": 1},
+                   role={"fixer": 0.8, "enabler": 0.2},
+                   effect={"mana_produced": 1.0, "board_impact": 1.0})
+    karn = _profile("Karn, the Great Creator", cmc=4.0, pips={"G": 1},
+                    role={"value_engine": 0.6, "disruption": 0.4})
+    nykthos = _profile("Nykthos, Shrine to Nyx", cmc=0.0, role={"land": 1.0},
+                       effect={"mana_produced": 2.0, "interaction_window": "static"},
+                       keywords=["G"])
+    cavalier = _profile("Cavalier of Thorns", cmc=5.0, pips={"G": 3},
+                        role={"threat": 0.7, "fixer": 0.3},
+                        effect={"board_impact": 6.0})
+    storm = _profile("Storm the Festival", cmc=6.0, pips={"G": 2},
+                     role={"payoff": 0.6, "value_engine": 0.4},
+                     effect={"board_impact": 6.0, "ca_delta": 2.0},
+                     closes_game=True)
+    kiora = _profile("Kiora, Behemoth Beckoner", cmc=3.0, pips={"G": 1},
+                     role={"enabler": 0.7, "value_engine": 0.3},
+                     effect={"mana_produced": 1.0, "cards_drawn": 0.5})
+    forest = _profile("Forest (Pio-G)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["G"])
+    deck.extend([(elf, "Creature — Elf Druid")] * 4)
+    deck.extend([(karn, "Planeswalker — Karn")] * 4)
+    deck.extend([(cavalier, "Creature — Elemental")] * 4)
+    deck.extend([(storm, "Sorcery")] * 4)
+    deck.extend([(kiora, "Planeswalker — Kiora")] * 4)
+    deck.extend([(nykthos, "Land")] * 4)
+    deck.extend([(forest, "Basic Land — Forest")] * 16)
+    pad = _profile("Old-Growth Troll", cmc=4.0, pips={"G": 3},
+                   role={"threat": 0.8}, effect={"board_impact": 4.0}, keywords=["trample"])
+    deck.extend([(pad, "Creature — Troll")] * 20)
+    return deck[:60]
+
+
+# --- Legacy meta ------------------------------------------------------
+
+
+def rug_delver_leg() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    delver = _profile("Delver of Secrets", cmc=1.0, pips={"U": 1},
+                      role={"threat": 0.9}, effect={"board_impact": 3.0},
+                      keywords=["flying"])
+    daze = _profile("Daze", cmc=1.0, pips={"U": 1},
+                    role={"disruption": 1.0},
+                    effect={"interaction_window": "instant"}, is_counterspell=True)
+    force = _profile("Force of Will", cmc=5.0, pips={"U": 2},
+                     role={"disruption": 1.0},
+                     effect={"interaction_window": "instant"}, is_counterspell=True)
+    bolt = _profile("Lightning Bolt (Legacy)", cmc=1.0, pips={"R": 1},
+                    role={"removal": 0.6, "closer": 0.4},
+                    effect={"damage_dealt": 3.0, "interaction_window": "instant"})
+    ragavan = _profile("Ragavan (Legacy)", cmc=1.0, pips={"R": 1},
+                       role={"threat": 0.9}, effect={"board_impact": 2.0}, keywords=["haste"])
+    wasteland = _profile("Wasteland", cmc=0.0, role={"land": 0.7, "disruption": 0.3},
+                         effect={"interaction_window": "static"})
+    fetch = _profile("Wooded Foothills", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"}, keywords=["U", "R", "G"])
+    island = _profile("Island (Legacy)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["U"])
+    ragout = _profile("Tarmogoyf", cmc=2.0, pips={"G": 1},
+                      role={"threat": 0.9}, effect={"board_impact": 4.0})
+    deck.extend([(delver, "Creature — Human Wizard")] * 4)
+    deck.extend([(ragout, "Creature — Lhurgoyf")] * 4)
+    deck.extend([(ragavan, "Creature — Monkey")] * 4)
+    deck.extend([(daze, "Instant")] * 4)
+    deck.extend([(force, "Instant")] * 4)
+    deck.extend([(bolt, "Instant")] * 4)
+    deck.extend([(wasteland, "Land")] * 4)
+    deck.extend([(fetch, "Land")] * 8)
+    deck.extend([(island, "Basic Land — Island")] * 8)
+    pad = _profile("Brainstorm", cmc=1.0, pips={"U": 1}, role={"value_engine": 1.0},
+                   effect={"cards_drawn": 3.0, "ca_delta": 1.0,
+                           "interaction_window": "instant"})
+    deck.extend([(pad, "Instant")] * 16)
+    return deck[:60]
+
+
+def reanimator_leg() -> list[tuple[CardProfile, str]]:
+    deck: list[tuple[CardProfile, str]] = []
+    entomb = _profile("Entomb", cmc=1.0, pips={"B": 1},
+                      role={"tutor": 1.0, "enabler": 0.5},
+                      effect={"interaction_window": "instant"}, is_tutor=True)
+    reanimate = _profile("Reanimate", cmc=1.0, pips={"B": 1},
+                         role={"payoff": 0.6, "enabler": 0.4},
+                         effect={"board_impact": 8.0, "life_lost": 4.0},
+                         is_combo_payoff=True)
+    exhume = _profile("Exhume", cmc=2.0, pips={"B": 1},
+                      role={"payoff": 0.6, "enabler": 0.4},
+                      effect={"board_impact": 8.0})
+    griselbrand = _profile("Griselbrand", cmc=8.0, pips={"B": 4},
+                           role={"closer": 1.0},
+                           effect={"board_impact": 12.0, "cards_drawn": 7.0},
+                           keywords=["flying", "lifelink"], closes_game=True)
+    atraxa = _profile("Atraxa, Grand Unifier", cmc=7.0, pips={"W": 1, "B": 1},
+                      role={"closer": 0.7, "value_engine": 0.3},
+                      effect={"board_impact": 10.0, "cards_drawn": 2.0},
+                      keywords=["flying"], closes_game=True)
+    dark = _profile("Dark Ritual", cmc=1.0, pips={"B": 1},
+                    role={"enabler": 1.0}, effect={"mana_produced": 3.0})
+    swamp = _profile("Swamp (Reanimator)", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"}, keywords=["B"])
+    deck.extend([(entomb, "Instant")] * 4)
+    deck.extend([(reanimate, "Sorcery")] * 4)
+    deck.extend([(exhume, "Sorcery")] * 4)
+    deck.extend([(dark, "Instant")] * 4)
+    deck.extend([(griselbrand, "Creature — Demon")] * 3)
+    deck.extend([(atraxa, "Creature — Angel")] * 3)
+    deck.extend([(swamp, "Basic Land — Swamp")] * 16)
+    pad = _profile("Faithless Looting", cmc=1.0, pips={"R": 1},
+                   role={"enabler": 0.7, "value_engine": 0.3},
+                   effect={"cards_drawn": 2.0, "interaction_window": "sorcery"})
+    deck.extend([(pad, "Sorcery")] * 18)
+    return deck[:60]
+
+
+# --- Commander meta ---------------------------------------------------
+
+
+def _commander_padding(label: str, count: int) -> list[tuple[CardProfile, str]]:
+    """Generic midrange filler so Commander skeletons reach ~99 cards
+    without inflating any single role."""
+    out: list[tuple[CardProfile, str]] = []
+    value = _profile(f"{label} Value Engine", cmc=3.0, pips={"C": 1},
+                     role={"value_engine": 0.8},
+                     effect={"cards_drawn": 1.0, "ca_delta": 1.0})
+    threat = _profile(f"{label} Beater", cmc=4.0,
+                      role={"threat": 0.8}, effect={"board_impact": 4.0})
+    out.extend([(value, "Artifact")] * (count // 2))
+    out.extend([(threat, "Creature — Construct")] * (count - count // 2))
+    return out
+
+
+def thoracle_combo_cmd() -> list[tuple[CardProfile, str]]:
+    """Commander cEDH Thoracle combo skeleton."""
+    deck: list[tuple[CardProfile, str]] = []
+    thoracle = _profile("Thassa's Oracle", cmc=2.0, pips={"U": 2},
+                        role={"payoff": 1.0}, effect={"board_impact": 1.0},
+                        closes_game=True, is_combo_payoff=True)
+    consult = _profile("Demonic Consultation", cmc=1.0, pips={"B": 1},
+                       role={"enabler": 0.7, "tutor": 0.3},
+                       effect={"interaction_window": "instant"}, is_tutor=True)
+    ritual = _profile("Dark Ritual (Cmd)", cmc=1.0, pips={"B": 1},
+                      role={"enabler": 1.0}, effect={"mana_produced": 3.0})
+    sol = _profile("Sol Ring", cmc=1.0, role={"enabler": 1.0},
+                   effect={"mana_produced": 2.0, "interaction_window": "permanent"})
+    counter = _profile("Mana Drain", cmc=2.0, pips={"U": 2},
+                       role={"disruption": 1.0},
+                       effect={"interaction_window": "instant"}, is_counterspell=True)
+    tutor = _profile("Demonic Tutor", cmc=2.0, pips={"B": 1},
+                     role={"tutor": 1.0}, is_tutor=True)
+    island = _profile("Island (Cmd-U)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["U"])
+    swamp = _profile("Swamp (Cmd-B)", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"}, keywords=["B"])
+    deck.extend([(thoracle, "Creature — Merfolk")] * 1)
+    deck.extend([(consult, "Instant")] * 1)
+    deck.extend([(tutor, "Sorcery")] * 4)
+    deck.extend([(ritual, "Instant")] * 4)
+    deck.extend([(sol, "Artifact")] * 1)
+    deck.extend([(counter, "Instant")] * 8)
+    deck.extend([(island, "Basic Land — Island")] * 18)
+    deck.extend([(swamp, "Basic Land — Swamp")] * 18)
+    deck.extend(_commander_padding("Thoracle", 99 - len(deck)))
+    return deck[:99]
+
+
+def midrange_goodstuff_cmd() -> list[tuple[CardProfile, str]]:
+    """Commander value midrange — slow, grindy, inevitability."""
+    deck: list[tuple[CardProfile, str]] = []
+    ramp = _profile("Cultivate (Cmd)", cmc=3.0, pips={"G": 1},
+                    role={"fixer": 0.7, "value_engine": 0.3},
+                    effect={"mana_produced": 1.0, "cards_drawn": 1.0})
+    wrath = _profile("Damnation (Cmd)", cmc=4.0, pips={"B": 2},
+                     role={"removal": 1.0},
+                     effect={"removal_scope": ["creature"], "board_impact": 4.0})
+    bomb = _profile("Avenger of Zendikar", cmc=7.0, pips={"G": 2},
+                    role={"payoff": 0.6, "threat": 0.4},
+                    effect={"creatures_made": 5.0, "board_impact": 8.0},
+                    closes_game=True)
+    draw = _profile("Sylvan Library", cmc=2.0, pips={"G": 1},
+                    role={"value_engine": 1.0},
+                    effect={"cards_drawn": 1.5, "ca_delta": 1.5})
+    sol = _profile("Sol Ring (Cmd)", cmc=1.0, role={"enabler": 1.0},
+                   effect={"mana_produced": 2.0, "interaction_window": "permanent"})
+    forest = _profile("Forest (Cmd-G)", cmc=0.0, role={"land": 1.0},
+                      effect={"interaction_window": "static"}, keywords=["G"])
+    swamp = _profile("Swamp (Cmd-BG)", cmc=0.0, role={"land": 1.0},
+                     effect={"interaction_window": "static"}, keywords=["B"])
+    deck.extend([(ramp, "Sorcery")] * 6)
+    deck.extend([(wrath, "Sorcery")] * 4)
+    deck.extend([(bomb, "Creature — Elemental")] * 3)
+    deck.extend([(draw, "Enchantment")] * 3)
+    deck.extend([(sol, "Artifact")] * 1)
+    deck.extend([(forest, "Basic Land — Forest")] * 20)
+    deck.extend([(swamp, "Basic Land — Swamp")] * 18)
+    deck.extend(_commander_padding("Goodstuff", 99 - len(deck)))
+    return deck[:99]
+
+
+# --- Format registry --------------------------------------------------
+
+# Modern remains the canonical default set for backward compatibility.
 META_DECKS: dict[str, list[tuple[CardProfile, str]]] = {
     "Burn": burn(),
     "Murktide (UR Tempo)": murktide(),
@@ -250,13 +649,55 @@ META_DECKS: dict[str, list[tuple[CardProfile, str]]] = {
     "Living End": living_end(),
 }
 
+# Per-format meta archetype sets. Each candidate deck is graded against
+# the meta of *its own* format. The matchup pipeline was always
+# format-aware — this is the data layer it needed.
+META_BY_FORMAT: dict[str, dict[str, list[tuple[CardProfile, str]]]] = {
+    "modern": {
+        "Burn": burn(),
+        "Murktide (UR Tempo)": murktide(),
+        "Tron": tron(),
+        "Living End": living_end(),
+        "Yawgmoth": yawgmoth(),
+        "Amulet Titan": amulet_titan(),
+    },
+    "standard": {
+        "Mono-Red Aggro": mono_red_std(),
+        "Domain Ramp": domain_ramp_std(),
+    },
+    "pioneer": {
+        "Izzet Phoenix": izzet_phoenix_pio(),
+        "Mono-Green Devotion": mono_green_devotion_pio(),
+    },
+    "legacy": {
+        "RUG Delver": rug_delver_leg(),
+        "Reanimator": reanimator_leg(),
+    },
+    "commander": {
+        "Thoracle Combo": thoracle_combo_cmd(),
+        "Midrange Goodstuff": midrange_goodstuff_cmd(),
+    },
+}
+
 # Each meta deck's native format. Used by the matchup simulator so that
 # a Commander candidate vs. these Modern decks doesn't accidentally
-# apply Commander mulligan rules to the opponent. Add new entries when
-# expanding the meta to other formats.
+# apply Commander mulligan rules to the opponent.
 META_DECK_FORMATS: dict[str, str] = {
-    "Burn": "modern",
-    "Murktide (UR Tempo)": "modern",
-    "Tron": "modern",
-    "Living End": "modern",
+    label: fmt
+    for fmt, decks in META_BY_FORMAT.items()
+    for label in decks
 }
+
+
+def format_meta(format_id: str) -> dict[str, list[tuple[CardProfile, str]]]:
+    """Return the meta-archetype opponent set for ``format_id``.
+
+    Falls back to the Modern meta for unknown formats so callers always
+    get a believable opponent suite rather than an empty matrix.
+    """
+    return META_BY_FORMAT.get(format_id, META_BY_FORMAT["modern"])
+
+
+def format_meta_formats(format_id: str) -> dict[str, str]:
+    """label -> native format map for the given format's meta set."""
+    return {label: format_id for label in format_meta(format_id)}

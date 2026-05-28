@@ -41,9 +41,12 @@ def test_burn_beats_slow_tron_in_goldfish_pressure():
 
 
 def test_matchup_matrix_covers_all_meta_decks():
-    cfg = MatchConfig(games=30, max_turns=8, seed=11)
+    from app.sim.meta_archetypes import format_meta
+    cfg = MatchConfig(games=30, max_turns=8, seed=11, format_id="modern")
     matrix = build_matchup_matrix(burn(), config=cfg)
-    assert set(matrix.by_opponent.keys()) == set(META_DECKS.keys())
+    # Default (no explicit opponents) grades against the candidate's
+    # own format meta — Modern here.
+    assert set(matrix.by_opponent.keys()) == set(format_meta("modern").keys())
     assert all(0.0 <= w <= 1.0 for w in matrix.by_opponent.values())
     assert matrix.weakest_matchup is not None
     assert matrix.strongest_matchup is not None
