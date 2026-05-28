@@ -91,6 +91,23 @@ class IngestionRun(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class SavedDeck(Base):
+    __tablename__ = "saved_decks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    share_token: Mapped[str] = mapped_column(String(64), index=True, unique=True)
+    owner: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), default="Untitled deck")
+    format: Mapped[str] = mapped_column(String(32), index=True)
+    commander: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mainboard: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    sideboard: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    evaluation: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[str] = mapped_column(String(32), index=True)
+    updated_at: Mapped[str] = mapped_column(String(32))
+
+
 class CardProfile(Base):
     __tablename__ = "card_profiles"
 

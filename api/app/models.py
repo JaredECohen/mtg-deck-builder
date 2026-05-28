@@ -225,6 +225,21 @@ class AnalyzeDeckRequest(BaseModel):
     deep_analysis: bool = True
 
 
+class DiffDeckRequest(BaseModel):
+    before: list[CardRef]
+    after: list[CardRef]
+
+
+class SaveDeckRequest(BaseModel):
+    name: str = "Untitled deck"
+    format: FormatName
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    commander: str | None = None
+    notes: str = ""
+    evaluation: dict = Field(default_factory=dict)
+
+
 class EvaluateDeckRequest(BaseModel):
     format: FormatName
     mainboard: list[CardRef]

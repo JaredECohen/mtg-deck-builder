@@ -17,6 +17,7 @@ from app.models import (
     DataStatusResponse,
     DeckAnalysisResponse,
     DeckResponse,
+    DiffDeckRequest,
     EvaluateDeckRequest,
     ExportDeckRequest,
     FormatName,
@@ -25,6 +26,7 @@ from app.models import (
     ParseDecklistRequest,
     ParsedDecklistResponse,
     RefineDeckRequest,
+    SaveDeckRequest,
     ValidateDeckRequest,
     ValidationResult,
 )
@@ -48,10 +50,12 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
+from app.services.deck_history_service import DeckHistoryService
 from app.services.vector_retrieval import CardVectorRetriever
 
 repository = CardRepository()
 card_retriever = CardVectorRetriever(repository)
+deck_history = DeckHistoryService()
 validator = DeckValidator(repository)
 generator = DeckGenerator(repository, validator)
 analysis_service = DeckAnalysisService(repository, validator)
@@ -182,6 +186,66 @@ def evaluate_deck(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/decks/diff")
+def diff_deck(request: DiffDeckRequest) -> dict:
+    """Card-by-card diff between two decklists (before → after)."""
+    from app.services.deck_diff import diff_decks
+    return diff_decks(request.before, request.after).to_dict()
+
+
+@app.post("/v1/decks/save")
+def save_deck(
+    request: SaveDeckRequest,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    """Persist a deck to history and mint a share token. When auth is
+    enabled the API key becomes the deck's owner."""
+    return deck_history.save(
+        name=request.name,
+        format_id=request.format,
+        mainboard=[c.model_dump() for c in request.mainboard],
+        sideboard=[c.model_dump() for c in request.sideboard],
+        commander=request.commander,
+        notes=request.notes,
+        evaluation=request.evaluation,
+        owner=key,
+    )
+
+
+@app.get("/v1/decks/history")
+def deck_history_list(
+    limit: int = 50,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    return {"decks": deck_history.history(owner=key, limit=max(1, min(limit, 200)))}
+
+
+@app.get("/v1/decks/saved/{deck_id}")
+def get_saved_deck(deck_id: str) -> dict:
+    deck = deck_history.get(deck_id)
+    if deck is None:
+        raise HTTPException(status_code=404, detail="saved deck not found")
+    return deck
+
+
+@app.get("/v1/decks/shared/{token}")
+def get_shared_deck(token: str) -> dict:
+    deck = deck_history.get_by_share_token(token)
+    if deck is None:
+        raise HTTPException(status_code=404, detail="shared deck not found")
+    return deck
+
+
+@app.delete("/v1/decks/saved/{deck_id}")
+def delete_saved_deck(
+    deck_id: str,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    if not deck_history.delete(deck_id, owner=key):
+        raise HTTPException(status_code=404, detail="saved deck not found")
+    return {"deleted": deck_id}
 
 
 @app.post("/v1/decks/parse", response_model=ParsedDecklistResponse)
