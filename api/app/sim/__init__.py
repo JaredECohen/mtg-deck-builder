@@ -6,6 +6,7 @@ mana-consistency analysis (Phase 2), goldfish kill-turn distributions
 FastAPI or the database — it operates on plain dataclasses so it can
 run in the optimizer worker pool.
 """
+from app.sim.evaluation import DeckEvaluation, evaluate_deck, wilson_interval
 from app.sim.goldfish import GoldfishConfig, GoldfishReport, goldfish
 from app.sim.match import (
     MatchConfig,
@@ -33,9 +34,12 @@ from app.sim.mana import (
 )
 
 __all__ = [
+    "DeckEvaluation",
     "GameState",
     "GoldfishConfig",
     "GoldfishReport",
+    "evaluate_deck",
+    "wilson_interval",
     "LandEntry",
     "LandKind",
     "LandSuite",
