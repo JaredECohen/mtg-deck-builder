@@ -5,9 +5,10 @@ that produces tournament-grade decks for all five major formats. FastAPI
 backend, Next.js frontend, structured `DeckRationale` output narrated by an
 optional LLM coach.
 
-**Current state:** 285 backend tests passing, frontend TypeScript clean,
-end-to-end optimizer flow live behind a feature flag, multi-format meta
-+ deck-evaluation engine wired.
+**Current state:** 291 backend tests passing, frontend TypeScript clean
+(`next build` green), end-to-end optimizer flow live behind a feature
+flag, multi-format meta + deck-evaluation engine + embedding retrieval
+wired.
 
 ## Structure
 
@@ -143,7 +144,14 @@ python -m app.scripts.ingest_scryfall              # full Scryfall ingest (optio
 python -m app.scripts.ingest_tournament_decks
 python -m app.scripts.build_archetypes
 python -m app.scripts.build_card_profiles          # parses oracle text → card_profiles
+python -m app.scripts.build_card_embeddings        # dense embeddings → card_embeddings
 ```
+
+Embeddings power the retriever's `vector` mode (works on SQLite too) and
+the pgvector `<=>` path on Postgres. The default embedder is a
+deterministic feature-hash projection ([app/services/embeddings.py](api/app/services/embeddings.py))
+so it runs offline; swap `embed_features` for a learned model without
+changing the table schema, ingest script, or retriever.
 
 The optimizer reads from `card_profiles` when populated and falls back
 to on-the-fly profiling when it isn't (logs a warning).
@@ -217,8 +225,9 @@ carries a tighter dedicated rate limit.
 ## Still pending
 
 - Real Redis/Celery broker provisioning (the backend is ready)
-- A real embedding pipeline to back the pgvector path (the table schema
-  + query path exist; only the lexical fallback runs today)
+- A *learned* embedding model to replace the deterministic feature-hash
+  embedder (the full pipeline — table, build script, `vector`/pgvector
+  retrieval modes — is wired and tested today)
 - Multi-tenant identity (the current `owner` field keys off the API key)
 - Deeper frontend wiring of the new evaluation/diff/history components
   into the workshop flow

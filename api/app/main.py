@@ -362,7 +362,7 @@ def similar_cards(card_name: str, k: int = 10) -> dict:
     hits = card_retriever.similar_to(card_name, k=max(1, min(k, 50)))
     return {
         "card": card_name,
-        "mode": "pgvector" if card_retriever.use_pgvector else "lexical",
+        "mode": card_retriever.mode,
         "similar": [h.to_dict() for h in hits],
     }
 

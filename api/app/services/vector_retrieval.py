@@ -19,21 +19,16 @@ embedding pipeline is provisioned.
 from __future__ import annotations
 
 import logging
-import math
 import os
-import re
 from collections import Counter
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from app.services.card_features import cosine as _cosine
+from app.services.card_features import featurize as _featurize
+from app.services.card_features import featurize_text
+from app.services.embeddings import cosine_dense, embed_card, embed_text, load_card_embeddings
 
-_TOKEN_RE = re.compile(r"[a-z0-9']+")
-_STOPWORDS = {
-    "the", "a", "an", "of", "to", "and", "or", "for", "with", "this", "that",
-    "you", "your", "it", "its", "is", "are", "be", "as", "at", "on", "in",
-    "from", "up", "may", "if", "then", "each", "any", "all", "card", "cards",
-    "target", "control", "controls", "player", "players", "into", "onto",
-}
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,58 +40,45 @@ class RetrievalHit:
         return {"name": self.name, "score": round(self.score, 4)}
 
 
-def _featurize(card) -> Counter:
-    """Bag-of-features for a card record (dataclass or dict)."""
-    def get(field: str, default=""):
-        if isinstance(card, dict):
-            return card.get(field, default)
-        return getattr(card, field, default)
-
-    feats: Counter = Counter()
-    type_line = str(get("type_line", "")).lower()
-    for tok in _TOKEN_RE.findall(type_line):
-        feats[f"type:{tok}"] += 2.0  # type is a strong signal
-    for color in get("color_identity", []) or []:
-        feats[f"ci:{color}"] += 1.5
-    for kw in get("keywords", []) or []:
-        feats[f"kw:{str(kw).lower()}"] += 1.5
-    for tag in get("tags", []) or []:
-        feats[f"tag:{str(tag).lower()}"] += 1.0
-    oracle = str(get("oracle_text", "")).lower()
-    for tok in _TOKEN_RE.findall(oracle):
-        if tok in _STOPWORDS or len(tok) <= 2:
-            continue
-        feats[f"o:{tok}"] += 1.0
-    mv = get("mana_value", 0) or 0
-    try:
-        feats[f"mv:{int(float(mv))}"] += 0.5
-    except (TypeError, ValueError):
-        pass
-    return feats
-
-
-def _cosine(a: Counter, b: Counter) -> float:
-    if not a or not b:
-        return 0.0
-    # Iterate the smaller vector for the dot product.
-    small, big = (a, b) if len(a) <= len(b) else (b, a)
-    dot = sum(w * big.get(k, 0.0) for k, w in small.items())
-    if dot == 0.0:
-        return 0.0
-    na = math.sqrt(sum(w * w for w in a.values()))
-    nb = math.sqrt(sum(w * w for w in b.values()))
-    return dot / (na * nb) if na and nb else 0.0
-
-
 class CardVectorRetriever:
-    """Find cards similar to a seed card or free-text query."""
+    """Find cards similar to a seed card or free-text query.
 
-    def __init__(self, repository, *, use_pgvector: bool | None = None) -> None:
+    Mode resolution (best first):
+      1. ``pgvector`` — Postgres ``<=>`` cosine over a ``card_embeddings``
+         table (when ``MTG_USE_PGVECTOR`` and the table exist).
+      2. ``vector`` — stored dense embeddings (works on SQLite too): the
+         build_card_embeddings script populates the table, and cosine is
+         computed in Python.
+      3. ``lexical`` — deterministic bag-of-features cosine, no DB needed.
+    """
+
+    def __init__(
+        self,
+        repository,
+        *,
+        use_pgvector: bool | None = None,
+        embeddings: dict[str, list[float]] | None = None,
+        session_factory=None,
+    ) -> None:
         self.repository = repository
         if use_pgvector is None:
             use_pgvector = os.getenv("MTG_USE_PGVECTOR", "").lower() in {"1", "true", "yes"}
         self.use_pgvector = use_pgvector and self._pgvector_available()
+        # Stored dense embeddings (vector mode). Loaded eagerly when not
+        # injected; empty dict means fall back to lexical.
+        if embeddings is not None:
+            self._embeddings = embeddings
+        else:
+            self._embeddings = load_card_embeddings(session_factory)
         self._feature_cache: dict[str, Counter] = {}
+
+    @property
+    def mode(self) -> str:
+        if self.use_pgvector:
+            return "pgvector"
+        if self._embeddings:
+            return "vector"
+        return "lexical"
 
     # -- public API -----------------------------------------------------
 
@@ -108,19 +90,17 @@ class CardVectorRetriever:
             hits = self._pgvector_neighbors(card_name, k)
             if hits:
                 return hits
-            logger.info("pgvector returned no rows for %s; using lexical fallback", card_name)
-        seed_feats = _featurize(seed)
-        return self._rank(seed_feats, k=k, exclude={self._norm(card_name)})
+            logger.info("pgvector returned no rows for %s; falling back", card_name)
+        if self._embeddings:
+            seed_vec = self._embeddings.get(card_name) or embed_card(seed)
+            return self._rank_dense(seed_vec, k=k, exclude={self._norm(card_name)})
+        return self._rank(_featurize(seed), k=k, exclude={self._norm(card_name)})
 
     def search(self, query_text: str, *, k: int = 10) -> list[RetrievalHit]:
-        """Free-text semantic-ish search via the lexical features."""
-        query_feats: Counter = Counter()
-        for tok in _TOKEN_RE.findall(query_text.lower()):
-            if tok in _STOPWORDS or len(tok) <= 2:
-                continue
-            query_feats[f"o:{tok}"] += 1.0
-            query_feats[f"type:{tok}"] += 1.0
-        return self._rank(query_feats, k=k, exclude=set())
+        """Free-text semantic-ish search."""
+        if self._embeddings:
+            return self._rank_dense(embed_text(query_text), k=k, exclude=set())
+        return self._rank(featurize_text(query_text), k=k, exclude=set())
 
     # -- internals ------------------------------------------------------
 
@@ -144,6 +124,20 @@ class CardVectorRetriever:
         if name:
             self._feature_cache[name] = feats
         return feats
+
+    def _rank_dense(self, query_vec: list[float], *, k: int, exclude: set[str]) -> list[RetrievalHit]:
+        """Rank stored dense embeddings by cosine to ``query_vec``."""
+        if not query_vec:
+            return []
+        scored: list[RetrievalHit] = []
+        for name, vec in self._embeddings.items():
+            if self._norm(name) in exclude:
+                continue
+            score = cosine_dense(query_vec, vec)
+            if score > 0.0:
+                scored.append(RetrievalHit(name=name, score=score))
+        scored.sort(key=lambda h: (-h.score, h.name))
+        return scored[:k]
 
     def _rank(self, query_feats: Counter, *, k: int, exclude: set[str]) -> list[RetrievalHit]:
         if not query_feats:

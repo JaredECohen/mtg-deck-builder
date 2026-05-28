@@ -108,6 +108,22 @@ class SavedDeck(Base):
     updated_at: Mapped[str] = mapped_column(String(32))
 
 
+class CardEmbedding(Base):
+    """Dense card embedding for semantic retrieval.
+
+    ``vector`` is stored as JSON for portability (SQLite/dev). On
+    Postgres with pgvector provisioned, a parallel ``vector(dim)`` column
+    can be added and the retriever's ``<=>`` path used instead.
+    """
+
+    __tablename__ = "card_embeddings"
+
+    name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64), index=True)
+    dim: Mapped[int] = mapped_column(Integer)
+    vector: Mapped[list[float]] = mapped_column(JSON, default=list)
+
+
 class CardProfile(Base):
     __tablename__ = "card_profiles"
 
