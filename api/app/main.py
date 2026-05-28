@@ -2,10 +2,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from app.auth import require_api_key
 from app.config import CORS_ORIGINS
 from app.models import (
     AnalyzeDeckRequest,
@@ -16,6 +17,7 @@ from app.models import (
     DataStatusResponse,
     DeckAnalysisResponse,
     DeckResponse,
+    EvaluateDeckRequest,
     ExportDeckRequest,
     FormatName,
     GenerateDeckRequest,
@@ -27,7 +29,11 @@ from app.models import (
     ValidationResult,
 )
 from app.optimizer import AnnealConfig, OptimizerConstraints
-from app.rate_limiter import deck_rate_limiter
+from app.rate_limiter import (
+    deck_rate_limiter,
+    evaluate_rate_limiter,
+    prose_rate_limiter,
+)
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
 from app.services.deck_analysis import DeckAnalysisService
@@ -42,7 +48,10 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
+from app.services.vector_retrieval import CardVectorRetriever
+
 repository = CardRepository()
+card_retriever = CardVectorRetriever(repository)
 validator = DeckValidator(repository)
 generator = DeckGenerator(repository, validator)
 analysis_service = DeckAnalysisService(repository, validator)
@@ -147,6 +156,34 @@ def analyze_deck(request: AnalyzeDeckRequest) -> DeckAnalysisResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/v1/decks/evaluate")
+def evaluate_deck(
+    request: EvaluateDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    """Run the multi-signal evaluation engine on a concrete decklist.
+
+    Returns flood/screw resistance, interaction resilience, inevitability,
+    consistency, card-advantage density, and a Wilson-interval win rate —
+    the same battery the optimizer's deep-eval uses, exposed directly.
+    """
+    client_ip = req.client.host if req.client else "unknown"
+    if not evaluate_rate_limiter.is_allowed(f"evaluate:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many evaluation requests. Please wait before trying again.")
+    from app.services.deck_evaluation_service import evaluate_decklist
+    try:
+        return evaluate_decklist(
+            format_id=request.format,
+            mainboard=request.mainboard,
+            repository=repository,
+            games=request.games,
+            seed=request.seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/v1/decks/parse", response_model=ParsedDecklistResponse)
 def parse_deck(request: ParseDecklistRequest) -> ParsedDecklistResponse:
     try:
@@ -164,7 +201,11 @@ def export_deck(request: ExportDeckRequest) -> dict[str, str]:
 
 
 @app.post("/v1/jobs/optimize", response_model=OptimizerJobResponse)
-def submit_optimize(request: OptimizerJobRequest, req: Request) -> OptimizerJobResponse:
+def submit_optimize(
+    request: OptimizerJobRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> OptimizerJobResponse:
     client_ip = req.client.host if req.client else "unknown"
     if not deck_rate_limiter.is_allowed(f"optimize:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many optimizer submissions. Wait before retrying.")
@@ -184,18 +225,29 @@ def get_job(job_id: str) -> dict:
 
 
 @app.post("/v1/jobs/{job_id}/prose")
-def get_job_prose(job_id: str) -> Response:
+def get_job_prose(
+    job_id: str,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> Response:
     """Lazily produce LLM-narrated coach prose for a completed
     optimizer job.
+
+    Gated by optional API-key auth and a tighter rate limit than the
+    deterministic endpoints, since it fans out to an LLM.
 
     * 200 — prose ready (or null when LLM is disabled / no API key)
     * 202 — job still running; client should poll the prose endpoint
             again after the parent job completes
     * 404 — unknown job, or job has no rationale
     * 409 — job failed
+    * 429 — prose rate limit exceeded
     """
     from fastapi.responses import JSONResponse
     from app.services.deck_rationale import prose_for_rationale_dict
+    client_ip = req.client.host if req.client else "unknown"
+    if not prose_rate_limiter.is_allowed(f"prose:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many prose requests. Please wait before trying again.")
     try:
         job = get_job_queue().get(job_id)
     except (JobNotFound, KeyError) as exc:
@@ -235,6 +287,20 @@ def card_detail(card_name: str) -> CardDetailResponse:
 @app.get("/v1/cards", response_model=CardSearchResponse)
 def card_search(query: str, format: FormatName | None = None, limit: int = 12) -> CardSearchResponse:
     return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=limit))
+
+
+@app.get("/v1/cards/{card_name}/similar")
+def similar_cards(card_name: str, k: int = 10) -> dict:
+    """Semantic-ish nearest neighbours for a card (pgvector when wired,
+    deterministic lexical-feature cosine otherwise)."""
+    if repository.get_card(card_name) is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    hits = card_retriever.similar_to(card_name, k=max(1, min(k, 50)))
+    return {
+        "card": card_name,
+        "mode": "pgvector" if card_retriever.use_pgvector else "lexical",
+        "similar": [h.to_dict() for h in hits],
+    }
 
 
 @app.get("/v1/commanders", response_model=CommanderSearchResponse)

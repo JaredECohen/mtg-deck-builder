@@ -225,6 +225,15 @@ class AnalyzeDeckRequest(BaseModel):
     deep_analysis: bool = True
 
 
+class EvaluateDeckRequest(BaseModel):
+    format: FormatName
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    commander: str | None = None
+    games: int = Field(default=200, ge=20, le=1000)
+    seed: int = 1729
+
+
 class ParseDecklistRequest(BaseModel):
     format: FormatName
     deck_text: str
