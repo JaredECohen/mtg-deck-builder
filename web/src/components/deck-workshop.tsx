@@ -8,15 +8,19 @@ import { CardDetailModal } from "./workshop/card-detail-modal";
 import { CommanderPicker, type CommanderMode } from "./workshop/commander-picker";
 import { DeckRationaleView } from "./workshop/deck-rationale";
 import { DeckResults } from "./workshop/deck-results";
+import { DeckEvaluationPanel } from "./workshop/deck-evaluation-panel";
+import { DeckDiffView } from "./workshop/deck-diff-view";
 import { FormatColorPicker } from "./workshop/format-color-picker";
 import { GenerateForm } from "./workshop/generate-form";
 import { StrategyPicker } from "./workshop/strategy-picker";
 import { useCardDetail } from "@/hooks/use-card-detail";
 import { useDataStatus } from "@/hooks/use-data-status";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
+import { useDeckEvaluation } from "@/hooks/use-deck-evaluation";
 import { useDeckGenerator } from "@/hooks/use-deck-generator";
 import { useDeckRationale } from "@/hooks/use-deck-rationale";
-import type { ExportTarget } from "@/lib/api";
+import { useExperienceMode } from "@/hooks/use-experience-mode";
+import { diffDecks, type DeckDiffResult, type ExportTarget } from "@/lib/api";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import { activeTags, parseBudgetInput, type StrategyId } from "@/lib/strategies";
 import type { CardRef, CommanderProfile, FormatName } from "@/lib/types";
@@ -33,7 +37,10 @@ export function DeckWorkshop() {
   const [prompt, setPrompt] = useState("Build me a strong Modern prowess deck that feels explosive and is still friendly to a newer player.");
   const [refinePrompt, setRefinePrompt] = useState("Make it a bit cheaper without losing too much pressure.");
   const [exportContent, setExportContent] = useState("");
-  const [expertMode, setExpertMode] = useState(false);
+  const experience = useExperienceMode();
+  const expertMode = experience.detailed;
+  const setExpertMode = (value: boolean) => experience.setMode(value ? "expert" : "beginner");
+  const [deckDiff, setDeckDiff] = useState<DeckDiffResult | null>(null);
   const [commanderMode, setCommanderMode] = useState<CommanderMode>("recommend");
   const [commanderSort, setCommanderSort] = useState<CommanderSort>("match");
   const [commanderSearch, setCommanderSearch] = useState("");
@@ -52,6 +59,7 @@ export function DeckWorkshop() {
   const generator = useDeckGenerator();
   const analyzer = useDeckAnalyzer();
   const rationale = useDeckRationale();
+  const evaluation = useDeckEvaluation();
 
   const handleRequestRationale = async () => {
     if (format !== "modern") return;
@@ -153,6 +161,8 @@ export function DeckWorkshop() {
       return;
     }
     setExportContent("");
+    setDeckDiff(null);
+    evaluation.reset();
     analyzer.reset();
     await generator.generate({
       format,
@@ -197,7 +207,21 @@ export function DeckWorkshop() {
 
   async function handleRefine() {
     setExportContent("");
-    await generator.refine(refinePrompt);
+    const before = deck?.mainboard ?? [];
+    const updated = await generator.refine(refinePrompt);
+    if (updated && before.length) {
+      try {
+        setDeckDiff(await diffDecks(before, updated.mainboard));
+      } catch {
+        /* diff is best-effort */
+      }
+      evaluation.reset();
+    }
+  }
+
+  async function handleEvaluate() {
+    if (!deck) return;
+    await evaluation.evaluate(deck.format, deck.mainboard);
   }
 
   async function handleExport(target: ExportTarget) {
@@ -336,6 +360,48 @@ export function DeckWorkshop() {
               onOpenCard={(name) => void cardDetail.open(name)}
               loading={loading}
             />
+            {deckDiff ? (
+              <div className="panel results-card" style={{ marginTop: 16 }}>
+                <DeckDiffView diff={deckDiff} />
+              </div>
+            ) : null}
+            <div className="panel results-card" style={{ marginTop: 16 }}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold">Simulation verdict</div>
+                  <div className="text-xs muted">
+                    Run the evaluation engine — resilience, flood/screw, inevitability, and a confidence-interval win rate. ~1–2s.
+                  </div>
+                </div>
+                <div className="chips">
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => setExpertMode(!expertMode)}
+                    aria-pressed={expertMode}
+                    title="Toggle beginner / expert detail"
+                  >
+                    {expertMode ? "Expert view" : "Beginner view"}
+                  </button>
+                  <button
+                    type="button"
+                    className="chip active"
+                    onClick={() => void handleEvaluate()}
+                    disabled={evaluation.loading}
+                  >
+                    {evaluation.loading ? "Evaluating…" : "Evaluate deck"}
+                  </button>
+                </div>
+              </div>
+              {evaluation.error ? (
+                <p style={{ color: "#fca5a5" }} role="alert">{evaluation.error}</p>
+              ) : null}
+              {evaluation.evaluation ? (
+                <div style={{ marginTop: 12 }}>
+                  <DeckEvaluationPanel evaluation={evaluation.evaluation} detailed={expertMode} />
+                </div>
+              ) : null}
+            </div>
             {format === "modern" ? (
               <RationalePanel
                 rationale={rationale.rationale}

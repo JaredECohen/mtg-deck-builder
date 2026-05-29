@@ -171,3 +171,41 @@ def test_criticality_skips_lands():
     names = [s.card_name for s in scores]
     assert "Mountain" not in names
     assert "Lightning Bolt" in names
+
+
+def test_combo_registry_loaded_from_versioned_file():
+    """KNOWN_COMBOS is sourced from combos.json, not the fallback list."""
+    from app.synergy import KNOWN_COMBOS, COMBO_REGISTRY_VERSION
+
+    assert COMBO_REGISTRY_VERSION != "fallback"
+    labels = {label for label, _ in KNOWN_COMBOS}
+    # A few cliques that only exist in the expanded JSON registry.
+    assert "Heliod Ballista" in labels
+    assert "Painter Grindstone" in labels
+    assert len(KNOWN_COMBOS) >= 25
+
+
+def test_suggest_clique_candidates_flags_frequent_unknown_pairs():
+    from app.synergy import suggest_clique_candidates
+
+    # 'Card X' + 'Card Y' co-occur in 4 of 5 decks and aren't a known combo.
+    decks = [
+        ["Card X", "Card Y", "Forest"],
+        ["Card X", "Card Y", "Island"],
+        ["Card X", "Card Y", "Mountain"],
+        ["Card X", "Card Y", "Swamp"],
+        ["Unrelated A", "Unrelated B"],
+    ]
+    candidates = suggest_clique_candidates(decks, min_co_occurrence=3, min_support=0.5)
+    pairs = {pair for pair, _count, _support in candidates}
+    assert ("Card X", "Card Y") in pairs
+
+
+def test_suggest_clique_candidates_excludes_known_combos():
+    from app.synergy import suggest_clique_candidates
+
+    decks = [["Splinter Twin", "Deceiver Exarch"]] * 5
+    candidates = suggest_clique_candidates(decks, min_co_occurrence=2, min_support=0.1)
+    pairs = {pair for pair, _c, _s in candidates}
+    # This pair is already in the registry, so it must not be surfaced.
+    assert ("Deceiver Exarch", "Splinter Twin") not in pairs

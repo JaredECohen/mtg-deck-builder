@@ -106,6 +106,11 @@ class GameState:
     win_turn: int | None = None
     loss_turn: int | None = None
     mulligans_taken: int = 0
+    # Probability that any given spell cast is answered (countered/removed)
+    # by a hypothetical opponent. 0.0 = pure goldfish (default). Used by
+    # the deck-evaluation layer to measure resilience to interaction.
+    disruption_rate: float = 0.0
+    spells_disrupted: int = 0
 
     def log(self, **fields: Any) -> None:
         entry = {"turn": self.turn, **fields}

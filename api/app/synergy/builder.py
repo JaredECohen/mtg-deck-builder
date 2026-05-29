@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
+import json
+import logging
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
+from pathlib import Path
 from threading import RLock
 from typing import Iterable
 
 from app.oracle.profile import CardProfile
+
+logger = logging.getLogger(__name__)
 
 
 # Mapping from a card's ``produces`` token to the trigger/requirement
@@ -34,11 +39,10 @@ PRODUCES_TO_TRIGGERS: dict[str, set[str]] = {
     "mana_treasure": {"cast_noncreature"},
 }
 
-# Hand-maintained registry of well-known Modern combo cliques. Each
-# clique is a set of card names; if all members are present, the synergy
-# graph adds high-criticality edges among them. Curated from MTG Wiki
-# and tournament reports.
-KNOWN_COMBOS: list[tuple[str, list[str]]] = [
+# The combo registry lives in a versioned data file (combos.json) so it
+# can be expanded without code changes and audited in git. These embedded
+# defaults are the fallback if the file is missing or unreadable.
+_FALLBACK_COMBOS: list[tuple[str, list[str]]] = [
     ("Splinter Twin combo", ["Splinter Twin", "Deceiver Exarch"]),
     ("Splinter Twin combo (Pestermite)", ["Splinter Twin", "Pestermite"]),
     ("Storm combo", ["Grapeshot", "Manamorphose", "Past in Flames"]),
@@ -54,6 +58,97 @@ KNOWN_COMBOS: list[tuple[str, list[str]]] = [
     ("Scapeshift combo", ["Scapeshift", "Valakut, the Molten Pinnacle", "Mountain"]),
     ("Amulet Titan", ["Amulet of Vigor", "Primeval Titan", "Simic Growth Chamber"]),
 ]
+
+_COMBOS_PATH = Path(__file__).with_name("combos.json")
+COMBO_REGISTRY_VERSION = "fallback"
+
+
+def _load_combo_registry() -> list[tuple[str, list[str]]]:
+    """Load the combo registry from combos.json, falling back to the
+    embedded defaults if the file is missing or malformed."""
+    global COMBO_REGISTRY_VERSION
+    try:
+        raw = json.loads(_COMBOS_PATH.read_text(encoding="utf-8"))
+        combos = [
+            (entry["label"], list(entry["cards"]))
+            for entry in raw.get("combos", [])
+            if entry.get("label") and entry.get("cards")
+        ]
+        if combos:
+            COMBO_REGISTRY_VERSION = str(raw.get("version", "unknown"))
+            return combos
+        logger.warning("combos.json contained no usable combos; using fallback")
+    except (OSError, ValueError, KeyError, TypeError) as exc:  # noqa: BLE001
+        logger.warning("failed to load combos.json (%s); using fallback registry", exc)
+    return list(_FALLBACK_COMBOS)
+
+
+# Loaded once at import. Each clique is a set of card names; if all
+# members are present in a pool, the synergy graph adds high-criticality
+# edges among them.
+KNOWN_COMBOS: list[tuple[str, list[str]]] = _load_combo_registry()
+
+
+def suggest_clique_candidates(
+    decklists: Iterable[Iterable[str]],
+    *,
+    min_co_occurrence: int = 3,
+    min_support: float = 0.15,
+    max_candidates: int = 25,
+) -> list[tuple[tuple[str, str], int, float]]:
+    """Mine tournament decklists for card pairs that co-occur often but
+    aren't yet in :data:`KNOWN_COMBOS` — surfacing candidate cliques to
+    add to the registry.
+
+    Returns ``[((card_a, card_b), co_occurrence_count, support), ...]``
+    sorted by support (fraction of decks containing the pair) then raw
+    count, descending. ``support`` filters out merely-popular staples by
+    requiring the pair appear together in a meaningful share of decks.
+
+    Lands and basic staples that appear in nearly every deck are noisy,
+    so callers should pre-filter or rely on the ``min_support`` cap to
+    avoid trivially-frequent pairs. This is automation to *flag* new
+    cliques for human curation — it does not auto-register them.
+    """
+    known_pairs: set[frozenset[str]] = set()
+    for _label, members in KNOWN_COMBOS:
+        members = list(members)
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                known_pairs.add(frozenset((members[i], members[j])))
+
+    pair_counts: Counter[frozenset[str]] = Counter()
+    deck_count = 0
+    for deck in decklists:
+        unique = sorted(set(deck))
+        deck_count += 1
+        for i in range(len(unique)):
+            for j in range(i + 1, len(unique)):
+                pair_counts[frozenset((unique[i], unique[j]))] += 1
+
+    if deck_count == 0:
+        return []
+
+    candidates: list[tuple[tuple[str, str], int, float]] = []
+    for pair, count in pair_counts.items():
+        if pair in known_pairs or count < min_co_occurrence:
+            continue
+        support = count / deck_count
+        if support < min_support:
+            continue
+        a, b = sorted(pair)
+        candidates.append(((a, b), count, support))
+
+    candidates.sort(key=lambda item: (item[2], item[1]), reverse=True)
+    return candidates[:max_candidates]
+
+
+def reload_combo_registry() -> list[tuple[str, list[str]]]:
+    """Re-read combos.json at runtime (e.g. after editing). Returns the
+    freshly-loaded registry and updates the module-level cache."""
+    global KNOWN_COMBOS
+    KNOWN_COMBOS = _load_combo_registry()
+    return KNOWN_COMBOS
 
 
 @dataclass(frozen=True)

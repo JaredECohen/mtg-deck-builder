@@ -153,15 +153,25 @@ def build_matchup_matrix(
 ) -> MatchupMatrix:
     """Run the candidate against every meta opponent; build a matrix.
 
-    If ``opponents`` is None, uses :data:`META_DECKS` from
-    :mod:`meta_archetypes`. ``opponent_formats`` (label -> format_id)
-    lets each opponent mulligan with its native format's profile —
-    important for cross-format matchups (Commander candidate vs Modern
-    meta decks).
+    If ``opponents`` is None, the opponent set is selected by the
+    candidate's own format (``config.format_id``) via
+    :func:`meta_archetypes.format_meta` — so a Standard deck is graded
+    against the Standard meta, a Commander deck against the Commander
+    meta, and so on. ``opponent_formats`` (label -> format_id) lets each
+    opponent mulligan with its native format's profile — important for
+    cross-format matchups (Commander candidate vs Modern meta decks).
     """
-    from app.sim.meta_archetypes import META_DECKS, META_DECK_FORMATS
+    from app.sim.meta_archetypes import (
+        META_DECK_FORMATS,
+        format_meta,
+        format_meta_formats,
+    )
 
-    opponents = opponents if opponents is not None else META_DECKS
+    fmt_id = (config or MatchConfig()).format_id
+    if opponents is None:
+        opponents = format_meta(fmt_id)
+        if opponent_formats is None:
+            opponent_formats = format_meta_formats(fmt_id)
     if opponent_formats is None:
         opponent_formats = META_DECK_FORMATS
     matrix = MatchupMatrix()
