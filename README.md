@@ -47,8 +47,18 @@ npm run dev
 
 ```bash
 cd api
-python -m pytest -q     # 251 passing, 1 skipped (Celery without Redis)
+python -m pytest -q     # 291 passing, 13 skipped (need full dataset / Celery without Redis)
 ```
+
+A handful of integration tests need the full Scryfall dataset and are
+skipped by default; after `ingest_scryfall`, run them with
+`MTG_FULL_DATASET=1 python -m pytest`.
+
+## CI
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push
+to `main` and every PR: the backend `pytest` suite and the frontend
+`tsc --noEmit` + `next build`.
 
 ## Capabilities
 
