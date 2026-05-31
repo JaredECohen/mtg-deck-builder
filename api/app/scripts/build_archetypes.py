@@ -401,7 +401,23 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
     rep = representative_deck(decks)
     tags = aggregate_tags(decks)
     colors = aggregate_colors(decks)
-    name = infer_name(rep, tags, colors)
+    # Prefer the canonical builtin display name when synthesize_tournament_corpus
+    # embedded one in the deck's metadata. Falls back to the auto-generated
+    # name from tags + colors when no builtin label is attached.
+    canonical_labels: list[str] = []
+    for deck in decks:
+        try:
+            label = (deck.metadata_json or {}).get("archetype_label")  # type: ignore[union-attr]
+        except Exception:
+            label = None
+        if isinstance(label, str) and label.strip():
+            canonical_labels.append(label.strip())
+    if canonical_labels:
+        # If multiple builtins clustered together, take the most common one.
+        from collections import Counter as _Counter
+        name = _Counter(canonical_labels).most_common(1)[0][0]
+    else:
+        name = infer_name(rep, tags, colors)
     archetype_id = slugify(f"{rep.format}-{name}")
     placements = [deck.placement for deck in decks if deck.placement is not None]
     core_cards = weighted_card_packages(repository, decks, "mainboard", threshold=0.72)
@@ -473,9 +489,19 @@ def main() -> None:
         session.add(run)
         session.flush()
 
+        seen_ids: set[str] = set()
         for grouped_decks in grouped_clusters:
             payload = build_archetype_payload(repository, grouped_decks)
+            # Skip clusters whose slugified ID would collide with an
+            # earlier cluster from the same run — the slugifier collapses
+            # variant names ("Modern Mono-Red Burn" + "Modern Mono-R Burn"
+            # share the same slug). Take whichever came first.
+            archetype_id = str(payload.get("id") or "")
+            if archetype_id in seen_ids:
+                continue
+            seen_ids.add(archetype_id)
             session.merge(Archetype(**payload))
+            session.flush()
             processed += 1
 
         run.status = "completed"

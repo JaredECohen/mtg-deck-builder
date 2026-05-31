@@ -47,6 +47,14 @@ def normalize_raw_deck(
     commander_name = commander if isinstance(commander, str) else None
     colors, tags = infer_colors_and_tags(repository, mainboard, commander_name)
 
+    # Pick up nested-metadata fields (e.g. archetype_label set by
+    # synthesize_tournament_corpus.py). Falls back to top-level when not
+    # nested. This keeps the JSON shape flexible — both work.
+    nested_metadata = raw_deck.get("metadata") if isinstance(raw_deck.get("metadata"), dict) else {}
+    archetype_label = (
+        _optional_str(nested_metadata.get("archetype_label"))  # type: ignore[union-attr]
+        or _optional_str(raw_deck.get("archetype_label"))
+    )
     metadata = TournamentDeckIngestMetadata(
         raw_source=str(raw_deck.get("source", source_name)),
         ingested_from=str(ingested_from),
@@ -56,6 +64,7 @@ def normalize_raw_deck(
         event_size=_optional_int(raw_deck.get("event_size")),
         finish_label=_optional_str(raw_deck.get("finish_label")),
         confidence=_optional_float(raw_deck.get("confidence")),
+        archetype_label=archetype_label,
     )
     dedupe_key = build_dedupe_key(
         raw_deck,

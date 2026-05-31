@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ProvenanceBanner } from "./provenance-banner";
 import type { ExportTarget } from "@/lib/api";
@@ -12,13 +12,11 @@ type Props = {
   meta: MetaSummaryResponse | null;
   selectedCommanderName: string;
   selectedCommanderProfile: CommanderProfile | null;
-  refinePrompt: string;
-  onRefinePromptChange: (value: string) => void;
-  onRefine: () => void;
+  chatPanel: ReactNode;
   onExport: (target: ExportTarget) => void;
   exportContent: string;
   onOpenCard: (name: string) => void;
-  loading: boolean;
+  onApplyOptimized?: (next: DeckResponse) => void;
 };
 
 function PackageList({ title, packages }: { title: string; packages: ArchetypePackage[] }) {
@@ -99,19 +97,22 @@ export function DeckResults({
   meta,
   selectedCommanderName,
   selectedCommanderProfile,
-  refinePrompt,
-  onRefinePromptChange,
-  onRefine,
+  chatPanel,
   onExport,
   exportContent,
   onOpenCard,
-  loading
+  onApplyOptimized
 }: Props) {
   const [exportTarget, setExportTarget] = useState<ExportTarget>("plain");
 
   return (
     <>
-      <ProvenanceBanner provenance={deck.provenance} commanderRequested={Boolean(deck.commander)} />
+      <ProvenanceBanner
+        provenance={deck.provenance}
+        commanderRequested={Boolean(deck.commander)}
+        currentDeck={deck}
+        onApplyOptimized={onApplyOptimized}
+      />
 
       <div className="panel results-card">
         <div className="deck-columns">
@@ -342,22 +343,7 @@ export function DeckResults({
         </div>
       ) : null}
 
-      <div className="panel results-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <label className="label" htmlFor="refine">Refine Deck</label>
-          <span style={{ fontSize: "0.75rem", color: refinePrompt.length > 1200 ? "orange" : "#9ca3af" }}>{refinePrompt.length}/1500</span>
-        </div>
-        <textarea
-          id="refine"
-          className="textarea"
-          value={refinePrompt}
-          maxLength={1500}
-          onChange={(event) => onRefinePromptChange(event.target.value)}
-        />
-        <button type="button" className="button secondary" onClick={onRefine} disabled={loading} style={{ marginTop: 12 }}>
-          Apply Refinement
-        </button>
-      </div>
+      {chatPanel}
 
       <div className="panel results-card">
         <div className="label">Export Deck</div>

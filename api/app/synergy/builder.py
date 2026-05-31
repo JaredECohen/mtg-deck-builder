@@ -18,11 +18,15 @@ PRODUCES_TO_REQUIRES: dict[str, set[str]] = {
     "creature_token": {"sacrifice_outlet", "creature_payoff", "go_wide_payoff"},
     "card_advantage": {"deck_thinning", "graveyard_filler"},
     "damage": {"damage_payoff"},
-    "tutored_card": {},
+    # NOTE: `{}` is a dict in Python — must use `set()` for empty sets, or
+    # `requires & wanted_requires` crashes with a TypeError when the token
+    # is one of these. Caused every optimizer job that touched a card with
+    # these primitives to fail.
+    "tutored_card": set(),
     "graveyard_fill": {"graveyard_payoff", "delve", "escape", "flashback"},
     "untap": {"untap_payoff"},
-    "extra_turn": {},
-    "game_win": {},
+    "extra_turn": set(),
+    "game_win": set(),
     "free_spell": {"cast_trigger_payoff"},
 }
 

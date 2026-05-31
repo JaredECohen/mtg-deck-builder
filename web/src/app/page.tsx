@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { DeckWorkshop } from "@/components/deck-workshop";
 
 export default function HomePage() {
@@ -6,18 +8,21 @@ export default function HomePage() {
       <header className="hero hero-compact">
         <div className="hero-copy">
           <div className="eyebrow">Meta-aware deckbuilding</div>
-          <h1 className="headline">Build legal MTG decks from a few constraints.</h1>
-          <p className="subhead">
-            Pick a format, set colors and a strategy, and get a tuned deck with transparent provenance — corpus-backed shells, deterministic legality, and honest confidence scoring.
-          </p>
+          <h1 className="headline">MTG Deck Lab</h1>
+          <p className="subhead">Pick a format, colors, and strategy. Get a legal deck with transparent provenance.</p>
         </div>
         <ul className="hero-bullets" aria-label="What this builds">
-          <li><strong>Corpus + fallback retrieval</strong><span>Every deck is labeled with where it came from.</span></li>
-          <li><strong>Hard legality gate</strong><span>Commander color identity is enforced end-to-end.</span></li>
-          <li><strong>Generate or analyze</strong><span>Build from constraints, or import a list and get coaching.</span></li>
+          <li><strong>Corpus-backed</strong><span>Sources labeled per card.</span></li>
+          <li><strong>Legality enforced</strong><span>Color identity gated end-to-end.</span></li>
+          <li><strong>Build or analyze</strong><span>Generate, or import for coaching.</span></li>
         </ul>
       </header>
-      <DeckWorkshop />
+      {/* Suspense wrapper required by Next.js 14 when child components use
+          useSearchParams (DeckWorkshop reads ?deck=<id> on mount for share
+          links). */}
+      <Suspense fallback={null}>
+        <DeckWorkshop />
+      </Suspense>
     </main>
   );
 }

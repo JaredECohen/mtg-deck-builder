@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 from app.models import (
     ArchetypeMetadata,
@@ -35,9 +38,21 @@ from app.constants import (
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
+from app.services.builtin_archetypes import (
+    BuiltinArchetype,
+    blend_archetypes,
+    detect_builtin_archetypes,
+)
 from app.services.card_repository import CardRepository
 from app.services.deck_validator import DeckValidator
-from app.services.llm_service import RefinementIntent, interpret_generate_prompt, interpret_refinement
+from app.services.llm_service import (
+    RefinementIntent,
+    compose_from_scratch,
+    interpret_generate_prompt,
+    interpret_refinement,
+    refine_blend,
+    refine_compose,
+)
 
 
 @dataclass
@@ -76,6 +91,105 @@ class DeckGenerator:
                 "include_cards": list(dict.fromkeys(request.include_cards + intent.include_cards)),
                 "exclude_cards": list(dict.fromkeys(request.exclude_cards + intent.exclude_cards)),
             })
+
+        # Built-in archetype seeds: when the brief names known shell(s) that
+        # the tournament corpus doesn't cover (Burn, Tron, Yawgmoth, ...), we
+        # inject canonical anchor cards into include_cards and merge the
+        # archetype's tags. If the brief matches multiple archetypes (e.g.
+        # "burn + lifegain", "boros burn into heliod combo"), they are
+        # blended into a synthetic hybrid before being applied. See
+        # app/services/builtin_archetypes.py for the seed map.
+        matches = detect_builtin_archetypes(request.prompt, request.format)
+        builtin = blend_archetypes(matches, request.format) if matches else None
+
+        # Compose-from-scratch fallback: when the brief has substance but no
+        # builtin matched, ask Claude to compose ~30 anchor cards instead of
+        # letting the corpus pick a near-miss shell. Synthesizes a transient
+        # BuiltinArchetype so the rest of the pipeline doesn't change.
+        if builtin is None and request.prompt and request.prompt.strip():
+            composed = compose_from_scratch(
+                format_name=request.format,
+                colors=list(request.colors),
+                playstyle_tags=list(request.playstyle_tags),
+                theme_tags=list(request.theme_tags),
+                budget=request.budget,
+                user_brief=request.prompt,
+            )
+            if composed is not None:
+                # Second-pass refinement: ask Claude to tighten the
+                # compose result (cut redundancies, add bridge cards,
+                # balance the curve). On LLM failure we keep the raw
+                # compose output.
+                refined = refine_compose(
+                    composed=composed,
+                    format_name=request.format,
+                    colors=list(request.colors),
+                    budget=request.budget,
+                    user_brief=request.prompt,
+                )
+                final_composed = refined if refined is not None else composed
+                colors_tuple = tuple(request.colors) if request.colors else ()
+                builtin = BuiltinArchetype(
+                    id="composed-" + str(abs(hash(request.prompt)) % 10_000_000),
+                    display_name=final_composed["archetype_label"] or "Composed",
+                    keywords=(),
+                    formats=(request.format,),
+                    colors=colors_tuple,
+                    playstyle_tags=tuple(request.playstyle_tags),
+                    theme_tags=tuple(request.theme_tags),
+                    anchor_cards=tuple((n, q) for n, q in final_composed["anchor_cards"]),
+                    strategy=final_composed["strategy"],
+                )
+
+        # If 2+ archetypes blended, ask the LLM to curate a more coherent
+        # anchor list (cut redundancies, add bridge cards, balance the curve).
+        # Falls through to the deterministic blend on no key or failure.
+        if builtin is not None and len(matches) >= 2:
+            llm_blend = refine_blend(
+                matched_archetypes=[
+                    {"display_name": m.display_name, "anchor_cards": list(m.anchor_cards)}
+                    for m in matches[:3]
+                ],
+                format_name=request.format,
+                colors=request.colors or list(builtin.colors),
+                budget=request.budget,
+                user_brief=request.prompt,
+            )
+            if llm_blend is not None and llm_blend.get("anchor_cards"):
+                builtin = BuiltinArchetype(
+                    id=builtin.id + "-llm",
+                    display_name=builtin.display_name,
+                    keywords=builtin.keywords,
+                    formats=builtin.formats,
+                    colors=builtin.colors,
+                    playstyle_tags=builtin.playstyle_tags,
+                    theme_tags=builtin.theme_tags,
+                    anchor_cards=tuple((n, q) for n, q in llm_blend["anchor_cards"]),
+                    strategy=llm_blend.get("blended_strategy") or builtin.strategy,
+                )
+
+        if builtin is not None:
+            # Push anchors through seed_cards (preserves quantity) and into
+            # include_cards (forces presence). Without seed_cards the include
+            # path clamps to ~2 copies, so 4x anchors never reach 4x.
+            anchor_seeds: list[CardRef] = []
+            anchor_names: list[str] = []
+            existing_seed_names = {ref.name.lower() for ref in request.seed_cards}
+            for name, qty in builtin.anchor_cards:
+                if qty <= 0:
+                    continue
+                if not self.repository.get_card(name):
+                    continue
+                anchor_names.append(name)
+                if name.lower() not in existing_seed_names:
+                    anchor_seeds.append(CardRef(name=name, quantity=qty))
+            request = request.model_copy(update={
+                "colors": request.colors or list(builtin.colors),
+                "playstyle_tags": list(dict.fromkeys(list(request.playstyle_tags) + list(builtin.playstyle_tags))),
+                "theme_tags": list(dict.fromkeys(list(request.theme_tags) + list(builtin.theme_tags))),
+                "include_cards": list(dict.fromkeys(list(request.include_cards) + anchor_names)),
+                "seed_cards": list(request.seed_cards) + anchor_seeds,
+            })
         requested_tags = [self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags]
         include_warnings: list[str] = self._check_include_cards(request)
         commander_reason: str | None = None
@@ -89,7 +203,7 @@ class DeckGenerator:
             mainboard, legality_actions = self._enforce_commander_color_identity(mainboard, commander_identity)
             sideboard: list[CardRef] = []
         else:
-            outcome = self._retrieve_for_constructed(request)
+            outcome = self._retrieve_for_constructed(request, builtin=builtin)
             base = outcome.base
             colors = request.colors or base.colors
             commander = None
@@ -114,13 +228,51 @@ class DeckGenerator:
         mana_curve = self._build_mana_curve(mainboard)
         card_notes = self._build_card_notes(mainboard)
 
+        # Honest confidence: replace the old "did we find a shell" signal with
+        # a composite of (a) intent-match — did the brief's archetype match
+        # what we built? — and (b) anchor coverage — does the mainboard
+        # actually contain the canonical anchors for the labeled archetype?
+        # Previously a W Lifegain Payoff result for "build a burn deck"
+        # claimed 95% because the corpus shell was clean; now it would
+        # correctly fall into the 0.30 range.
+        confidence = self._compute_honest_confidence(
+            outcome=outcome,
+            builtin=builtin,
+            matches=matches,
+            mainboard=mainboard,
+            request=request,
+        )
+        # Queue sim validation for blends (2+ archetypes merged) so the
+        # frontend can show a "validated by simulator" badge once the
+        # optimizer finishes. Best-effort — any failure is swallowed so the
+        # generation response isn't blocked by optimizer queue issues.
+        sim_job_id: str | None = None
+        if len(matches) >= 2 and request.format != "commander":
+            try:
+                from app.services.optimizer_service import OptimizerJobRequest, submit_optimize_job
+                anchor_names = [name for name, _ in builtin.anchor_cards if self.repository.get_card(name)] if builtin else []
+                opt_request = OptimizerJobRequest(
+                    format=request.format,
+                    colors=list(request.colors),
+                    budget_usd=request.budget,
+                    include_cards=anchor_names[:16],  # cap so the optimizer can move
+                    rounds=4,  # short loop; this is validation, not full search
+                    proposals_per_round=2,
+                    sim_runs_per_eval=80,
+                )
+                opt_response = submit_optimize_job(opt_request, repository=self.repository)
+                sim_job_id = opt_response.job_id
+            except Exception:
+                logger.debug("sim validation queue failed (non-blocking)", exc_info=True)
+
         provenance = DeckProvenance(
             source_type=outcome.source_type,
-            confidence=round(outcome.confidence, 3),
+            confidence=round(confidence, 3),
             evidence_count=outcome.evidence_count,
             retrieved_from=outcome.retrieved_from,
             fallback_used=outcome.fallback_used,
             notes=outcome.notes,
+            sim_validation_job_id=sim_job_id,
         )
 
         # Final hard legality gate for commander format. The validator already
@@ -130,12 +282,39 @@ class DeckGenerator:
         if request.format == "commander" and legality_actions:
             warnings.insert(0, "Generator substituted off-color cards with basic lands to honor commander color identity.")
 
+        # If a built-in archetype seed was matched, prefer its display name
+        # and a synthesized strategy line so the deck doesn't show the
+        # corpus's nearest-neighbor archetype ("Izzet Prowess") for a
+        # request that was clearly something else ("burn").
+        if builtin is not None:
+            # Commander format with a chosen commander reads as
+            # "{commander} — {archetype}" so the table can scan who's at the
+            # helm before what the deck is doing.
+            if request.format == "commander" and commander:
+                title = f"{commander} — {builtin.display_name}"
+            else:
+                # Avoid stuttering when the display_name already includes the
+                # format word ("Legacy Reanimator" → "Legacy Legacy Reanimator").
+                format_word = request.format.title()
+                if builtin.display_name.lower().startswith(request.format.lower()):
+                    title = builtin.display_name
+                else:
+                    title = f"{format_word} {builtin.display_name}"
+            strategy_summary = (
+                builtin.strategy
+                or f"Built from a {builtin.display_name} seed: canonical anchor cards in this archetype, "
+                f"with the rest filled from the {request.format} card pool."
+            )
+        else:
+            title = self._build_title(request, base, commander)
+            strategy_summary = base.strategy
+
         return DeckResponse(
             format=request.format,
-            title=self._build_title(request, base, commander),
+            title=title,
             colors=colors,
             commander=commander,
-            strategy_summary=base.strategy,
+            strategy_summary=strategy_summary,
             mainboard=mainboard,
             sideboard=sideboard,
             estimated_price_usd=estimated_price,
@@ -159,7 +338,217 @@ class DeckGenerator:
 
     # ── Retrieval ────────────────────────────────────────────────────────
 
-    def _retrieve_for_constructed(self, request: GenerateDeckRequest) -> _RetrievalOutcome:
+    # Modern-legal fetchlands grouped by what they search for. Used by the
+    # mana_base template materializer to pick correct fetches for the colors.
+    _FETCHES_BY_COLOR_PAIR: dict[tuple[str, str], str] = {
+        ("R", "G"): "Wooded Foothills",
+        ("R", "W"): "Arid Mesa",
+        ("R", "U"): "Scalding Tarn",
+        ("R", "B"): "Bloodstained Mire",
+        ("U", "G"): "Misty Rainforest",
+        ("U", "W"): "Flooded Strand",
+        ("U", "B"): "Polluted Delta",
+        ("B", "G"): "Verdant Catacombs",
+        ("B", "W"): "Marsh Flats",
+        ("G", "W"): "Windswept Heath",
+    }
+    _SHOCKS_BY_COLOR_PAIR: dict[tuple[str, str], str] = {
+        ("R", "W"): "Sacred Foundry",
+        ("U", "R"): "Steam Vents",
+        ("U", "W"): "Hallowed Fountain",
+        ("B", "G"): "Overgrown Tomb",
+        ("R", "G"): "Stomping Ground",
+        ("G", "W"): "Temple Garden",
+        ("B", "W"): "Godless Shrine",
+        ("U", "B"): "Watery Grave",
+        ("R", "B"): "Blood Crypt",
+        ("U", "G"): "Breeding Pool",
+    }
+
+    def _materialize_mana_base(
+        self,
+        template: "ManaBaseTemplate",
+        colors: list[str],
+    ) -> list[ArchetypePackage]:
+        """Turn a ManaBaseTemplate + color request into concrete
+        ArchetypePackage entries for utility lands, shocks, fetches, basics.
+
+        The fractions (shocks_ratio, fetches_ratio) are applied to total
+        land slots minus utility + basics_min, so a "20 lands, 25% shocks,
+        50% fetches" template on a 2-color deck produces:
+          • utility lands as declared
+          • ceil((20 - util - basics_min) * 0.25) shocks split across colors
+          • ceil((20 - util - basics_min) * 0.50) fetches
+          • basics filling the remainder, never below basics_min
+        """
+        # Normalize colors (drop C; uppercase).
+        colors_clean = [c.upper() for c in colors if c.upper() in {"W", "U", "B", "R", "G"}]
+
+        packages: list[ArchetypePackage] = []
+        used = 0
+        # 1. Utility lands at fixed quantities.
+        for name, qty in template.utility_lands:
+            if qty > 0:
+                packages.append(ArchetypePackage(name=name, average_quantity=float(qty), inclusion_rate=1.0))
+                used += qty
+
+        remaining = max(0, template.total_lands - used - template.basics_min)
+
+        # 2. Shocks split across color pairs present.
+        if template.shocks_ratio > 0 and len(colors_clean) >= 2:
+            shock_total = max(0, int(round(remaining * template.shocks_ratio)))
+            pairs = self._color_pairs(colors_clean)
+            picked: list[str] = []
+            for pair in pairs:
+                land = self._SHOCKS_BY_COLOR_PAIR.get(pair) or self._SHOCKS_BY_COLOR_PAIR.get((pair[1], pair[0]))
+                if land:
+                    picked.append(land)
+            per_pair = max(1, shock_total // len(picked)) if picked else 0
+            for land in picked[: shock_total // max(1, per_pair) + 1]:
+                qty = min(per_pair, shock_total)
+                if qty <= 0:
+                    break
+                packages.append(ArchetypePackage(name=land, average_quantity=float(qty), inclusion_rate=1.0))
+                shock_total -= qty
+                used += qty
+                remaining -= qty
+                if shock_total <= 0:
+                    break
+
+        # 3. Fetches.
+        if template.fetches_ratio > 0 and len(colors_clean) >= 2:
+            fetch_total = max(0, int(round(remaining * template.fetches_ratio / max(1.0 - template.shocks_ratio, 0.01))))
+            pairs = self._color_pairs(colors_clean)
+            picked = []
+            for pair in pairs:
+                land = self._FETCHES_BY_COLOR_PAIR.get(pair) or self._FETCHES_BY_COLOR_PAIR.get((pair[1], pair[0]))
+                if land:
+                    picked.append(land)
+            per_pair = max(1, fetch_total // len(picked)) if picked else 0
+            for land in picked[: fetch_total // max(1, per_pair) + 1]:
+                qty = min(per_pair, fetch_total)
+                if qty <= 0:
+                    break
+                packages.append(ArchetypePackage(name=land, average_quantity=float(qty), inclusion_rate=1.0))
+                fetch_total -= qty
+                used += qty
+                remaining -= qty
+                if fetch_total <= 0:
+                    break
+
+        # 4. Basics for the rest, distributed across colors.
+        basics_target = max(template.basics_min, template.total_lands - used)
+        if basics_target > 0:
+            basics = self._basic_lands_for_colors(colors_clean or ["C"])
+            if not basics:
+                basics = ["Wastes"]
+            per_color = max(1, basics_target // len(basics))
+            placed = 0
+            for i, basic in enumerate(basics):
+                qty = basics_target - placed if i == len(basics) - 1 else per_color
+                qty = max(0, qty)
+                if qty <= 0:
+                    break
+                packages.append(ArchetypePackage(name=basic, average_quantity=float(qty), inclusion_rate=1.0))
+                placed += qty
+
+        return packages
+
+    @staticmethod
+    def _color_pairs(colors: list[str]) -> list[tuple[str, str]]:
+        """Return all unique 2-color pairs from the given colors list."""
+        out: list[tuple[str, str]] = []
+        for i in range(len(colors)):
+            for j in range(i + 1, len(colors)):
+                out.append((colors[i], colors[j]))
+        return out
+
+    def _synthesize_outcome_from_builtin(
+        self, builtin: BuiltinArchetype, request: GenerateDeckRequest
+    ) -> _RetrievalOutcome:
+        """Build a retrieval outcome from a builtin archetype seed.
+
+        Used when the requested format has no corpus archetypes at all (e.g.
+        Pioneer in our current data) but the user's brief matched a known
+        builtin shell. Synthesizes an ArchetypeRecord so downstream pipeline
+        steps (mainboard fill, strategy summary, sections) all run normally.
+        """
+        # If the archetype carries a mana_base template, strip any hand-
+        # listed lands from anchor_cards — they'd otherwise compete with
+        # the template's recipe. The template-driven materialization runs
+        # later in _materialize_mana_base via outcome.notes plumbing.
+        def _is_land(name: str) -> bool:
+            card = self.repository.get_card(name)
+            return bool(card and "Land" in card.type_line)
+
+        mainboard_anchors = list(builtin.anchor_cards)
+        if builtin.mana_base is not None:
+            mainboard_anchors = [
+                (name, qty) for name, qty in mainboard_anchors
+                if not _is_land(name)
+            ]
+        mainboard = [
+            CardRef(name=name, quantity=qty)
+            for name, qty in mainboard_anchors
+            if qty > 0 and self.repository.get_card(name)
+        ]
+        sideboard = [
+            CardRef(name=name, quantity=qty)
+            for name, qty in builtin.sideboard_anchors
+            if qty > 0 and self.repository.get_card(name)
+        ]
+        # Mana-base template → concrete ArchetypePackage list (utility,
+        # shocks, fetches, basics). The existing _add_lands_from_packages
+        # path consumes this transparently.
+        land_packages: list[ArchetypePackage] = []
+        if builtin.mana_base is not None:
+            colors_for_mb = request.colors or list(builtin.colors)
+            land_packages = self._materialize_mana_base(builtin.mana_base, colors_for_mb)
+        archetype_metadata = ArchetypeMetadata(land_packages=land_packages)
+        base = ArchetypeRecord(
+            id=builtin.id,
+            name=builtin.display_name,
+            format=request.format,
+            colors=list(builtin.colors),
+            tags=list(builtin.playstyle_tags + builtin.theme_tags),
+            strategy=(
+                builtin.strategy
+                or f"Canonical {builtin.display_name} shell seeded from a built-in template."
+            ),
+            mainboard=mainboard,
+            sideboard=sideboard,
+            commander=None,
+            source_count=0,
+            avg_placement=None,
+            metadata=archetype_metadata,
+        )
+        return _RetrievalOutcome(
+            base=base,
+            candidates=[base],
+            source_type="builtin",
+            confidence=0.7,
+            evidence_count=0,
+            retrieved_from=[builtin.display_name],
+            fallback_used=True,
+            notes=[
+                f"Format '{request.format}' has no corpus archetypes; synthesized base from built-in {builtin.display_name} seed.",
+            ],
+        )
+
+    def _retrieve_for_constructed(
+        self,
+        request: GenerateDeckRequest,
+        builtin: BuiltinArchetype | None = None,
+    ) -> _RetrievalOutcome:
+        # If the user named (or blended) a known archetype, synthesize the
+        # base from the builtin and skip corpus retrieval entirely. The
+        # corpus is sparse and would otherwise pick an unrelated nearest-
+        # neighbor shell whose flex cards leak into the mainboard (e.g.
+        # picking "RU Spells Aggro" for a mono-red burn request and bleeding
+        # in Slickshot Show-Off / Monstrous Rage).
+        if builtin is not None:
+            return self._synthesize_outcome_from_builtin(builtin, request)
+
         # Strict color subset first — stops a 4C shell from beating a 2C match.
         candidates = self.repository.top_archetypes(
             format_name=request.format,
@@ -208,6 +597,8 @@ class DeckGenerator:
             )
         all_archetypes = self.repository.archetypes_for_format(request.format)
         if not all_archetypes:
+            if builtin is not None:
+                return self._synthesize_outcome_from_builtin(builtin, request)
             raise ValueError(f"No archetypes available for format {request.format}")
         base = all_archetypes[0]
         return _RetrievalOutcome(
@@ -506,7 +897,18 @@ class DeckGenerator:
             theme_tags=requested_tags,
             limit=20,
         )
-        ranked_candidates = [item["name"] for item in package_candidates] + self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        # When the base was synthesized from a builtin (source_count==0 and
+        # no metadata.core_cards from the corpus), skip the corpus package
+        # candidates. They're the source of leaks like Stormchaser's Talent
+        # appearing in Modern Burn decks because the corpus picked a tagged
+        # nearest-neighbor shell. The builtin's anchors are already seeded;
+        # everything else is filled from the format card pool ranked by
+        # color and theme match.
+        from_builtin = archetype.source_count == 0 and not archetype.metadata.core_cards
+        if from_builtin:
+            ranked_candidates = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        else:
+            ranked_candidates = [item["name"] for item in package_candidates] + self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
         nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
         while self._nonland_total(counts) < nonland_target:
             if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
@@ -534,6 +936,17 @@ class DeckGenerator:
         for ref in mainboard:
             resolved = self.repository.get_card(ref.name)
             main_counts[resolved.name if resolved else ref.name] += ref.quantity
+        # Builtin sideboard anchors: when the synthesized base carries a
+        # curated sideboard (Burn → Smash to Smithereens, Roiling Vortex,
+        # etc.), seed those first at their declared quantities. Eliminates
+        # the "15 Mountains" / random role-pool grab bag for top archetypes.
+        for ref in archetype.sideboard:
+            card = self.repository.get_card(ref.name)
+            if not card or not self._is_card_legal_record(card, request.format):
+                continue
+            if not self._matches_color_request(card, colors):
+                continue
+            counts[card.name] = min(ref.quantity, self._copy_limit(card, request.format) or ref.quantity)
         preferred_packages = archetype.metadata.sideboard_packages or archetype.metadata.matchup_tech_packages
         for package in preferred_packages:
             card = self.repository.get_card(package.name)
@@ -545,14 +958,25 @@ class DeckGenerator:
             if remaining:
                 counts[card.name] = min(int(round(package.average_quantity or 1)), remaining)
 
-        fallback_names = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="interaction", theme_tags=requested_tags, limit=20)]
-        while self._total_cards(counts) < SIDEBOARD_SIZE:
-            if not self._add_ranked_candidate(counts, fallback_names, request.format, colors, request.budget, set(), main_counts):
+        # Walk multiple role pools before giving up. Basic lands in a
+        # sideboard are always wrong, so we never pad with them — better to
+        # return a short sideboard than 15 Mountains.
+        for role in ("interaction", "removal", "threat", "advantage", "ramp"):
+            if self._total_cards(counts) >= SIDEBOARD_SIZE:
                 break
-        while self._total_cards(counts) < SIDEBOARD_SIZE:
-            for basic_land in self._basic_lands_for_colors(colors):
-                counts[basic_land] += 1
-                if self._total_cards(counts) >= SIDEBOARD_SIZE:
+            role_names = [
+                item["name"]
+                for item in self.repository.card_packages_by_role_theme(
+                    format_name=request.format,
+                    role=role,
+                    theme_tags=requested_tags,
+                    limit=20,
+                )
+            ]
+            while self._total_cards(counts) < SIDEBOARD_SIZE:
+                if not self._add_ranked_candidate(
+                    counts, role_names, request.format, colors, request.budget, set(), main_counts
+                ):
                     break
         return self._counts_to_refs(counts)
 
@@ -623,6 +1047,83 @@ class DeckGenerator:
             return archetype.commander, None, archetype
         return None, None, archetype
 
+    # Canonical Commander baseline. Every commander deck should include
+    # these unless explicitly excluded. The Sliver Queen output had ZERO of
+    # these — no Sol Ring, no Command Tower, no Cultivate, no Rhystic Study.
+    # That made the deck unplayable as a "real" commander build. Categorized
+    # so the seeder can swap by color identity (artifacts always, color
+    # cards only if the identity includes the color).
+    _COMMANDER_BASELINE: list[tuple[str, frozenset[str]]] = [
+        # (card_name, required_color_identity) — empty set = colorless / always
+        ("Sol Ring", frozenset()),
+        ("Arcane Signet", frozenset()),
+        ("Command Tower", frozenset()),
+        ("Skullclamp", frozenset()),
+        ("Lightning Greaves", frozenset()),
+        ("Swiftfoot Boots", frozenset()),
+        # Ramp
+        ("Cultivate", frozenset({"G"})),
+        ("Kodama's Reach", frozenset({"G"})),
+        ("Three Visits", frozenset({"G"})),
+        ("Nature's Lore", frozenset({"G"})),
+        ("Rampant Growth", frozenset({"G"})),
+        ("Farseek", frozenset({"G"})),
+        # Draw
+        ("Rhystic Study", frozenset({"U"})),
+        ("Mystic Remora", frozenset({"U"})),
+        ("Sylvan Library", frozenset({"G"})),
+        ("Esper Sentinel", frozenset({"W"})),
+        # Spot removal
+        ("Swords to Plowshares", frozenset({"W"})),
+        ("Path to Exile", frozenset({"W"})),
+        ("Generous Gift", frozenset({"W"})),
+        ("Beast Within", frozenset({"G"})),
+        ("Anguished Unmaking", frozenset({"W", "U", "B"})),
+        ("Assassin's Trophy", frozenset({"B", "G"})),
+        # Sweepers
+        ("Wrath of God", frozenset({"W"})),
+        ("Damnation", frozenset({"B"})),
+        ("Blasphemous Act", frozenset({"R"})),
+        ("Toxic Deluge", frozenset({"B"})),
+        ("Farewell", frozenset({"W"})),
+        # Treasure / fixing
+        ("Sol Talisman", frozenset()),
+        ("Mind Stone", frozenset()),
+        ("Fellwar Stone", frozenset()),
+        # Catch-all draw
+        ("Cyclonic Rift", frozenset({"U"})),
+    ]
+
+    def _seed_commander_baseline(
+        self,
+        counts: Counter[str],
+        commander_identity: set[str],
+        excluded: set[str],
+        format_name: str,
+        budget: float | None,
+    ) -> None:
+        """Seed the canonical commander staples for the deck's color identity.
+        Quantity=1 per card (singleton). Skips anything excluded or off-color.
+        Run BEFORE archetype packages so these staples form the floor.
+        """
+        for name, requires in self._COMMANDER_BASELINE:
+            if name.lower() in excluded:
+                continue
+            # Color identity check: card's identity must subset the commander's.
+            # Empty `requires` means colorless / always eligible.
+            if requires and not requires.issubset(commander_identity):
+                continue
+            card = self.repository.get_card(name)
+            if not card or counts[card.name] > 0:
+                continue
+            if not self._is_card_legal_record(card, format_name):
+                continue
+            if not self.repository.fits_color_identity(card, commander_identity):
+                continue
+            if budget is not None and not self._fits_budget_request(card, budget):
+                continue
+            counts[card.name] = 1
+
     def _build_commander_mainboard(
         self,
         archetype: ArchetypeRecord,
@@ -634,15 +1135,25 @@ class DeckGenerator:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
         excluded = {name.lower() for name in request.exclude_cards}
-        package = archetype.metadata.commander_package
-        if package:
-            self._add_package_cards(counts, package.ramp_package, target=COMMANDER_ROLE_TARGETS["ramp"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
-            self._add_package_cards(counts, package.draw_package, target=COMMANDER_ROLE_TARGETS["draw"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
-            self._add_package_cards(counts, package.interaction_package, target=COMMANDER_ROLE_TARGETS["interaction"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
-            self._add_package_cards(counts, package.synergy_packages, target=COMMANDER_ROLE_TARGETS["engine"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
-            self._add_package_cards(counts, package.signature_cards, target=COMMANDER_ROLE_TARGETS["payoff"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+        # Seed the canonical staples first so a Sliver Queen build never
+        # ships without Sol Ring / Command Tower / Arcane Signet again.
+        self._seed_commander_baseline(counts, commander_identity, excluded, request.format, request.budget)
 
-        # Seed from prior deck (refine path): preserve original quantities for cards that pass all filters
+        # Seed from the builtin's anchor cards (passed in via request.seed_cards)
+        # BEFORE the corpus packages run. Previously this loop ran last and
+        # only added if counts==0, which meant the corpus package's pet cards
+        # for the commander beat the builtin's archetype-specific anchors —
+        # so a "yawgmoth combo" request whose anchors include Wall of Roots,
+        # Strangleroot Geist, Eldritch Evolution, Chord of Calling would get
+        # an Aristocrats package instead. By seeding builtin anchors first,
+        # the commander packages fill flex slots around them.
+        # NOTE: Cards whose color identity isn't a subset of the commander's
+        # are filtered here — that's a hard MTG rule, not a bug. A Modern
+        # builtin like "Yawgmoth Combo" lists green support cards (Wall of
+        # Roots, Strangleroot Geist, Chord of Calling) that are illegal
+        # under a mono-B Yawgmoth, Thran Physician commander. The intersect
+        # produces a mono-B Yawgmoth shell — the package path then fills
+        # around the legal anchors.
         for ref in request.seed_cards:
             card = self.repository.get_card(ref.name)
             if not card or ref.name.lower() in excluded or "Land" in card.type_line:
@@ -656,7 +1167,15 @@ class DeckGenerator:
             if not self._fits_budget_request(card, request.budget):
                 continue
             if counts[card.name] == 0:
-                counts[card.name] = 1  # Commander format is singleton; skip if already added from packages
+                counts[card.name] = 1  # Commander is singleton.
+
+        package = archetype.metadata.commander_package
+        if package:
+            self._add_package_cards(counts, package.ramp_package, target=COMMANDER_ROLE_TARGETS["ramp"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.draw_package, target=COMMANDER_ROLE_TARGETS["draw"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.interaction_package, target=COMMANDER_ROLE_TARGETS["interaction"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.synergy_packages, target=COMMANDER_ROLE_TARGETS["engine"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
+            self._add_package_cards(counts, package.signature_cards, target=COMMANDER_ROLE_TARGETS["payoff"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
 
         themed_candidates = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="engine", theme_tags=requested_tags, limit=30)]
         fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded)
@@ -679,9 +1198,31 @@ class DeckGenerator:
         return self._counts_to_refs(counts)
 
     def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None) -> str:
+        # Commander branch: "{commander} — {short archetype label}". Strips
+        # the commander name from the archetype label if the clusterer
+        # embedded it (e.g. "Yawgmoth, Thran Physician Aristocrats Combo
+        # Commander Shell"), and drops the redundant "Commander Shell"
+        # suffix. Prevents the "Yawgmoth, Thran Physician Yawgmoth, Thran
+        # Physician Commander Shell" doubling pattern.
+        if commander:
+            short_label = archetype.name
+            for noise in (f"{commander} ", "Commander Shell", "Commander shell"):
+                short_label = short_label.replace(noise, "").strip()
+            short_label = re.sub(r"\s+", " ", short_label).strip(" -—")
+            if not short_label or short_label == commander:
+                return commander
+            return f"{commander} — {short_label}"
+
+        # Constructed: prefer the corpus archetype name; only prepend a
+        # single playstyle/theme modifier if the corpus name doesn't
+        # already start with one.
+        archetype_name = archetype.name or ""
         modifiers = [tag.title() for tag in request.theme_tags[:1] + request.playstyle_tags[:1] if tag]
-        anchor = commander or archetype.name
-        return f"{' '.join(modifiers + [anchor, archetype.name if commander and archetype.name != commander else '']).strip()}".strip()
+        modifier_words = {m.lower() for m in modifiers}
+        starts_with_modifier = archetype_name.split(" ", 1)[0].lower() in modifier_words if archetype_name else False
+        if starts_with_modifier or not modifiers:
+            return archetype_name
+        return f"{modifiers[0]} {archetype_name}".strip()
 
     def _build_explanation(
         self,
@@ -700,6 +1241,7 @@ class DeckGenerator:
             "corpus": f"Started from the {archetype.name} shell, backed by {outcome.evidence_count} corpus deck(s) of supporting evidence.",
             "fallback": f"No matching corpus shell was found — the deck was assembled from the legal card pool using deterministic role and color filters (low confidence: {outcome.confidence:.2f}).",
             "hybrid": f"Started from the {archetype.name} shell but most slots were filled by deterministic fallbacks (mixed confidence: {outcome.confidence:.2f}).",
+            "builtin": f"No corpus archetype was available for this format — assembled from the built-in {archetype.name} seed and filled from the legal card pool.",
         }[outcome.source_type]
         notes = [
             provenance_blurb,
@@ -731,6 +1273,7 @@ class DeckGenerator:
             "corpus": f"Backed by {outcome.evidence_count} corpus deck(s); confidence {outcome.confidence:.2f}.",
             "fallback": f"No matching corpus shell — assembled from card pool. Confidence {outcome.confidence:.2f}.",
             "hybrid": f"Hybrid of corpus shell and card-pool fallback. Confidence {outcome.confidence:.2f}.",
+            "builtin": f"Built from a curated {archetype.name} seed (no corpus archetype for this format). Confidence {outcome.confidence:.2f}.",
         }[outcome.source_type]
         sections = [
             DeckSectionSummary(
@@ -758,20 +1301,42 @@ class DeckGenerator:
             )
         if commander_reason:
             sections.append(DeckSectionSummary(title="Commander Choice", summary=commander_reason, bullets=[f"Commander: {commander or 'n/a'}"]))
+        config_bullets = [
+            f"Mainboard cards: {sum(ref.quantity for ref in mainboard)}",
+            f"Sideboard cards: {sum(ref.quantity for ref in sideboard)}",
+        ]
+        if request.format == "commander" and commander:
+            config_bullets.append(f"Commander: {commander}")
         sections.append(
             DeckSectionSummary(
                 title="Configuration",
                 summary="Mana base and support package were adjusted after retrieval.",
-                bullets=[
-                    f"Mainboard cards: {sum(ref.quantity for ref in mainboard)}",
-                    f"Sideboard cards: {sum(ref.quantity for ref in sideboard)}",
-                    f"Commander: {commander or 'n/a'}",
-                ],
+                bullets=config_bullets,
             )
         )
         if warnings:
             sections.append(DeckSectionSummary(title="Watchouts", summary="A few structural risks remain worth testing in games.", bullets=warnings[:4]))
         return sections
+
+    # Priority order for Key Mechanics tagging: most-specific tag wins so a
+    # card with tags ["draw", "graveyard", "spells"] gets bucketed under
+    # graveyard alone instead of appearing under all three. Stops the
+    # "same 5 cards under every mechanic" duplication seen in earlier outputs.
+    _MECHANIC_PRIORITY: tuple[str, ...] = (
+        "tribal", "prowess", "graveyard", "lifegain", "tokens", "sacrifice",
+        "ramp", "burn", "infect", "mill",
+        "interaction", "draw", "spells",
+    )
+    _MECHANIC_KEY_TAGS: frozenset[str] = frozenset(_MECHANIC_PRIORITY)
+
+    def _primary_mechanic_tag(self, card_tags: list[str]) -> str | None:
+        """Pick at most one mechanic tag per card using the priority order.
+        Returns None if the card has no mechanic-relevant tag."""
+        tag_set = set(card_tags)
+        for candidate in self._MECHANIC_PRIORITY:
+            if candidate in tag_set:
+                return candidate
+        return None
 
     def _build_mechanics(self, mainboard: list[CardRef], commander: str | None) -> list[DeckMechanic]:
         tag_to_cards: defaultdict[str, list[str]] = defaultdict(list)
@@ -779,14 +1344,21 @@ class DeckGenerator:
             card = self.repository.get_card(ref.name)
             if not card or "Land" in card.type_line:
                 continue
-            for tag in card.tags:
-                if tag in {"interaction", "draw", "ramp", "prowess", "tokens", "lifegain", "graveyard", "tribal", "spells"}:
-                    tag_to_cards[tag].append(card.name)
+            primary = self._primary_mechanic_tag(card.tags)
+            if primary is None:
+                continue
+            tag_to_cards[primary].append(card.name)
         mechanics: list[DeckMechanic] = []
-        for tag, cards in sorted(tag_to_cards.items(), key=lambda item: len(item[1]), reverse=True)[:4]:
-            summary = f"The deck uses {tag} as a recurring axis rather than a one-off inclusion."
+        # Require at least 3 cards in a mechanic before surfacing it — a tag
+        # with 1–2 hits is too sparse to call a "recurring axis."
+        for tag, cards in sorted(tag_to_cards.items(), key=lambda item: len(item[1]), reverse=True):
+            if len(cards) < 3:
+                continue
+            if len(mechanics) >= 4:
+                break
+            summary = f"{len(cards)} cards form a {tag} axis."
             if commander:
-                summary = f"The commander shell reinforces {tag} through retrieved support packages and signature cards."
+                summary = f"The commander shell reinforces {tag} through {len(cards)} support cards."
             mechanics.append(DeckMechanic(label=tag.title(), summary=summary, cards=cards[:5]))
         return mechanics
 
@@ -868,7 +1440,80 @@ class DeckGenerator:
         scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return [name for _, name in scored]
 
+    # Set types that should never appear in a competitive deck regardless of
+    # what Scryfall says about their legality. "funny" covers Un-sets and
+    # Unfinity stickers (Happy Dead Squirrel, Sassy Gremlin Blood). The rest
+    # are alt-art / Arena-only / collector printings.
+    _BLOCKED_SET_TYPES = frozenset({"funny", "memorabilia", "alchemy"})
+
+    def _compute_honest_confidence(
+        self,
+        *,
+        outcome: _RetrievalOutcome,
+        builtin: BuiltinArchetype | None,
+        matches: list[BuiltinArchetype],
+        mainboard: list[CardRef],
+        request: GenerateDeckRequest,
+    ) -> float:
+        """Compute a confidence score that reflects whether the deck answers
+        the brief, not just whether the engine found a shell.
+
+        Mix three signals:
+          1. Source bias: builtin ≫ blend ≫ corpus ≫ hybrid ≫ fallback.
+          2. Anchor coverage: of the labeled archetype's anchor cards, what
+             fraction made it into the mainboard?
+          3. Intent match: did the brief contain a keyword that maps to the
+             labeled archetype?
+
+        Returns a value in [0.05, 0.98]. Capped below 1.0 because no deck is
+        a perfect answer — there's always editorial judgement involved.
+        """
+        # Source bias — the floor.
+        source_bias = {
+            "builtin": 0.65,
+            "corpus": 0.50,
+            "hybrid": 0.35,
+            "fallback": 0.20,
+        }.get(outcome.source_type, 0.25)
+
+        # Blend bonus: a 2-way blend that was LLM-curated reads as well-aimed
+        # even though it's not a single corpus match.
+        if len(matches) >= 2:
+            source_bias = max(source_bias, 0.55)
+
+        # Anchor coverage: when there's a builtin (single or blend), check
+        # how many of its canonical anchors actually landed in the mainboard.
+        anchor_coverage = 0.0
+        if builtin is not None and builtin.anchor_cards:
+            mainboard_names = {ref.name.lower() for ref in mainboard}
+            anchors = [name for name, qty in builtin.anchor_cards if qty > 0]
+            if anchors:
+                present = sum(1 for name in anchors if name.lower() in mainboard_names)
+                anchor_coverage = present / len(anchors)
+
+        # Intent match: did the brief reference the labeled archetype at all?
+        # Direct keyword hit = strong signal; meta-default route = soft signal.
+        intent_match = 0.0
+        if request.prompt and builtin is not None:
+            prompt_lc = request.prompt.lower()
+            for keyword in builtin.keywords:
+                if keyword in prompt_lc:
+                    intent_match = 1.0
+                    break
+
+        # Composite. Source bias is the floor; the coverage + intent terms
+        # add headroom up to a cap. A high source_bias with poor coverage
+        # still reads as moderately confident because the SHAPE was right.
+        score = source_bias + 0.20 * anchor_coverage + 0.13 * intent_match
+        return max(0.05, min(0.98, score))
+
     def _is_card_legal_record(self, card: CardRecord, format_name: str) -> bool:
+        # Set-type gate: drops the joke / Arena-only / collector printings
+        # backfilled by app/scripts/backfill_set_type.py. Cards from sets that
+        # haven't been classified keep set_type=None and pass through, so
+        # this is failure-open for normal printings.
+        if card.set_type and card.set_type in self._BLOCKED_SET_TYPES:
+            return False
         return card.legalities.get(format_name, "not_legal") in {"legal", "restricted"}
 
     def _check_include_cards(self, request: GenerateDeckRequest) -> list[str]:
@@ -950,6 +1595,17 @@ class DeckGenerator:
         return round(total, 2) if priced_cards else None
 
     def _target_land_count(self, archetype: ArchetypeRecord, requested_tags: list[str]) -> int:
+        # If the archetype carries a mana_base template, its land_packages
+        # sum to the canonical land count for this archetype. Respect that
+        # instead of the tag-based heuristic — Burn wants 19, Tron wants 20,
+        # Amulet wants 22. The heuristic returns the same value for every
+        # aggro deck regardless of archetype.
+        if archetype.metadata.land_packages:
+            template_total = int(round(sum(
+                float(pkg.average_quantity or 0) for pkg in archetype.metadata.land_packages
+            )))
+            if template_total > 0:
+                return template_total
         if {"aggro", "tempo", "spells"} & set(requested_tags):
             return LAND_TARGET_AGGRO
         if {"control", "midrange", "combo"} & set(requested_tags):

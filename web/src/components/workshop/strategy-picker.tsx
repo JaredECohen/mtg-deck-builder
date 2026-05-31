@@ -8,10 +8,16 @@ type Props = {
 };
 
 export function StrategyPicker({ selected, onChange }: Props) {
+  const selectedLabels = STRATEGY_OPTIONS.filter((option) => selected.includes(option.id)).map((option) => option.label);
+  const summaryText = selectedLabels.length === 0 ? "Any" : selectedLabels.join(", ");
+
   return (
-    <div className="panel form-card">
-      <span className="label">Deck Strategy</span>
-      <div className="chips">
+    <details className="panel form-card strategy-picker">
+      <summary className="strategy-summary">
+        <span className="label">Deck Strategy</span>
+        <span className="strategy-summary-value">{summaryText}</span>
+      </summary>
+      <div className="chips" style={{ marginTop: 12 }}>
         {STRATEGY_OPTIONS.map((option) => (
           <button
             key={option.id}
@@ -25,6 +31,6 @@ export function StrategyPicker({ selected, onChange }: Props) {
           </button>
         ))}
       </div>
-    </div>
+    </details>
   );
 }

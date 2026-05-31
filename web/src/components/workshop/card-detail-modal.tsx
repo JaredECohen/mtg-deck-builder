@@ -60,8 +60,11 @@ export function CardDetailModal({ card, loading, error, onClose }: Props) {
               {card.purchase_links?.scryfall ? (
                 <a className="button secondary" href={card.purchase_links.scryfall} target="_blank" rel="noreferrer">Open Scryfall</a>
               ) : null}
-              {card.purchase_links?.amazon_search ? (
-                <a className="button secondary" href={card.purchase_links.amazon_search} target="_blank" rel="noreferrer">Search Amazon</a>
+              {card.purchase_links?.tcgplayer ? (
+                <a className="button secondary" href={card.purchase_links.tcgplayer} target="_blank" rel="noreferrer">Buy on TCGPlayer</a>
+              ) : null}
+              {card.purchase_links?.cardmarket ? (
+                <a className="button secondary" href={card.purchase_links.cardmarket} target="_blank" rel="noreferrer">Buy on Cardmarket</a>
               ) : null}
             </div>
             {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}

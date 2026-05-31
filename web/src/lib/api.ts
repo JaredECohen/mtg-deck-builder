@@ -74,6 +74,65 @@ export async function refineDeck(deck: DeckResponse, prompt: string, signal?: Ab
   return jsonOrThrow<DeckResponse>(response, "Refinement failed");
 }
 
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+export type ChatDeckResponse = { reply: string; suggested_refinement: string | null };
+
+export async function chatAboutDeck(
+  deck: DeckResponse,
+  message: string,
+  history: ChatTurn[],
+  signal?: AbortSignal
+): Promise<ChatDeckResponse> {
+  const response = await fetch(`${API_BASE}/v1/decks/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal,
+    body: JSON.stringify({ deck, message, history })
+  });
+  return jsonOrThrow<ChatDeckResponse>(response, "Deck chat failed");
+}
+
+export type SavedDeckSummary = {
+  id: string;
+  title: string;
+  format: FormatName;
+  created_at: string;
+};
+
+export type SavedDeckDetail = SavedDeckSummary & { deck: DeckResponse; chat_history?: ChatTurn[] };
+
+export async function saveDeck(sessionId: string, deck: DeckResponse, chatHistory: ChatTurn[] = []): Promise<SavedDeckSummary> {
+  const response = await fetch(`${API_BASE}/v1/decks/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, deck, chat_history: chatHistory })
+  });
+  return jsonOrThrow<SavedDeckSummary>(response, "Save deck failed");
+}
+
+export async function listSavedDecks(sessionId: string): Promise<SavedDeckSummary[]> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  const response = await fetch(`${API_BASE}/v1/decks/saved?${params.toString()}`);
+  const payload = await jsonOrThrow<{ decks: SavedDeckSummary[] }>(response, "List saved decks failed");
+  return payload.decks;
+}
+
+export async function loadSavedDeck(deckId: string): Promise<SavedDeckDetail> {
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(deckId)}`);
+  return jsonOrThrow<SavedDeckDetail>(response, "Load saved deck failed");
+}
+
+export async function deleteSavedDeck(deckId: string, sessionId: string): Promise<void> {
+  const params = new URLSearchParams({ session_id: sessionId });
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(deckId)}?${params.toString()}`, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? "Delete failed");
+  }
+}
+
 export type ExportTarget = "arena" | "plain" | "csv" | "moxfield";
 
 export async function exportDeck(deck: DeckResponse, target: ExportTarget): Promise<{ content: string; target: ExportTarget }> {

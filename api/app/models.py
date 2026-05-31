@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-FormatName = Literal["standard", "modern", "legacy", "commander"]
+FormatName = Literal["standard", "modern", "pioneer", "legacy", "commander"]
 ModeName = Literal["fast-competitive", "constraint-aware", "creative-but-viable"]
 ExperienceLevel = Literal["beginner", "expert"]
 
@@ -24,6 +24,10 @@ class TournamentDeckIngestMetadata(BaseModel):
     event_size: int | None = None
     finish_label: str | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
+    # Canonical display name of the source archetype (when known, e.g. from
+    # synthesize_tournament_corpus.py). Used by build_archetypes.py to label
+    # the cluster instead of auto-generating "B Graveyard Ramp"-style names.
+    archetype_label: str | None = None
 
 
 class NormalizedTournamentDeckRecord(BaseModel):
@@ -118,6 +122,8 @@ class CardFaceRecord(BaseModel):
 
 class CardPurchaseLinks(BaseModel):
     scryfall: str | None = None
+    tcgplayer: str | None = None
+    cardmarket: str | None = None
     amazon_search: str | None = None
 
 
@@ -136,6 +142,7 @@ class CardRecord(BaseModel):
     layout: str | None = None
     rarity: str | None = None
     set_code: str | None = None
+    set_type: str | None = None
     released_at: str | None = None
     image_uri: str | None = None
     image_uris: dict[str, str] = Field(default_factory=dict)
@@ -207,6 +214,48 @@ class GenerateDeckRequest(BaseModel):
 class RefineDeckRequest(BaseModel):
     deck: "DeckResponse"
     refinement_prompt: str
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatDeckRequest(BaseModel):
+    deck: "DeckResponse"
+    message: str
+    history: list[ChatMessage] = Field(default_factory=list)
+
+
+class ChatDeckResponse(BaseModel):
+    reply: str
+    suggested_refinement: str | None = None
+
+
+class SaveDeckRequest(BaseModel):
+    session_id: str
+    deck: "DeckResponse"
+    chat_history: list[ChatMessage] = Field(default_factory=list)
+
+
+class SavedDeckSummary(BaseModel):
+    id: str
+    title: str
+    format: FormatName
+    created_at: str
+
+
+class SavedDecksResponse(BaseModel):
+    decks: list[SavedDeckSummary]
+
+
+class SavedDeckResponse(BaseModel):
+    id: str
+    title: str
+    format: FormatName
+    created_at: str
+    deck: "DeckResponse"
+    chat_history: list[ChatMessage] = Field(default_factory=list)
 
 
 class ValidateDeckRequest(BaseModel):
@@ -289,7 +338,7 @@ class ManaCurvePoint(BaseModel):
     card_count: int
 
 
-SourceType = Literal["corpus", "fallback", "hybrid"]
+SourceType = Literal["corpus", "fallback", "hybrid", "builtin"]
 
 # Primary categorization for deck breakdown UI. Order matters: a card with
 # multiple types (e.g. Artifact Creature) is bucketed by the first match in
@@ -328,6 +377,10 @@ class DeckProvenance(BaseModel):
     retrieved_from: list[str] = Field(default_factory=list)
     fallback_used: bool = False
     notes: list[str] = Field(default_factory=list)
+    # When a blend or compose path triggered sim validation, this carries
+    # the optimizer job id the frontend can poll. None means no sim
+    # validation was queued (single-archetype matches don't need it).
+    sim_validation_job_id: str | None = None
 
 
 class DeckResponse(BaseModel):

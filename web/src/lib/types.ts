@@ -1,4 +1,4 @@
-export type FormatName = "standard" | "modern" | "legacy" | "commander";
+export type FormatName = "standard" | "modern" | "pioneer" | "legacy" | "commander";
 
 export type CardRef = {
   name: string;
@@ -15,6 +15,8 @@ export type CardFaceRecord = {
 
 export type CardPurchaseLinks = {
   scryfall?: string | null;
+  tcgplayer?: string | null;
+  cardmarket?: string | null;
   amazon_search?: string | null;
 };
 
@@ -124,7 +126,9 @@ export type ScoreBreakdown = {
   total: number;
 };
 
-export type SourceType = "corpus" | "fallback" | "hybrid";
+export type SourceType = "corpus" | "fallback" | "hybrid" | "builtin";
+
+export type SimValidationStatus = "pending" | "running" | "succeeded" | "failed" | "unknown";
 
 export type DeckProvenance = {
   source_type: SourceType;
@@ -133,6 +137,7 @@ export type DeckProvenance = {
   retrieved_from: string[];
   fallback_used: boolean;
   notes: string[];
+  sim_validation_job_id?: string | null;
 };
 
 export type PrimaryCardType =

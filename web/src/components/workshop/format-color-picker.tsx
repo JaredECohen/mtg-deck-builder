@@ -18,6 +18,7 @@ export function FormatColorPicker({ format, colors, onFormatChange, onColorsChan
         <select id="format" className="select" value={format} onChange={(event) => onFormatChange(event.target.value as FormatName)}>
           <option value="standard">Standard</option>
           <option value="modern">Modern</option>
+          <option value="pioneer">Pioneer</option>
           <option value="legacy">Legacy</option>
           <option value="commander">Commander</option>
         </select>

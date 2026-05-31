@@ -450,6 +450,23 @@ class CardRepository:
     def all_cards(self) -> list[CardRecord]:
         return self._all_cards_cache
 
+    def list_cards_for_format(self, format_name: str) -> list[CardRecord]:
+        """Return format-legal, non-joke cards eligible for the optimizer
+        pool. Wraps `all_cards()` with the same filters used by the deck
+        generator's pool query — `legalities[format] == legal/restricted`
+        and `set_type` not in the funny/memorabilia/alchemy blocklist.
+        """
+        blocked_set_types = {"funny", "memorabilia", "alchemy"}
+        legal = {"legal", "restricted"}
+        out: list[CardRecord] = []
+        for card in self._all_cards_cache:
+            if card.legalities.get(format_name, "not_legal") not in legal:
+                continue
+            if card.set_type and card.set_type in blocked_set_types:
+                continue
+            out.append(card)
+        return out
+
     def is_legal_commander(self, card: CardRecord) -> bool:
         if card.legalities.get("commander", "not_legal") != "legal":
             return False
@@ -811,6 +828,7 @@ class CardRepository:
             layout=row.layout,
             rarity=row.rarity,
             set_code=row.set_code,
+            set_type=row.set_type,
             released_at=row.released_at,
             image_uri=row.image_uri,
             image_uris=row.image_uris,

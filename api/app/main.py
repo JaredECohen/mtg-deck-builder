@@ -11,6 +11,9 @@ from app.models import (
     AnalyzeDeckRequest,
     CardDetailResponse,
     CardSearchResponse,
+    ChatDeckRequest,
+    ChatDeckResponse,
+    ChatMessage,
     CommanderProfileResponse,
     CommanderSearchResponse,
     DataStatusResponse,
@@ -23,6 +26,10 @@ from app.models import (
     ParseDecklistRequest,
     ParsedDecklistResponse,
     RefineDeckRequest,
+    SaveDeckRequest,
+    SavedDeckResponse,
+    SavedDeckSummary,
+    SavedDecksResponse,
     ValidateDeckRequest,
     ValidationResult,
 )
@@ -53,8 +60,73 @@ repository.refresh_service = card_refresh_service
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
+def _card_profile_coverage() -> dict[str, int | float | str]:
+    """Compare card count vs card_profiles count. Surfaces the stale-profile
+    case where the optimizer's _build_pool silently returns nothing because
+    no profiles exist. Threshold is 60%.
+    """
+    from sqlalchemy import func, select
+    from app.db import session_scope
+    from app.db_models import Card, CardProfile
+    try:
+        with session_scope() as session:
+            card_total = session.scalar(select(func.count()).select_from(Card)) or 0
+            profile_total = session.scalar(select(func.count()).select_from(CardProfile)) or 0
+    except Exception:
+        return {"status": "unknown", "cards": 0, "profiles": 0, "coverage": 0.0}
+    coverage = (profile_total / card_total) if card_total else 0.0
+    status = "ok" if coverage >= 0.60 else "stale"
+    return {
+        "status": status,
+        "cards": int(card_total),
+        "profiles": int(profile_total),
+        "coverage": round(coverage, 4),
+    }
+
+
+def _ensure_saved_deck_chat_column() -> None:
+    """SQLite-only inline migration: add chat_history JSON column to
+    saved_decks if it doesn't exist. Idempotent — safe to call every boot.
+    """
+    from sqlalchemy import inspect, text
+    from app.db import get_engine
+    eng = get_engine()
+    inspector = inspect(eng)
+    try:
+        cols = {c["name"] for c in inspector.get_columns("saved_decks")}
+    except Exception:
+        return
+    if "chat_history" in cols:
+        return
+    with eng.begin() as conn:
+        conn.execute(text("ALTER TABLE saved_decks ADD COLUMN chat_history JSON DEFAULT '[]'"))
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    # Bootstrap any tables added since last ingest run (e.g. saved_decks)
+    # without disturbing existing data.
+    from app.services.database_bootstrap import create_schema
+    try:
+        create_schema()
+        _ensure_saved_deck_chat_column()
+    except Exception:
+        logger.warning("schema bootstrap on startup failed", exc_info=True)
+    # Warn loudly when card_profiles is stale: the optimizer silently
+    # returns an empty pool ("optimizer pool is empty") when profiles
+    # are missing, which is hard to diagnose without this check.
+    try:
+        coverage = _card_profile_coverage()
+        if coverage["status"] == "stale":
+            logger.warning(
+                "card_profiles coverage is %.0f%% (%d/%d). Optimizer will return empty pools. "
+                "Run: python -m app.scripts.build_card_profiles",
+                float(coverage["coverage"]) * 100,
+                int(coverage["profiles"]),
+                int(coverage["cards"]),
+            )
+    except Exception:
+        logger.warning("card_profile coverage check failed", exc_info=True)
     card_refresh_service.start()
     try:
         yield
@@ -81,9 +153,16 @@ app.add_middleware(
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, object]:
     status = repository.data_status()
-    return {"status": "ok", "card_source": status.card_source, "archetype_source": status.archetype_source}
+    profile_coverage = _card_profile_coverage()
+    overall = "ok" if profile_coverage["status"] == "ok" else "degraded"
+    return {
+        "status": overall,
+        "card_source": status.card_source,
+        "archetype_source": status.archetype_source,
+        "card_profiles": profile_coverage,
+    }
 
 
 @app.get("/api/data-status", response_model=DataStatusResponse)
@@ -129,6 +208,125 @@ def refine_deck(request: RefineDeckRequest, req: Request) -> DeckResponse:
         return generator.refine(request.deck, request.refinement_prompt)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/decks/chat", response_model=ChatDeckResponse)
+def chat_deck(request: ChatDeckRequest, req: Request) -> ChatDeckResponse:
+    client_ip = req.client.host if req.client else "unknown"
+    if not deck_rate_limiter.is_allowed(f"chat:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many chat requests. Please wait before trying again.")
+
+    message = (request.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required.")
+
+    deck = request.deck
+    main_lines = "\n".join(f"  {c.quantity}x {c.name}" for c in deck.mainboard)
+    side_lines = "\n".join(f"  {c.quantity}x {c.name}" for c in deck.sideboard) or "  (empty)"
+    archetype_line = deck.selected_archetype.name if deck.selected_archetype else "none"
+    warnings_text = "; ".join(deck.warnings[:6]) or "none"
+    deck_summary = (
+        f"Title: {deck.title}\n"
+        f"Format: {deck.format} | Colors: {','.join(deck.colors) or '—'} | Commander: {deck.commander or 'n/a'}\n"
+        f"Selected archetype: {archetype_line}\n"
+        f"Strategy summary: {deck.strategy_summary}\n"
+        f"Warnings: {warnings_text}\n"
+        f"\nMainboard ({sum(c.quantity for c in deck.mainboard)}):\n{main_lines}\n"
+        f"\nSideboard ({sum(c.quantity for c in deck.sideboard)}):\n{side_lines}"
+    )
+
+    from app.services.llm_service import chat_about_deck
+    result = chat_about_deck(
+        deck_summary=deck_summary,
+        history=[m.model_dump() for m in request.history],
+        user_message=message,
+    )
+    if result is None:
+        raise HTTPException(status_code=503, detail="Deck chat is unavailable (LLM not configured or call failed).")
+    return ChatDeckResponse(reply=result["reply"], suggested_refinement=result.get("suggested_refinement"))
+
+
+@app.post("/v1/decks/save", response_model=SavedDeckSummary)
+def save_deck(request: SaveDeckRequest) -> SavedDeckSummary:
+    import uuid
+    from datetime import datetime, timezone
+    from app.db import session_scope
+    from app.db_models import SavedDeck
+
+    deck_id = uuid.uuid4().hex[:16]
+    created_at = datetime.now(timezone.utc).isoformat()
+    chat_payload = [m.model_dump() for m in request.chat_history]
+    with session_scope() as session:
+        row = SavedDeck(
+            id=deck_id,
+            session_id=request.session_id,
+            title=request.deck.title or "Untitled Deck",
+            format=request.deck.format,
+            deck_json=request.deck.model_dump(),
+            chat_history=chat_payload,
+            created_at=created_at,
+        )
+        session.add(row)
+    return SavedDeckSummary(
+        id=deck_id,
+        title=request.deck.title or "Untitled Deck",
+        format=request.deck.format,
+        created_at=created_at,
+    )
+
+
+@app.get("/v1/decks/saved", response_model=SavedDecksResponse)
+def list_saved_decks(session_id: str) -> SavedDecksResponse:
+    from sqlalchemy import select
+    from app.db import session_scope
+    from app.db_models import SavedDeck
+
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    with session_scope() as session:
+        rows = session.scalars(
+            select(SavedDeck).where(SavedDeck.session_id == session_id).order_by(SavedDeck.created_at.desc())
+        ).all()
+        decks = [
+            SavedDeckSummary(id=row.id, title=row.title, format=row.format, created_at=row.created_at)
+            for row in rows
+        ]
+    return SavedDecksResponse(decks=decks)
+
+
+@app.get("/v1/decks/saved/{deck_id}", response_model=SavedDeckResponse)
+def get_saved_deck(deck_id: str) -> SavedDeckResponse:
+    from app.db import session_scope
+    from app.db_models import SavedDeck
+
+    with session_scope() as session:
+        row = session.get(SavedDeck, deck_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Saved deck not found")
+        chat_payload = row.chat_history or []
+        return SavedDeckResponse(
+            id=row.id,
+            title=row.title,
+            format=row.format,
+            created_at=row.created_at,
+            deck=DeckResponse.model_validate(row.deck_json),
+            chat_history=[ChatMessage.model_validate(m) for m in chat_payload],
+        )
+
+
+@app.delete("/v1/decks/saved/{deck_id}")
+def delete_saved_deck(deck_id: str, session_id: str) -> dict[str, str]:
+    from app.db import session_scope
+    from app.db_models import SavedDeck
+
+    with session_scope() as session:
+        row = session.get(SavedDeck, deck_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Saved deck not found")
+        if row.session_id != session_id:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this deck")
+        session.delete(row)
+    return {"status": "deleted", "id": deck_id}
 
 
 @app.post("/v1/decks/validate", response_model=ValidationResult)
@@ -224,9 +422,16 @@ def meta_summary(format: FormatName) -> MetaSummaryResponse:
     return MetaSummaryResponse(format=format, archetypes=archetypes)
 
 
-@app.get("/v1/cards/{card_name}", response_model=CardDetailResponse)
+@app.get("/v1/cards/{card_name:path}", response_model=CardDetailResponse)
 def card_detail(card_name: str) -> CardDetailResponse:
+    # Use `:path` so URL-encoded `/` in DFC names (e.g. "Tamiyo, Inquisitive
+    # Student // Tamiyo, Seasoned Scholar") doesn't break route matching.
+    # On any miss, fall back to the front-face name (split on " // ") so
+    # decks that reference the canonical full DFC name still resolve when
+    # the DB only has the front-face entry.
     card = repository.get_card(card_name)
+    if not card and " // " in card_name:
+        card = repository.get_card(card_name.split(" // ", 1)[0])
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
     return CardDetailResponse(card=card)

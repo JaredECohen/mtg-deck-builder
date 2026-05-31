@@ -13,17 +13,14 @@ type Props = {
   manualSideboard: CardRef[];
   manualCommander: string;
   manualNotes: string;
-  importText: string;
   loading: boolean;
   deepAnalysis: boolean;
   onDeepAnalysisChange: (value: boolean) => void;
   onCommanderChange: (value: string) => void;
   onNotesChange: (value: string) => void;
-  onImportTextChange: (value: string) => void;
   onAddCard: (name: string, zone: ManualZone) => void;
   onChangeQuantity: (name: string, zone: ManualZone, quantity: number) => void;
   onMoveCard: (name: string, from: ManualZone) => void;
-  onImport: () => void;
   onClearDraft: () => void;
   onAnalyze: () => void;
   onOpenCard: (name: string) => void;
@@ -36,17 +33,14 @@ export function AnalyzeForm(props: Props) {
     manualSideboard,
     manualCommander,
     manualNotes,
-    importText,
     loading,
     deepAnalysis,
     onDeepAnalysisChange,
     onCommanderChange,
     onNotesChange,
-    onImportTextChange,
     onAddCard,
     onChangeQuantity,
     onMoveCard,
-    onImport,
     onClearDraft,
     onAnalyze,
     onOpenCard
@@ -157,16 +151,7 @@ export function AnalyzeForm(props: Props) {
       </div>
 
       <div className="panel form-card">
-        <label className="label" htmlFor="manual-import">Import Deck Text</label>
-        <textarea
-          id="manual-import"
-          className="textarea"
-          value={importText}
-          onChange={(event) => onImportTextChange(event.target.value)}
-          placeholder={"Commander\n1 Aminatou, the Fateshifter\n\nMainboard\n1 Sol Ring\n1 Arcane Signet\n...\n\nSideboard\n2 Spell Pierce"}
-        />
-        <div className="export-row" style={{ marginTop: 12 }}>
-          <button type="button" className="button secondary" onClick={onImport} disabled={loading}>Import Deck</button>
+        <div className="export-row" style={{ justifyContent: "flex-end" }}>
           <button type="button" className="button secondary" onClick={onClearDraft}>Clear Draft</button>
         </div>
       </div>

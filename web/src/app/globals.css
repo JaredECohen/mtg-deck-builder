@@ -173,6 +173,158 @@ a:focus-visible {
   padding: 22px;
 }
 
+.strategy-picker {
+  padding: 18px 22px;
+}
+
+.strategy-picker .strategy-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.strategy-picker .strategy-summary::-webkit-details-marker {
+  display: none;
+}
+
+.strategy-picker .strategy-summary::after {
+  content: "▾";
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 120ms ease;
+}
+
+.strategy-picker[open] .strategy-summary::after {
+  transform: rotate(180deg);
+}
+
+.strategy-picker .strategy-summary .label {
+  margin-bottom: 0;
+}
+
+.strategy-picker .strategy-summary-value {
+  flex: 1;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deck-chat-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deck-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  min-height: 120px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.deck-chat-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.deck-chat-empty p {
+  margin: 0 0 6px;
+}
+
+.deck-chat-empty ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.deck-chat-bubble {
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  max-width: 92%;
+}
+
+.deck-chat-bubble.user {
+  align-self: flex-end;
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.deck-chat-bubble.assistant {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+
+.deck-chat-bubble-body {
+  white-space: pre-wrap;
+}
+
+.deck-chat-apply-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  display: grid;
+  gap: 6px;
+}
+
+.deck-chat-apply-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.deck-chat-apply-text {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.deck-chat-apply-btn {
+  margin-top: 4px;
+  justify-self: start;
+}
+
+.deck-chat-error {
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.deck-chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.deck-chat-input {
+  flex: 1;
+  resize: vertical;
+  min-height: 56px;
+}
+
+.deck-chat-send {
+  align-self: stretch;
+  min-width: 84px;
+}
+
 .label {
   display: block;
   font-size: 13px;

@@ -82,10 +82,33 @@ def optimize_deck_task(
         sideboard_size=sideboard_size,
     )
 
+    # Baseline score: the optimizer's seed-deck score before annealing.
+    # We use the FIRST rounds_log entry per unique seed and take the
+    # minimum (most conservative baseline). When there are no rounds (e.g.
+    # the optimizer short-circuited), baseline equals best.score so the
+    # delta is 0 and the frontend doesn't show an Apply button.
+    baseline_score = result.best.score
+    seen_seeds: set[str] = set()
+    for entry in result.rounds_log:
+        seed_label = str(entry.get("seed", ""))
+        if seed_label in seen_seeds:
+            continue
+        seen_seeds.add(seed_label)
+        try:
+            s = float(entry.get("score", baseline_score))
+        except (TypeError, ValueError):
+            continue
+        if s < baseline_score:
+            baseline_score = s
+
     return {
         "deck": deck_payload,
         "fitness": result.best.fitness.to_dict() if result.best.fitness else {},
         "score": result.best.score,
+        # Score the optimizer started from (pre-annealing seed). The
+        # frontend computes an improvement delta and only surfaces the
+        # "Apply sim-optimized" button when delta ≥ a threshold.
+        "baseline_score": baseline_score,
         "accepted_swaps": result.accepted_swaps,
         "rejected_swaps": result.rejected_swaps,
         "rounds": len(result.rounds_log),

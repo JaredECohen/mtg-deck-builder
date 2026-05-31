@@ -29,6 +29,7 @@ class Card(Base):
     price_usd_foil: Mapped[float | None] = mapped_column(Float, nullable=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     set_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    set_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     released_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
     image_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_uris: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
@@ -89,6 +90,27 @@ class IngestionRun(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     records_processed: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SavedDeck(Base):
+    """User-saved deck snapshot. Lightweight: stores the full DeckResponse
+    JSON plus a stable share token so a saved deck can be re-opened by URL.
+    No real user accounts yet — saves are keyed by a session_id the
+    frontend mints on first save.
+
+    chat_history is an optional list of {role, content} dicts so reopening
+    a saved deck restores the conversation that led up to it. Empty by
+    default for backward compatibility.
+    """
+    __tablename__ = "saved_decks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # uuid
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    format: Mapped[str] = mapped_column(String(32), index=True)
+    deck_json: Mapped[dict[str, object]] = mapped_column(JSON)
+    chat_history: Mapped[list[dict[str, str]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[str] = mapped_column(String(32))  # ISO 8601
 
 
 class CardProfile(Base):

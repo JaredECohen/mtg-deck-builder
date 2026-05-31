@@ -23,7 +23,7 @@ export function GenerateForm({
 }: Props) {
   return (
     <>
-      <div className="panel form-card" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="panel form-card" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.9rem" }}>
           <input
             type="checkbox"
@@ -33,7 +33,9 @@ export function GenerateForm({
           />
           Expert mode
         </label>
-        {expertMode ? <span className="muted" style={{ fontSize: "0.8rem" }}>Budget, prompt, and advanced options unlocked</span> : null}
+        <span className="muted" style={{ fontSize: "0.8rem", marginLeft: 24 }}>
+          Adds a Budget (USD) cap to the build. Off = no spend limit.
+        </span>
       </div>
 
       {expertMode ? (
@@ -54,6 +56,7 @@ export function GenerateForm({
           value={prompt}
           maxLength={1500}
           onChange={(event) => onPromptChange(event.target.value)}
+          placeholder="Describe the deck you want. e.g. 'Modern burn, mono-red, aggressive damage to face' or 'Standard control with planeswalker finishers'."
         />
       </div>
 
