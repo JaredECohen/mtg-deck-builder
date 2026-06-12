@@ -61,17 +61,18 @@ export function AnalyzeForm(props: Props) {
           <span>{card.name}</span>
           <span className="muted">{zone}</span>
         </button>
-        <button type="button" className="chip" onClick={() => onChangeQuantity(card.name, zone, card.quantity - 1)}>-1</button>
+        <button type="button" className="chip" aria-label="Decrease quantity" onClick={() => onChangeQuantity(card.name, zone, card.quantity - 1)}>-1</button>
         <input
           className="input"
           type="number"
           min={0}
           max={format === "commander" ? 1 : 20}
           value={card.quantity}
+          aria-label="Card quantity"
           onChange={(event) => onChangeQuantity(card.name, zone, Number(event.target.value))}
           style={{ width: 76 }}
         />
-        <button type="button" className="chip" onClick={() => onChangeQuantity(card.name, zone, card.quantity + 1)}>+1</button>
+        <button type="button" className="chip" aria-label="Increase quantity" onClick={() => onChangeQuantity(card.name, zone, card.quantity + 1)}>+1</button>
         {format !== "commander" ? (
           <button type="button" className="chip" onClick={() => onMoveCard(card.name, zone)}>
             {zone === "mainboard" ? "To Side" : "To Main"}

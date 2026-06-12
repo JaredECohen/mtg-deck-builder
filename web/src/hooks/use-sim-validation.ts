@@ -48,11 +48,15 @@ export function useSimValidation(jobId: string | null | undefined): SimValidatio
     setOptimizedDeck(null);
     setOptimizerScore(null);
     setBaselineScore(null);
+    // Pending fetches can resolve after jobId changes or the component
+    // unmounts; this flag makes those stale responses no-ops.
+    let cancelled = false;
     let attempts = 0;
     const tick = async () => {
       attempts += 1;
       try {
         const record: any = await fetchJob(jobId);
+        if (cancelled) return;
         const s = String(record?.status ?? "").toLowerCase();
         if (s === "completed" || s === "succeeded" || s === "cached") {
           setStatus("succeeded");
@@ -76,6 +80,7 @@ export function useSimValidation(jobId: string | null | undefined): SimValidatio
           if (timer.current) clearInterval(timer.current);
         }
       } catch {
+        if (cancelled) return;
         if (attempts >= 30) {
           setStatus("failed");
           if (timer.current) clearInterval(timer.current);
@@ -85,6 +90,7 @@ export function useSimValidation(jobId: string | null | undefined): SimValidatio
     void tick();
     timer.current = setInterval(() => void tick(), 3000);
     return () => {
+      cancelled = true;
       if (timer.current) clearInterval(timer.current);
     };
   }, [jobId]);

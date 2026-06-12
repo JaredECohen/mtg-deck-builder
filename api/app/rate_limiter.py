@@ -17,6 +17,7 @@ class InMemoryRateLimiter:
         self.window = 60.0
         self._timestamps: defaultdict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
+        self._calls_since_sweep = 0
 
     def reset(self) -> None:
         with self._lock:
@@ -31,6 +32,14 @@ class InMemoryRateLimiter:
             if len(self._timestamps[key]) >= self.limit:
                 return False
             self._timestamps[key].append(now)
+            # Periodically drop keys whose window has fully expired so the
+            # dict doesn't grow unbounded with one entry per client IP.
+            self._calls_since_sweep += 1
+            if self._calls_since_sweep >= 1024:
+                self._calls_since_sweep = 0
+                stale = [k for k, ts in self._timestamps.items() if not ts or ts[-1] <= cutoff]
+                for k in stale:
+                    del self._timestamps[k]
             return True
 
 

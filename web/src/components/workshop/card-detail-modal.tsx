@@ -1,5 +1,8 @@
 "use client";
 
+import { useRef } from "react";
+
+import { AFFILIATE_DISCLOSURE, amazonSearchUrl } from "@/lib/affiliate";
 import type { CardRecord } from "@/lib/types";
 
 type Props = {
@@ -9,16 +12,41 @@ type Props = {
   onClose: () => void;
 };
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function CardDetailModal({ card, loading, error, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  // Dependency-free Tab focus trap: keep keyboard focus cycling inside the
+  // dialog while it is open.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const root = dialogRef.current;
+    if (!root) return;
+    const focusable = root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div className="card-modal-backdrop" role="presentation" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="card-modal panel panel-strong"
         role="dialog"
         aria-modal="true"
         aria-labelledby="card-detail-name"
         aria-describedby="card-detail-oracle"
         onClick={(event) => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
       >
         <div className="card-modal-header">
           <div>
@@ -26,7 +54,7 @@ export function CardDetailModal({ card, loading, error, onClose }: Props) {
             <h3 id="card-detail-name" style={{ marginTop: 0, marginBottom: 6 }}>{card.name}</h3>
             <p className="muted" style={{ margin: 0 }}>{card.type_line || "Card details"}</p>
           </div>
-          <button type="button" className="chip" onClick={onClose}>Close</button>
+          <button type="button" className="chip" onClick={onClose} autoFocus>Close</button>
         </div>
         <div className="card-modal-grid">
           <div className="card-image-shell">
@@ -54,9 +82,17 @@ export function CardDetailModal({ card, loading, error, onClose }: Props) {
                 </ul>
               </div>
             ) : null}
-            {card.price_usd ? <p><strong>Cached Price:</strong> ${card.price_usd.toFixed(2)}</p> : null}
+            {card.price_usd && Number.isFinite(card.price_usd) ? <p><strong>Cached Price:</strong> ${card.price_usd.toFixed(2)}</p> : null}
             {card.tags.length ? <p><strong>Tags:</strong> {card.tags.join(", ")}</p> : null}
             <div className="export-row" style={{ marginTop: 12 }}>
+              <a
+                className="button"
+                href={card.purchase_links?.amazon_search || amazonSearchUrl(card.name)}
+                target="_blank"
+                rel="noreferrer sponsored"
+              >
+                Buy on Amazon
+              </a>
               {card.purchase_links?.scryfall ? (
                 <a className="button secondary" href={card.purchase_links.scryfall} target="_blank" rel="noreferrer">Open Scryfall</a>
               ) : null}
@@ -67,6 +103,7 @@ export function CardDetailModal({ card, loading, error, onClose }: Props) {
                 <a className="button secondary" href={card.purchase_links.cardmarket} target="_blank" rel="noreferrer">Buy on Cardmarket</a>
               ) : null}
             </div>
+            <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
             {error ? <p style={{ color: "#fca5a5" }}>{error}</p> : null}
           </div>
         </div>

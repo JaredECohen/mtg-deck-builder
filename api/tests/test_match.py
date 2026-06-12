@@ -93,8 +93,10 @@ def test_matchup_strength_appears_in_fitness_when_enabled():
     deck = burn()
     fv = compute_fitness(deck, sim_runs=20, max_turns=8, seed=1,
                          include_matchup=True, matchup_games=10)
-    # Should NOT be the neutral 0.5 default after computation.
-    assert fv.matchup_strength != 0.5
+    # The matrix in raw proves the matchup actually ran (the average can
+    # legitimately land on exactly 0.5, so don't assert against the
+    # neutral default).
+    assert 0.0 <= fv.matchup_strength <= 1.0
     assert "matchup_matrix" in fv.raw
     matrix = fv.raw["matchup_matrix"]
     assert isinstance(matrix, dict)

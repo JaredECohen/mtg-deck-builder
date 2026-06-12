@@ -84,10 +84,18 @@ def _register_tasks(app) -> None:
             dispatcher takes a module + function name, deserializes args
             from JSON, and calls the function. This forces task functions
             to accept JSON-serializable arguments only.
+
+            Only modules under ``app.workers`` and ``app.services`` may be
+            dispatched: a generic import-anything dispatcher would let
+            anyone with broker access execute arbitrary code.
             """
             import importlib
+            if not (fn_module.startswith("app.workers") or fn_module.startswith("app.services")):
+                raise ValueError(f"dispatch refused for module {fn_module!r}: not an allowed task module")
             module = importlib.import_module(fn_module)
             fn = getattr(module, fn_name)
+            if not callable(fn) or fn_name.startswith("_"):
+                raise ValueError(f"dispatch refused for {fn_module}.{fn_name}: not a public task callable")
             args = json.loads(args_json)
             kwargs = json.loads(kwargs_json)
             return fn(*args, **kwargs)

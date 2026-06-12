@@ -398,6 +398,9 @@ export function DeckWorkshop() {
             </p>
           ) : null}
           {error ? <p style={{ color: "#fca5a5" }} role="alert">{error}</p> : null}
+          {analyzer.warnings.length ? (
+            <p style={{ color: "#fcd34d" }} role="status">{analyzer.warnings.join(" ")}</p>
+          ) : null}
 
           {builderMode === "generate" && deck ? <ResultStats label="Quality" score={deck.score} extra={{ price: deck.estimated_price_usd }} /> : null}
           {builderMode === "analyze" && analysis ? (
@@ -486,6 +489,10 @@ function ResultStats({
   extra?: { price?: number | null };
   health?: { value: string; explanation: string };
 }) {
+  // Only treat the price as renderable when it's a real finite number —
+  // never show "$NaN".
+  const price = extra?.price;
+  const hasPrice = typeof price === "number" && Number.isFinite(price);
   return (
     <div className="stats stats-four" style={{ marginTop: 18 }}>
       <div className="stat">
@@ -509,8 +516,8 @@ function ResultStats({
         <strong>{score.synergy}</strong>
       </div>
       <div className="stat">
-        <span className="muted">{extra?.price !== undefined ? "Est. Price" : "Curve"}</span>
-        <strong>{extra?.price !== undefined && extra?.price !== null ? `$${extra.price.toFixed(0)}` : score.curve}</strong>
+        <span className="muted">{hasPrice ? "Est. Price" : "Curve"}</span>
+        <strong>{hasPrice ? `$${price.toFixed(0)}` : score.curve}</strong>
       </div>
     </div>
   );

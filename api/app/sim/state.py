@@ -67,9 +67,12 @@ class ManaPool:
             return False
         for color, count in pips.items():
             self.pool[color] -= count
-        # Spend any remaining colored sources for generic.
+        # Spend remaining sources for generic: colorless first, then the
+        # most-plentiful colors, so scarce colored sources stay available
+        # for later pips this turn. Sorted order also keeps payment
+        # deterministic regardless of pool insertion order.
         remaining = generic
-        for color in list(self.pool):
+        for color in sorted(self.pool, key=lambda c: (c != "C", -self.pool.get(c, 0), c)):
             if remaining <= 0:
                 break
             avail = self.pool.get(color, 0)

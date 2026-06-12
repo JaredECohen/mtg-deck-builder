@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATABASE_URL
 from app.db import session_scope
+from app.services.affiliate import ensure_affiliate_tag
 from app.db_models import Archetype, Card
 from app.models import (
     ArchetypeMetadata,
@@ -118,8 +119,9 @@ class CardRepository:
         cards: dict[str, CardRecord] = {}
         for item in raw_cards:
             record = CardRecord.model_validate(item)
-            if not record.purchase_links.amazon_search:
-                record.purchase_links.amazon_search = f"https://www.amazon.com/s?k={quote_plus(record.name)}+magic+the+gathering+card"
+            record.purchase_links.amazon_search = ensure_affiliate_tag(
+                record.purchase_links.amazon_search, record.name
+            )
             cards[self._normalize_name(record.name)] = record
         return cards
 
@@ -428,13 +430,19 @@ class CardRepository:
                 else archetype.metadata.core_cards + archetype.metadata.flex_cards
             )
             for package in packages:
-                if requested_tags and not (requested_tags & {self._normalize_name(tag) for tag in package.tags}):
-                    continue
+                # Theme tags are a preference, not a hard filter: role packages
+                # (ramp/draw/interaction) only carry role tags, so a hard
+                # intersection with theme tags like "tribal" would always come
+                # back empty. Matching packages get a weight boost instead.
+                theme_match = bool(
+                    requested_tags & {self._normalize_name(tag) for tag in package.tags}
+                )
                 current = package_weights.setdefault(
                     package.name,
                     {"name": package.name, "weight": 0.0, "tags": set(), "average_quantity": package.average_quantity},
                 )
-                current["weight"] += (package.inclusion_rate or 0.0) * max(1, archetype.source_count)
+                base_weight = (package.inclusion_rate or 0.0) * max(1, archetype.source_count)
+                current["weight"] += base_weight * (2.0 if theme_match else 1.0)
                 current["tags"].update(package.tags)
         ordered = sorted(package_weights.values(), key=lambda item: item["weight"], reverse=True)
         return [
@@ -813,6 +821,8 @@ class CardRepository:
 
     @staticmethod
     def _to_card_record(row: Card) -> CardRecord:
+        links = CardPurchaseLinks.model_validate(row.purchase_links or {})
+        links.amazon_search = ensure_affiliate_tag(links.amazon_search, row.name)
         return CardRecord(
             oracle_id=row.oracle_id,
             scryfall_id=row.scryfall_id,
@@ -837,7 +847,7 @@ class CardRepository:
             price_usd=row.price_usd,
             price_usd_foil=row.price_usd_foil,
             tags=row.tags,
-            purchase_links=CardPurchaseLinks.model_validate(row.purchase_links or {}),
+            purchase_links=links,
         )
 
     @staticmethod

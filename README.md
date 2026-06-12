@@ -129,6 +129,17 @@ cached so generation stays fast and deterministic.
 | `MTG_CRITIC_MAX_TOKENS_PER_CALL` | Per-call output cap | `4096` |
 | `MTG_CRITIC_MAX_USD_PER_JOB` | Per-job cost cap (shared across rounds) | `1.50` |
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
+| `AMAZON_AFFILIATE_TAG` | Amazon Associates tracking ID appended to every Amazon purchase link served by the API (e.g. `mydecksite-20`) | (unset → untagged links) |
+| `NEXT_PUBLIC_AMAZON_AFFILIATE_TAG` | Same tag, inlined into the frontend for client-built "Shop This Deck" links | (unset) |
+
+### Monetization
+
+Every card detail modal has a **Buy on Amazon** button, and each generated deck
+gets a **Shop This Deck** panel with per-card Amazon search links. Set both
+affiliate variables above to your Associates tracking ID and all links are
+tagged automatically — the tag is applied at the API boundary (and at build
+time on the frontend), so changing it never requires re-ingesting card data.
+The required Associates disclosure renders alongside every link surface.
 
 ## Postgres data pipeline
 

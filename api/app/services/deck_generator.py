@@ -868,7 +868,10 @@ class DeckGenerator:
                 continue
             if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
                 continue
-            if not self._fits_budget_request(card, request.budget):
+            # Lands are not budget-exempt here: pricey duals are usually the
+            # most expensive part of an aggro deck, and _add_lands backfills
+            # any shortfall with basics.
+            if not self._fits_budget_request(card, request.budget, exempt_lands=False):
                 continue
             desired_qty = max(ref.quantity, 2 if ref.name in core_names and "Land" not in card.type_line else ref.quantity)
             counts[card.name] = min(desired_qty, self._copy_limit(card, request.format) or desired_qty)
@@ -913,7 +916,7 @@ class DeckGenerator:
         while self._nonland_total(counts) < nonland_target:
             if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
                 break
-        self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format)
+        self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format, budget=request.budget)
         while self._total_cards(counts) > CONSTRUCTED_DECK_SIZE:
             self._trim_excess_land_or_spell(counts, colors)
         max_fill_iters = 200
@@ -946,7 +949,13 @@ class DeckGenerator:
                 continue
             if not self._matches_color_request(card, colors):
                 continue
-            counts[card.name] = min(ref.quantity, self._copy_limit(card, request.format) or ref.quantity)
+            # The copy limit spans mainboard + sideboard combined, so subtract
+            # copies the mainboard already runs.
+            limit = self._copy_limit(card, request.format)
+            remaining = (limit - main_counts[card.name]) if limit is not None else ref.quantity
+            if remaining <= 0:
+                continue
+            counts[card.name] = min(ref.quantity, remaining)
         preferred_packages = archetype.metadata.sideboard_packages or archetype.metadata.matchup_tech_packages
         for package in preferred_packages:
             card = self.repository.get_card(package.name)
@@ -1190,7 +1199,7 @@ class DeckGenerator:
             if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
                 break
 
-        self._add_lands_from_packages(counts, list(commander_identity), LAND_TARGET_COMMANDER, package.land_package if package else [], request.format)
+        self._add_lands_from_packages(counts, list(commander_identity), LAND_TARGET_COMMANDER, package.land_package if package else [], request.format, budget=request.budget)
         while self._total_cards(counts) > COMMANDER_DECK_SIZE:
             self._trim_excess_land_or_spell(counts, list(commander_identity))
         while self._total_cards(counts) < COMMANDER_DECK_SIZE:
@@ -1572,11 +1581,13 @@ class DeckGenerator:
         return not identity or identity.issubset(requested)
 
     @staticmethod
-    def _fits_budget_request(card: CardRecord, budget: float | None) -> bool:
+    def _fits_budget_request(card: CardRecord, budget: float | None, *, exempt_lands: bool = True) -> bool:
         if budget is None or card.price_usd is None:
             return True
         per_card_cap = max(0.50, min(budget / 20.0, budget * 0.12))
-        return card.price_usd <= per_card_cap or "Land" in card.type_line
+        if exempt_lands and "Land" in card.type_line:
+            return True
+        return card.price_usd <= per_card_cap
 
     def _estimate_price(self, mainboard: list[CardRef], sideboard: list[CardRef], commander: str | None) -> float | None:
         total = 0.0
@@ -1605,7 +1616,10 @@ class DeckGenerator:
                 float(pkg.average_quantity or 0) for pkg in archetype.metadata.land_packages
             )))
             if template_total > 0:
-                return template_total
+                # Corpus packages can be skewed (a single 28-Plains record).
+                # Clamp to the range real 60-card decks live in — the
+                # validator warns above 27, so never build past it.
+                return max(17, min(template_total, 26))
         if {"aggro", "tempo", "spells"} & set(requested_tags):
             return LAND_TARGET_AGGRO
         if {"control", "midrange", "combo"} & set(requested_tags):
@@ -1634,7 +1648,7 @@ class DeckGenerator:
             land_package=profile.land_package,
         )
 
-    def _add_lands_from_packages(self, counts: Counter[str], colors: list[str], target_lands: int, packages: list[ArchetypePackage], format_name: str = "modern") -> None:
+    def _add_lands_from_packages(self, counts: Counter[str], colors: list[str], target_lands: int, packages: list[ArchetypePackage], format_name: str = "modern", budget: float | None = None) -> None:
         # Color-identity-aware: a sliver-shaped land package will not leak
         # off-color basics into a narrow-color deck. This filter applies to
         # ALL formats when the caller passed an explicit color list — a UR
@@ -1647,6 +1661,13 @@ class DeckGenerator:
             card = self.repository.get_card(package.name)
             if not card or "Land" not in card.type_line:
                 continue
+            if not self._is_card_legal_record(card, format_name):
+                continue
+            # On a budget request the mana base is fair game — pricey duals
+            # (often the most expensive cards in the deck) get skipped here
+            # and the basics backfill below covers the shortfall.
+            if not self._fits_budget_request(card, budget, exempt_lands=False):
+                continue
             if identity and not self.repository.fits_color_identity(card, identity):
                 continue
             limit = self._copy_limit(card, format_name)
@@ -1655,8 +1676,79 @@ class DeckGenerator:
             desired = max(1, int(round(package.average_quantity or 1)))
             if limit is not None:
                 desired = min(desired, limit - counts[card.name])
+            # Never let a single package blow past the land target — a corpus
+            # "28 Plains" package would otherwise crowd out every other color.
+            desired = min(desired, target_lands - self._land_total(counts))
+            if desired <= 0:
+                continue
             counts[card.name] += desired
         self._add_lands(counts, colors, target_lands)
+        self._ensure_color_sources(counts, colors)
+
+    _BASIC_BY_COLOR = {"W": "Plains", "U": "Island", "B": "Swamp", "R": "Mountain", "G": "Forest"}
+
+    def _ensure_color_sources(self, counts: Counter[str], colors: list[str], min_sources: int = 4) -> None:
+        """Rebalance basic lands so every color's source count tracks its
+        share of the deck's mana pips. A corpus land package can be heavily
+        skewed toward one color (e.g. mono-W Soul Sisters lands grafted onto
+        a WB request), leaving splash-color spells uncastable. Nonbasic
+        lands are left as-is; only the basic-land portion is reallocated.
+        """
+        identity = [c for c in colors if c in self._BASIC_BY_COLOR]
+        if len(identity) < 2:
+            return
+        basic_names = set(self._BASIC_BY_COLOR.values())
+
+        # Pip counts per color across nonland spells (hybrid pips count for
+        # both colors — close enough for allocation purposes).
+        pips = {c: 0 for c in identity}
+        nonbasic_sources = {c: 0 for c in identity}
+        basics_total = 0
+        land_total = 0
+        for name, qty in counts.items():
+            card = self.repository.get_card(name)
+            if not card:
+                continue
+            if "Land" in card.type_line:
+                land_total += qty
+                if name in basic_names:
+                    basics_total += qty
+                else:
+                    for c in identity:
+                        if c in (card.color_identity or []):
+                            nonbasic_sources[c] += qty
+                continue
+            cost = card.mana_cost or "".join(face.mana_cost or "" for face in card.faces)
+            for c in identity:
+                pips[c] += cost.count(c) * qty
+        total_pips = sum(pips.values())
+        if total_pips == 0 or basics_total == 0:
+            return
+
+        # Each color wants sources proportional to its pip share, with a
+        # floor so a requested splash is never stranded. Basics cover
+        # whatever the nonbasics don't.
+        need = {}
+        for c in identity:
+            floor = min_sources if pips[c] < 8 else 8  # validator warns under 8 sources at 8+ pips
+            target_sources = max(floor, round(land_total * pips[c] / total_pips))
+            need[c] = max(0.0, float(target_sources - nonbasic_sources[c]))
+        need_total = sum(need.values())
+        if need_total <= 0:
+            return
+        alloc = {c: int(basics_total * need[c] / need_total) for c in identity}
+        remainder = basics_total - sum(alloc.values())
+        for c in sorted(identity, key=lambda c: -(basics_total * need[c] / need_total - alloc[c])):
+            if remainder <= 0:
+                break
+            alloc[c] += 1
+            remainder -= 1
+        for name in list(counts):
+            if name in basic_names:
+                del counts[name]
+        for c, qty in alloc.items():
+            if qty > 0:
+                counts[self._BASIC_BY_COLOR[c]] += qty
 
     def _add_lands(self, counts: Counter[str], colors: list[str], target_lands: int) -> None:
         basics = self._basic_lands_for_colors(colors) or ["Mountain"]

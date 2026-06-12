@@ -91,7 +91,9 @@ def london_mulligan_loop(
             state.log(event="keep_hand", mulligans=muls, score=round(score, 2),
                      hand=[c.name for c in state.hand])
             return
-        state.library = state.library + candidate
+        # ``candidate`` was only peeked (never removed from the library), so
+        # there is nothing to put back — appending it would duplicate 7 cards
+        # into the library on every mulligan. Just reshuffle next iteration.
         state.log(event="mulligan", mulligans=muls + 1, score=round(score, 2))
 
 

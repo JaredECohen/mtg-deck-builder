@@ -18,8 +18,9 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:80
 
 async function jsonOrThrow<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
+    // Non-JSON (e.g. HTML error pages) parses to null and uses the fallback.
     const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? fallback);
+    throw new Error(detail?.detail ?? detail?.error ?? detail?.message ?? fallback);
   }
   return (await response.json()) as T;
 }
@@ -129,7 +130,7 @@ export async function deleteSavedDeck(deckId: string, sessionId: string): Promis
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? "Delete failed");
+    throw new Error(detail?.detail ?? detail?.error ?? detail?.message ?? "Delete failed");
   }
 }
 
@@ -160,10 +161,11 @@ export async function analyzeDeck(payload: {
   return jsonOrThrow<DeckAnalysisResponse>(response, "Analysis failed");
 }
 
-export async function parseDeckText(format: FormatName, deck_text: string): Promise<ParsedDecklistResponse> {
+export async function parseDeckText(format: FormatName, deck_text: string, signal?: AbortSignal): Promise<ParsedDecklistResponse> {
   const response = await fetch(`${API_BASE}/v1/decks/parse`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal,
     body: JSON.stringify({ format, deck_text })
   });
   return jsonOrThrow<ParsedDecklistResponse>(response, "Deck import failed");
