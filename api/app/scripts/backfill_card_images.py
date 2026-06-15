@@ -217,7 +217,8 @@ def main() -> None:
                 changed = True
             new_links = marketplace_links(data)
             existing_links = dict(card.purchase_links or {})
-            # Keep amazon_search if already set; update the rest.
+            # Merge fresh non-empty links over existing ones; preserves any
+            # legacy keys already stored.
             new_links_clean = {k: v for k, v in new_links.items() if v}
             merged_links = {**existing_links, **new_links_clean}
             if merged_links != existing_links:

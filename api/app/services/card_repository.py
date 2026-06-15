@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATABASE_URL
 from app.db import session_scope
-from app.services.affiliate import ensure_affiliate_tag
+from app.services.affiliate import ensure_tcgplayer_link
 from app.db_models import Archetype, Card
 from app.models import (
     ArchetypeMetadata,
@@ -119,8 +119,8 @@ class CardRepository:
         cards: dict[str, CardRecord] = {}
         for item in raw_cards:
             record = CardRecord.model_validate(item)
-            record.purchase_links.amazon_search = ensure_affiliate_tag(
-                record.purchase_links.amazon_search, record.name
+            record.purchase_links.tcgplayer = ensure_tcgplayer_link(
+                record.purchase_links.tcgplayer, record.name
             )
             cards[self._normalize_name(record.name)] = record
         return cards
@@ -822,7 +822,7 @@ class CardRepository:
     @staticmethod
     def _to_card_record(row: Card) -> CardRecord:
         links = CardPurchaseLinks.model_validate(row.purchase_links or {})
-        links.amazon_search = ensure_affiliate_tag(links.amazon_search, row.name)
+        links.tcgplayer = ensure_tcgplayer_link(links.tcgplayer, row.name)
         return CardRecord(
             oracle_id=row.oracle_id,
             scryfall_id=row.scryfall_id,

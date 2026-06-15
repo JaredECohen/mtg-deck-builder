@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { ProvenanceBanner } from "./provenance-banner";
-import { AFFILIATE_DISCLOSURE, amazonSearchUrl } from "@/lib/affiliate";
+import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
 import type { ExportTarget } from "@/lib/api";
 import { groupByType } from "@/lib/group-by-type";
 import type { ArchetypePackage, CardRef, CardTypeMap, CommanderProfile, DeckResponse, MetaSummaryResponse } from "@/lib/types";
@@ -107,27 +107,44 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
     shoppable.push(ref);
   }
   if (!shoppable.length) return null;
+  // The whole deck — including basics — goes into the one-click cart.
+  const commanderEntries = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
+  const massEntryUrl = tcgplayerMassEntryUrl([
+    ...commanderEntries,
+    ...deck.mainboard,
+    ...deck.sideboard,
+  ]);
   return (
     <div className="panel results-card">
       <div className="label">Shop This Deck</div>
       <p className="muted" style={{ marginTop: 0 }}>
-        Find singles on Amazon — each link searches for that card.
+        Buy the whole list in one TCGplayer cart at the cheapest available prices,
+        or grab individual singles below.
       </p>
+      <a
+        href={massEntryUrl}
+        target="_blank"
+        rel="noreferrer sponsored"
+        className="button"
+        style={{ marginBottom: 12 }}
+      >
+        Buy entire deck on TCGplayer
+      </a>
       <details>
         <summary style={{ cursor: "pointer" }}>
-          {shoppable.length} cards to shop
+          {shoppable.length} cards to shop individually
         </summary>
         <ul className="card-list" style={{ marginTop: 8 }}>
           {shoppable.map((card) => (
             <li key={`shop-${card.name}`} className="card-row">
               <span>{card.quantity}x {card.name}</span>
               <a
-                href={amazonSearchUrl(card.name)}
+                href={tcgplayerSearchUrl(card.name)}
                 target="_blank"
                 rel="noreferrer sponsored"
                 className="chip"
               >
-                Amazon
+                TCGplayer
               </a>
             </li>
           ))}

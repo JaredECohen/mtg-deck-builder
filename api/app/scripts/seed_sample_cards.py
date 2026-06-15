@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import quote_plus
 
 from app.config import CARD_CACHE_PATH
 from app.db import session_scope
@@ -39,9 +38,9 @@ def main() -> None:
                 "image_uri": card.get("image_uri"),
                 "image_uris": card.get("image_uris", {}),
                 "card_faces": card.get("faces", []),
-                "purchase_links": {
-                    "amazon_search": f"https://www.amazon.com/s?k={quote_plus(name)}+magic+the+gathering+card",
-                },
+                # Preserve source purchase links (scryfall/tcgplayer/cardmarket).
+                # The TCGplayer link is affiliate-wrapped at the read boundary.
+                "purchase_links": card.get("purchase_links", {}),
             }
             session.merge(Card(**payload))
 

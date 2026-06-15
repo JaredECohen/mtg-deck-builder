@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { AFFILIATE_DISCLOSURE, amazonSearchUrl } from "@/lib/affiliate";
+import { AFFILIATE_DISCLOSURE, tcgplayerSearchUrl } from "@/lib/affiliate";
 import type { CardRecord } from "@/lib/types";
 
 type Props = {
@@ -87,17 +87,14 @@ export function CardDetailModal({ card, loading, error, onClose }: Props) {
             <div className="export-row" style={{ marginTop: 12 }}>
               <a
                 className="button"
-                href={card.purchase_links?.amazon_search || amazonSearchUrl(card.name)}
+                href={card.purchase_links?.tcgplayer || tcgplayerSearchUrl(card.name)}
                 target="_blank"
                 rel="noreferrer sponsored"
               >
-                Buy on Amazon
+                Buy on TCGplayer
               </a>
               {card.purchase_links?.scryfall ? (
                 <a className="button secondary" href={card.purchase_links.scryfall} target="_blank" rel="noreferrer">Open Scryfall</a>
-              ) : null}
-              {card.purchase_links?.tcgplayer ? (
-                <a className="button secondary" href={card.purchase_links.tcgplayer} target="_blank" rel="noreferrer">Buy on TCGPlayer</a>
               ) : null}
               {card.purchase_links?.cardmarket ? (
                 <a className="button secondary" href={card.purchase_links.cardmarket} target="_blank" rel="noreferrer">Buy on Cardmarket</a>

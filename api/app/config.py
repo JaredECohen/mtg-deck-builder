@@ -25,6 +25,7 @@ SCRYFALL_BULK_URL = os.getenv("SCRYFALL_BULK_DATA_URL", "https://api.scryfall.co
 SCRYFALL_USER_AGENT = os.getenv("SCRYFALL_USER_AGENT", "mtg-deck-builder/0.1")
 _raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 CORS_ORIGINS: list[str] = [o.strip() for o in _raw_cors.split(",") if o.strip()]
-# Amazon Associates tracking ID (e.g. "mydecksite-20"). When set, every
-# Amazon purchase link served by the API carries this tag.
-AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "").strip()
+# TCGplayer affiliate deep-link prefix from Impact (impact.com), e.g.
+# "https://tcgplayer.pxf.io/c/123456/789012/21018". When set, every
+# TCGplayer purchase link served by the API is wrapped for attribution.
+TCGPLAYER_AFFILIATE_URL = os.getenv("TCGPLAYER_AFFILIATE_URL", "").strip()

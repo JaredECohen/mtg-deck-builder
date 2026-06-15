@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import quote_plus
 
 import httpx
 
@@ -35,10 +34,10 @@ def normalize_name(value: str) -> str:
 def marketplace_links(card: dict[str, object]) -> dict[str, str]:
     purchase_uris = card.get("purchase_uris") or {}
     related_uris = card.get("related_uris") or {}
-    name = quote_plus(str(card.get("name", "")))
+    # The TCGplayer link is affiliate-wrapped at the API read boundary
+    # (app/services/affiliate.py), so the raw destination URL is stored here.
     return {
         "scryfall": str(related_uris.get("scryfall_uri") or ""),
-        "amazon_search": f"https://www.amazon.com/s?k={name}+magic+the+gathering+card" if name else "",
         "tcgplayer": str(purchase_uris.get("tcgplayer") or ""),
         "cardmarket": str(purchase_uris.get("cardmarket") or ""),
     }

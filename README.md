@@ -129,17 +129,26 @@ cached so generation stays fast and deterministic.
 | `MTG_CRITIC_MAX_TOKENS_PER_CALL` | Per-call output cap | `4096` |
 | `MTG_CRITIC_MAX_USD_PER_JOB` | Per-job cost cap (shared across rounds) | `1.50` |
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
-| `AMAZON_AFFILIATE_TAG` | Amazon Associates tracking ID appended to every Amazon purchase link served by the API (e.g. `mydecksite-20`) | (unset → untagged links) |
-| `NEXT_PUBLIC_AMAZON_AFFILIATE_TAG` | Same tag, inlined into the frontend for client-built "Shop This Deck" links | (unset) |
+| `TCGPLAYER_AFFILIATE_URL` | TCGplayer affiliate deep-link prefix from Impact (e.g. `https://tcgplayer.pxf.io/c/123456/789012/21018`); every TCGplayer link served by the API is wrapped for attribution | (unset → untracked links) |
+| `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | Same prefix, inlined into the frontend for client-built "Shop This Deck" and mass-entry links | (unset) |
 
 ### Monetization
 
-Every card detail modal has a **Buy on Amazon** button, and each generated deck
-gets a **Shop This Deck** panel with per-card Amazon search links. Set both
-affiliate variables above to your Associates tracking ID and all links are
-tagged automatically — the tag is applied at the API boundary (and at build
-time on the frontend), so changing it never requires re-ingesting card data.
-The required Associates disclosure renders alongside every link surface.
+Monetized via **TCGplayer affiliate links** (the marketplace where players
+actually buy MTG singles). Surfaces:
+
+- **Card detail modal** — a primary **Buy on TCGplayer** button (uses the card's
+  own product link, falling back to a name search).
+- **Shop This Deck** panel on every generated deck — a **Buy entire deck on
+  TCGplayer** button that opens a single [Mass Entry](https://www.tcgplayer.com/massentry)
+  cart pre-filled with the whole list at the cheapest available sellers, plus
+  per-card single links.
+
+TCGplayer's program runs through [Impact](https://impact.com); once approved you
+get a deep-link prefix — set both variables above to it. Links are wrapped at the
+API read boundary (`app/services/affiliate.py`) and at build time on the
+frontend, so changing the prefix never requires re-ingesting card data. The
+required affiliate disclosure renders alongside every link surface.
 
 ## Postgres data pipeline
 
