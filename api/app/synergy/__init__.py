@@ -12,20 +12,28 @@ synergy clique are flagged as filler-fests.
 """
 
 from app.synergy.builder import (
+    COMBO_REGISTRY_VERSION,
+    KNOWN_COMBOS,
     SynergyEdge,
     SynergyGraph,
     build_synergy_graph,
     clear_synergy_cache,
     extract_known_combos,
+    reload_combo_registry,
+    suggest_clique_candidates,
 )
 from app.synergy.criticality import compute_criticality, score_card_criticality
 
 __all__ = [
+    "COMBO_REGISTRY_VERSION",
+    "KNOWN_COMBOS",
     "SynergyEdge",
     "SynergyGraph",
     "build_synergy_graph",
     "clear_synergy_cache",
     "compute_criticality",
     "extract_known_combos",
+    "reload_combo_registry",
     "score_card_criticality",
+    "suggest_clique_candidates",
 ]

@@ -2,10 +2,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from app.auth import require_api_key
 from app.config import CORS_ORIGINS
 from app.models import (
     AnalyzeDeckRequest,
@@ -13,12 +14,13 @@ from app.models import (
     CardSearchResponse,
     ChatDeckRequest,
     ChatDeckResponse,
-    ChatMessage,
     CommanderProfileResponse,
     CommanderSearchResponse,
     DataStatusResponse,
     DeckAnalysisResponse,
     DeckResponse,
+    DiffDeckRequest,
+    EvaluateDeckRequest,
     ExportDeckRequest,
     FormatName,
     GenerateDeckRequest,
@@ -27,14 +29,15 @@ from app.models import (
     ParsedDecklistResponse,
     RefineDeckRequest,
     SaveDeckRequest,
-    SavedDeckResponse,
-    SavedDeckSummary,
-    SavedDecksResponse,
     ValidateDeckRequest,
     ValidationResult,
 )
 from app.optimizer import AnnealConfig, OptimizerConstraints
-from app.rate_limiter import deck_rate_limiter
+from app.rate_limiter import (
+    deck_rate_limiter,
+    evaluate_rate_limiter,
+    prose_rate_limiter,
+)
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
 from app.services.deck_analysis import DeckAnalysisService
@@ -49,7 +52,12 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
+from app.services.deck_history_service import DeckHistoryService
+from app.services.vector_retrieval import CardVectorRetriever
+
 repository = CardRepository()
+card_retriever = CardVectorRetriever(repository)
+deck_history = DeckHistoryService()
 validator = DeckValidator(repository)
 generator = DeckGenerator(repository, validator)
 analysis_service = DeckAnalysisService(repository, validator)
@@ -75,31 +83,19 @@ def _card_profile_coverage() -> dict[str, int | float | str]:
     except Exception:
         return {"status": "unknown", "cards": 0, "profiles": 0, "coverage": 0.0}
     coverage = (profile_total / card_total) if card_total else 0.0
-    status = "ok" if coverage >= 0.60 else "stale"
+    # No cards ingested yet (fresh DB / sample-data fallback) is not a
+    # "stale" condition — there's nothing to be stale about. Only flag stale
+    # when cards exist but profiles lag behind them.
+    if card_total == 0:
+        status = "ok"
+    else:
+        status = "ok" if coverage >= 0.60 else "stale"
     return {
         "status": status,
         "cards": int(card_total),
         "profiles": int(profile_total),
         "coverage": round(coverage, 4),
     }
-
-
-def _ensure_saved_deck_chat_column() -> None:
-    """SQLite-only inline migration: add chat_history JSON column to
-    saved_decks if it doesn't exist. Idempotent — safe to call every boot.
-    """
-    from sqlalchemy import inspect, text
-    from app.db import get_engine
-    eng = get_engine()
-    inspector = inspect(eng)
-    try:
-        cols = {c["name"] for c in inspector.get_columns("saved_decks")}
-    except Exception:
-        return
-    if "chat_history" in cols:
-        return
-    with eng.begin() as conn:
-        conn.execute(text("ALTER TABLE saved_decks ADD COLUMN chat_history JSON DEFAULT '[]'"))
 
 
 @asynccontextmanager
@@ -109,7 +105,6 @@ async def _lifespan(app: FastAPI):
     from app.services.database_bootstrap import create_schema
     try:
         create_schema()
-        _ensure_saved_deck_chat_column()
     except Exception:
         logger.warning("schema bootstrap on startup failed", exc_info=True)
     # Warn loudly when card_profiles is stale: the optimizer silently
@@ -246,89 +241,6 @@ def chat_deck(request: ChatDeckRequest, req: Request) -> ChatDeckResponse:
     return ChatDeckResponse(reply=result["reply"], suggested_refinement=result.get("suggested_refinement"))
 
 
-@app.post("/v1/decks/save", response_model=SavedDeckSummary)
-def save_deck(request: SaveDeckRequest) -> SavedDeckSummary:
-    import uuid
-    from datetime import datetime, timezone
-    from app.db import session_scope
-    from app.db_models import SavedDeck
-
-    deck_id = uuid.uuid4().hex[:16]
-    created_at = datetime.now(timezone.utc).isoformat()
-    chat_payload = [m.model_dump() for m in request.chat_history]
-    with session_scope() as session:
-        row = SavedDeck(
-            id=deck_id,
-            session_id=request.session_id,
-            title=request.deck.title or "Untitled Deck",
-            format=request.deck.format,
-            deck_json=request.deck.model_dump(),
-            chat_history=chat_payload,
-            created_at=created_at,
-        )
-        session.add(row)
-    return SavedDeckSummary(
-        id=deck_id,
-        title=request.deck.title or "Untitled Deck",
-        format=request.deck.format,
-        created_at=created_at,
-    )
-
-
-@app.get("/v1/decks/saved", response_model=SavedDecksResponse)
-def list_saved_decks(session_id: str) -> SavedDecksResponse:
-    from sqlalchemy import select
-    from app.db import session_scope
-    from app.db_models import SavedDeck
-
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id is required")
-    with session_scope() as session:
-        rows = session.scalars(
-            select(SavedDeck).where(SavedDeck.session_id == session_id).order_by(SavedDeck.created_at.desc())
-        ).all()
-        decks = [
-            SavedDeckSummary(id=row.id, title=row.title, format=row.format, created_at=row.created_at)
-            for row in rows
-        ]
-    return SavedDecksResponse(decks=decks)
-
-
-@app.get("/v1/decks/saved/{deck_id}", response_model=SavedDeckResponse)
-def get_saved_deck(deck_id: str) -> SavedDeckResponse:
-    from app.db import session_scope
-    from app.db_models import SavedDeck
-
-    with session_scope() as session:
-        row = session.get(SavedDeck, deck_id)
-        if row is None:
-            raise HTTPException(status_code=404, detail="Saved deck not found")
-        chat_payload = row.chat_history or []
-        return SavedDeckResponse(
-            id=row.id,
-            title=row.title,
-            format=row.format,
-            created_at=row.created_at,
-            deck=DeckResponse.model_validate(row.deck_json),
-            chat_history=[ChatMessage.model_validate(m) for m in chat_payload],
-        )
-
-
-@app.delete("/v1/decks/saved/{deck_id}")
-def delete_saved_deck(deck_id: str, session_id: str) -> dict[str, str]:
-    from app.db import session_scope
-    from app.db_models import SavedDeck
-
-    with session_scope() as session:
-        row = session.get(SavedDeck, deck_id)
-        if row is None:
-            raise HTTPException(status_code=404, detail="Saved deck not found")
-        if row.session_id != session_id:
-            raise HTTPException(status_code=403, detail="Not authorized to delete this deck")
-        session.delete(row)
-    return {"status": "deleted", "id": deck_id}
-
-
 @app.post("/v1/decks/validate", response_model=ValidationResult)
 def validate_deck(request: ValidateDeckRequest) -> ValidationResult:
     try:
@@ -343,6 +255,94 @@ def analyze_deck(request: AnalyzeDeckRequest) -> DeckAnalysisResponse:
         return analysis_service.analyze(request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/decks/evaluate")
+def evaluate_deck(
+    request: EvaluateDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    """Run the multi-signal evaluation engine on a concrete decklist.
+
+    Returns flood/screw resistance, interaction resilience, inevitability,
+    consistency, card-advantage density, and a Wilson-interval win rate —
+    the same battery the optimizer's deep-eval uses, exposed directly.
+    """
+    client_ip = req.client.host if req.client else "unknown"
+    if not evaluate_rate_limiter.is_allowed(f"evaluate:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many evaluation requests. Please wait before trying again.")
+    from app.services.deck_evaluation_service import evaluate_decklist
+    try:
+        return evaluate_decklist(
+            format_id=request.format,
+            mainboard=request.mainboard,
+            repository=repository,
+            games=request.games,
+            seed=request.seed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/decks/diff")
+def diff_deck(request: DiffDeckRequest) -> dict:
+    """Card-by-card diff between two decklists (before → after)."""
+    from app.services.deck_diff import diff_decks
+    return diff_decks(request.before, request.after).to_dict()
+
+
+@app.post("/v1/decks/save")
+def save_deck(
+    request: SaveDeckRequest,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    """Persist a deck to history and mint a share token. When auth is
+    enabled the API key becomes the deck's owner."""
+    return deck_history.save(
+        name=request.name,
+        format_id=request.format,
+        mainboard=[c.model_dump() for c in request.mainboard],
+        sideboard=[c.model_dump() for c in request.sideboard],
+        commander=request.commander,
+        notes=request.notes,
+        evaluation=request.evaluation,
+        owner=key,
+    )
+
+
+@app.get("/v1/decks/history")
+def deck_history_list(
+    limit: int = 50,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    return {"decks": deck_history.history(owner=key, limit=max(1, min(limit, 200)))}
+
+
+@app.get("/v1/decks/saved/{deck_id}")
+def get_saved_deck(deck_id: str) -> dict:
+    deck = deck_history.get(deck_id)
+    if deck is None:
+        raise HTTPException(status_code=404, detail="saved deck not found")
+    return deck
+
+
+@app.get("/v1/decks/shared/{token}")
+def get_shared_deck(token: str) -> dict:
+    deck = deck_history.get_by_share_token(token)
+    if deck is None:
+        raise HTTPException(status_code=404, detail="shared deck not found")
+    return deck
+
+
+@app.delete("/v1/decks/saved/{deck_id}")
+def delete_saved_deck(
+    deck_id: str,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    if not deck_history.delete(deck_id, owner=key):
+        raise HTTPException(status_code=404, detail="saved deck not found")
+    return {"deleted": deck_id}
 
 
 @app.post("/v1/decks/parse", response_model=ParsedDecklistResponse)
@@ -362,7 +362,11 @@ def export_deck(request: ExportDeckRequest) -> dict[str, str]:
 
 
 @app.post("/v1/jobs/optimize", response_model=OptimizerJobResponse)
-def submit_optimize(request: OptimizerJobRequest, req: Request) -> OptimizerJobResponse:
+def submit_optimize(
+    request: OptimizerJobRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> OptimizerJobResponse:
     client_ip = req.client.host if req.client else "unknown"
     if not deck_rate_limiter.is_allowed(f"optimize:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many optimizer submissions. Wait before retrying.")
@@ -382,18 +386,29 @@ def get_job(job_id: str) -> dict:
 
 
 @app.post("/v1/jobs/{job_id}/prose")
-def get_job_prose(job_id: str) -> Response:
+def get_job_prose(
+    job_id: str,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> Response:
     """Lazily produce LLM-narrated coach prose for a completed
     optimizer job.
+
+    Gated by optional API-key auth and a tighter rate limit than the
+    deterministic endpoints, since it fans out to an LLM.
 
     * 200 — prose ready (or null when LLM is disabled / no API key)
     * 202 — job still running; client should poll the prose endpoint
             again after the parent job completes
     * 404 — unknown job, or job has no rationale
     * 409 — job failed
+    * 429 — prose rate limit exceeded
     """
     from fastapi.responses import JSONResponse
     from app.services.deck_rationale import prose_for_rationale_dict
+    client_ip = req.client.host if req.client else "unknown"
+    if not prose_rate_limiter.is_allowed(f"prose:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many prose requests. Please wait before trying again.")
     try:
         job = get_job_queue().get(job_id)
     except (JobNotFound, KeyError) as exc:
@@ -422,6 +437,27 @@ def meta_summary(format: FormatName) -> MetaSummaryResponse:
     return MetaSummaryResponse(format=format, archetypes=archetypes)
 
 
+@app.get("/v1/cards", response_model=CardSearchResponse)
+def card_search(query: str, format: FormatName | None = None, limit: int = 12) -> CardSearchResponse:
+    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=limit))
+
+
+@app.get("/v1/cards/{card_name}/similar")
+def similar_cards(card_name: str, k: int = 10) -> dict:
+    """Semantic-ish nearest neighbours for a card (pgvector when wired,
+    deterministic lexical-feature cosine otherwise)."""
+    if repository.get_card(card_name) is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    hits = card_retriever.similar_to(card_name, k=max(1, min(k, 50)))
+    return {
+        "card": card_name,
+        "mode": card_retriever.mode,
+        "similar": [h.to_dict() for h in hits],
+    }
+
+
+# Registered last: the `:path` converter is greedy and would otherwise
+# swallow more specific subpaths like `/v1/cards/{name}/similar`.
 @app.get("/v1/cards/{card_name:path}", response_model=CardDetailResponse)
 def card_detail(card_name: str) -> CardDetailResponse:
     # Use `:path` so URL-encoded `/` in DFC names (e.g. "Tamiyo, Inquisitive
@@ -435,11 +471,6 @@ def card_detail(card_name: str) -> CardDetailResponse:
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
     return CardDetailResponse(card=card)
-
-
-@app.get("/v1/cards", response_model=CardSearchResponse)
-def card_search(query: str, format: FormatName | None = None, limit: int = 12) -> CardSearchResponse:
-    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=limit))
 
 
 @app.get("/v1/commanders", response_model=CommanderSearchResponse)

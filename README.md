@@ -5,8 +5,10 @@ that produces tournament-grade decks for all five major formats. FastAPI
 backend, Next.js frontend, structured `DeckRationale` output narrated by an
 optional LLM coach.
 
-**Current state:** 251 backend tests passing, frontend TypeScript clean,
-end-to-end optimizer flow live behind a feature flag.
+**Current state:** 291 backend tests passing, frontend TypeScript clean
+(`next build` green), end-to-end optimizer flow live behind a feature
+flag, multi-format meta + deck-evaluation engine + embedding retrieval
+wired.
 
 ## Structure
 
@@ -45,8 +47,18 @@ npm run dev
 
 ```bash
 cd api
-python -m pytest -q     # 251 passing, 1 skipped (Celery without Redis)
+python -m pytest -q     # 291 passing, 13 skipped (need full dataset / Celery without Redis)
 ```
+
+A handful of integration tests need the full Scryfall dataset and are
+skipped by default; after `ingest_scryfall`, run them with
+`MTG_FULL_DATASET=1 python -m pytest`.
+
+## CI
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push
+to `main` and every PR: the backend `pytest` suite and the frontend
+`tsc --noEmit` + `next build`.
 
 ## Capabilities
 
@@ -129,6 +141,8 @@ cached so generation stays fast and deterministic.
 | `MTG_CRITIC_MAX_TOKENS_PER_CALL` | Per-call output cap | `4096` |
 | `MTG_CRITIC_MAX_USD_PER_JOB` | Per-job cost cap (shared across rounds) | `1.50` |
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
+| `MTG_API_KEY` | Comma-separated API keys; enables `X-API-Key` auth on optimize/prose/evaluate/save | (unset → auth off) |
+| `MTG_USE_PGVECTOR` | Use the pgvector NN path for `/similar` when the `card_embeddings` table exists | `false` |
 | `TCGPLAYER_AFFILIATE_URL` | TCGplayer affiliate deep-link prefix from Impact (e.g. `https://tcgplayer.pxf.io/c/123456/789012/21018`); every TCGplayer link served by the API is wrapped for attribution | (unset → untracked links) |
 | `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | Same prefix, inlined into the frontend for client-built "Shop This Deck" and mass-entry links | (unset) |
 
@@ -160,7 +174,14 @@ python -m app.scripts.ingest_scryfall              # full Scryfall ingest (optio
 python -m app.scripts.ingest_tournament_decks
 python -m app.scripts.build_archetypes
 python -m app.scripts.build_card_profiles          # parses oracle text → card_profiles
+python -m app.scripts.build_card_embeddings        # dense embeddings → card_embeddings
 ```
+
+Embeddings power the retriever's `vector` mode (works on SQLite too) and
+the pgvector `<=>` path on Postgres. The default embedder is a
+deterministic feature-hash projection ([app/services/embeddings.py](api/app/services/embeddings.py))
+so it runs offline; swap `embed_features` for a learned model without
+changing the table schema, ingest script, or retriever.
 
 The optimizer reads from `card_profiles` when populated and falls back
 to on-the-fly profiling when it isn't (logs a warning).
@@ -183,25 +204,60 @@ to on-the-fly profiling when it isn't (logs a warning).
 - **Critic loop sanity** — auto-downgrades critic-APPROVE when deterministic rubric flags errors; rolls back rounds that don't improve any metric
 - **LLM cost gating** — shared budget across all critic-loop rounds enforces the per-job USD cap
 
-## Pending / not yet wired
+## Deck evaluation engine
 
-### Per-format meta archetypes
-- [api/app/sim/meta_archetypes.py](api/app/sim/meta_archetypes.py) contains
-  Modern opponents only (Burn, Murktide, Tron, Living End). Standard /
-  Pioneer / Legacy / Commander need their own meta sets. The matchup
-  pipeline is format-aware; the data isn't.
+The simulator now ships a **multi-signal evaluation layer**
+([api/app/sim/evaluation.py](api/app/sim/evaluation.py)) that grades a
+concrete decklist beyond a single kill-turn number:
 
-### Synergy registry expansion
-- `KNOWN_COMBOS` lists 12 well-known Modern cliques. Pulling from a
-  versioned data file + automation to flag new clique candidates from
-  tournament data is a follow-up.
+- **Win rate + Wilson 95% confidence interval** — so callers know when a
+  delta is signal vs. noise.
+- **Flood / screw resistance** — re-runs the deck with opening hands
+  forced land-heavy and land-light.
+- **Interaction resilience** — re-runs with a hypothetical opponent
+  answering a fraction of spells (gated `disruption_rate` goldfish primitive).
+- **Inevitability** — late-game win share + card-advantage density.
+- **Consistency** — inverse of kill-turn variance.
 
-### Tournament deck benchmark coverage
-- Kill-turn benchmarks are pinned for Burn only. Living End, Yawgmoth,
-  and Tron each need their own benchmark tests (currently their
-  goldfish kill turns aren't asserted, just produced).
+Exposed at `POST /v1/decks/evaluate` and folded into the optimizer's
+fitness as the `resilience` + `inevitability` axes (computed on
+`deep_eval=True`, off in the hot anneal loop).
 
-### Production wiring
+## Newer endpoints
+
+- `POST /v1/decks/evaluate` — run the evaluation battery on a decklist
+- `POST /v1/decks/diff` — card-by-card before/after diff
+- `POST /v1/decks/save`, `GET /v1/decks/history`,
+  `GET /v1/decks/saved/{id}`, `GET /v1/decks/shared/{token}`,
+  `DELETE /v1/decks/saved/{id}` — persistent history + sharing
+- `GET /v1/cards/{name}/similar` — semantic-ish neighbours (pgvector
+  fast-path, deterministic lexical fallback)
+
+Optional API-key auth (`MTG_API_KEY`, `X-API-Key` header) gates the
+optimize / prose / evaluate / save endpoints; the prose endpoint also
+carries a tighter dedicated rate limit.
+
+## Resolved to-do items
+
+- **Per-format meta archetypes** — `META_BY_FORMAT` now ships Standard,
+  Pioneer, Legacy, and Commander opponent sets plus Modern Yawgmoth &
+  Amulet Titan; `build_matchup_matrix` grades each candidate against its
+  own format's meta.
+- **Synergy registry expansion** — combos live in a versioned
+  [combos.json](api/app/synergy/combos.json) (31 cliques across formats)
+  with `suggest_clique_candidates()` mining tournament lists for new
+  candidates.
+- **Tournament benchmark coverage** — per-archetype goldfish benchmarks
+  in [test_meta_benchmarks.py](api/tests/test_meta_benchmarks.py).
+- **Production wiring** — API-key auth, dedicated prose rate limit, and
+  pgvector retrieval (with fallback) are wired.
+
+## Still pending
+
 - Real Redis/Celery broker provisioning (the backend is ready)
-- Auth + rate limiting on the prose endpoint
-- pgvector retrieval for semantic similarity
+- A *learned* embedding model to replace the deterministic feature-hash
+  embedder (the full pipeline — table, build script, `vector`/pgvector
+  retrieval modes — is wired and tested today)
+- Multi-tenant identity (the current `owner` field keys off the API key)
+- Deeper frontend wiring of the new evaluation/diff/history components
+  into the workshop flow

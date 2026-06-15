@@ -27,6 +27,10 @@ class GoldfishConfig:
     max_turns: int = 12
     on_play: bool = True
     starting_life: int = 20
+    # When > 0, each spell cast has this probability of being answered by
+    # a hypothetical opponent (counter/removal). Drives resilience
+    # evaluation; defaults to 0.0 so pure goldfish behavior is unchanged.
+    disruption_rate: float = 0.0
 
 
 @dataclass
@@ -37,6 +41,7 @@ class GoldfishReport:
     median_kill_turn: float
     p25_kill_turn: float
     p75_kill_turn: float
+    kill_turn_stdev: float
     kill_turn_distribution: dict[int, int]
     avg_engine_online_turn: float | None
     avg_mulligans: float
@@ -66,6 +71,7 @@ def goldfish(
             on_play=cfg.on_play,
             starting_life=cfg.starting_life,
         )
+        state.disruption_rate = cfg.disruption_rate
         london_mulligan_loop(state, mp)
         _play_game(state, policy=policy, max_turns=cfg.max_turns)
         if state.win_turn is not None:
@@ -87,11 +93,13 @@ def goldfish(
         med_kt = statistics.median(kill_turns)
         p25 = _percentile(kill_turns, 0.25)
         p75 = _percentile(kill_turns, 0.75)
+        kt_stdev = statistics.pstdev(kill_turns) if len(kill_turns) > 1 else 0.0
     else:
         avg_kt = float(cfg.max_turns + 1)
         med_kt = float(cfg.max_turns + 1)
         p25 = float(cfg.max_turns + 1)
         p75 = float(cfg.max_turns + 1)
+        kt_stdev = 0.0
 
     distribution: dict[int, int] = {}
     for t in kill_turns:
@@ -109,6 +117,7 @@ def goldfish(
         median_kill_turn=med_kt,
         p25_kill_turn=p25,
         p75_kill_turn=p75,
+        kill_turn_stdev=kt_stdev,
         kill_turn_distribution=distribution,
         avg_engine_online_turn=(statistics.mean(engine_turns) if engine_turns else None),
         avg_mulligans=statistics.mean(mulligans_taken) if mulligans_taken else 0.0,
@@ -273,6 +282,15 @@ def _resolve_cast(state: GameState, card: CardInPlay) -> None:
     state.hand.remove(card)
     state.spells_cast_this_turn += 1
     state.storm_count += 1
+    # Hypothetical opponent interaction: the spell still costs mana but
+    # is answered before it resolves. Lands are never "disrupted" (this
+    # only fires from _resolve_cast, never _resolve_play_land). Modeled
+    # as a probabilistic counter for the resilience evaluation.
+    if state.disruption_rate > 0.0 and state.rng.random() < state.disruption_rate:
+        state.spells_disrupted += 1
+        state.graveyard.append(card)
+        state.log(event="disrupted", card=card.name)
+        return
     _resolve_card_effects(state, card)
     if card.is_creature or card.is_planeswalker or "enchantment" in (card.profile.notes or []):
         card.summoning_sick = card.is_creature

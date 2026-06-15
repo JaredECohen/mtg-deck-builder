@@ -232,32 +232,6 @@ class ChatDeckResponse(BaseModel):
     suggested_refinement: str | None = None
 
 
-class SaveDeckRequest(BaseModel):
-    session_id: str
-    deck: "DeckResponse"
-    chat_history: list[ChatMessage] = Field(default_factory=list)
-
-
-class SavedDeckSummary(BaseModel):
-    id: str
-    title: str
-    format: FormatName
-    created_at: str
-
-
-class SavedDecksResponse(BaseModel):
-    decks: list[SavedDeckSummary]
-
-
-class SavedDeckResponse(BaseModel):
-    id: str
-    title: str
-    format: FormatName
-    created_at: str
-    deck: "DeckResponse"
-    chat_history: list[ChatMessage] = Field(default_factory=list)
-
-
 class ValidateDeckRequest(BaseModel):
     format: FormatName
     mainboard: list[CardRef]
@@ -272,6 +246,30 @@ class AnalyzeDeckRequest(BaseModel):
     commander: str | None = None
     notes: str = ""
     deep_analysis: bool = True
+
+
+class DiffDeckRequest(BaseModel):
+    before: list[CardRef]
+    after: list[CardRef]
+
+
+class SaveDeckRequest(BaseModel):
+    name: str = "Untitled deck"
+    format: FormatName
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    commander: str | None = None
+    notes: str = ""
+    evaluation: dict = Field(default_factory=dict)
+
+
+class EvaluateDeckRequest(BaseModel):
+    format: FormatName
+    mainboard: list[CardRef]
+    sideboard: list[CardRef] = Field(default_factory=list)
+    commander: str | None = None
+    games: int = Field(default=200, ge=20, le=1000)
+    seed: int = 1729
 
 
 class ParseDecklistRequest(BaseModel):

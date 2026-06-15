@@ -46,3 +46,11 @@ class InMemoryRateLimiter:
 # 30 deck generations per IP per minute is generous for interactive use
 # while blocking automated abuse.
 deck_rate_limiter = InMemoryRateLimiter(requests_per_minute=30)
+
+# The prose endpoint fans out to an LLM and is markedly more expensive
+# (latency + cost) than the deterministic endpoints, so it gets a
+# tighter budget.
+prose_rate_limiter = InMemoryRateLimiter(requests_per_minute=10)
+
+# Deck evaluation runs several hundred simulated games; keep it bounded.
+evaluate_rate_limiter = InMemoryRateLimiter(requests_per_minute=20)

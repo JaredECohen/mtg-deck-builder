@@ -57,6 +57,11 @@ class FitnessVector:
     redundancy: float = 0.0
     role_balance: float = 0.0
     matchup_strength: float = 0.5
+    # Deep-eval axes — populated only when ``compute_fitness`` is called
+    # with ``deep_eval=True`` (expensive). Default 0.5 (neutral) so they
+    # don't penalize the geometric-mean combine during fast annealing.
+    resilience: float = 0.5
+    inevitability: float = 0.5
     raw: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, float]:
@@ -68,12 +73,17 @@ class FitnessVector:
             "redundancy": self.redundancy,
             "role_balance": self.role_balance,
             "matchup_strength": self.matchup_strength,
+            "resilience": self.resilience,
+            "inevitability": self.inevitability,
             **self.raw,
         }
 
     def worst_axis(self) -> str:
-        # Only the structured axes are eligible — `raw` holds
-        # diagnostic strings/floats that aren't directly optimizable.
+        # Only axes the swap-proposal engine has a targeted strategy for
+        # are eligible. matchup_strength / resilience / inevitability are
+        # graded but not directly swap-targetable (and are often neutral
+        # placeholders), so excluding them keeps the annealer from
+        # chasing axes it can't act on.
         axes = {
             "kill_turn_score": self.kill_turn_score,
             "mulligan_keep": self.mulligan_keep,
@@ -81,7 +91,6 @@ class FitnessVector:
             "synergy_density": self.synergy_density,
             "redundancy": self.redundancy,
             "role_balance": self.role_balance,
-            "matchup_strength": self.matchup_strength,
         }
         return min(axes, key=axes.get)
 
@@ -103,43 +112,51 @@ def _archetype_weights(role_profile: dict[str, float]) -> dict[str, float]:
     archetype = select_policy(role_profile)
     if archetype == "aggro":
         return {
-            "kill_turn_score": 0.30,
-            "mulligan_keep": 0.15,
+            "kill_turn_score": 0.28,
+            "mulligan_keep": 0.14,
             "mana_consistency": 0.10,
             "synergy_density": 0.05,
-            "redundancy": 0.10,
-            "role_balance": 0.10,
-            "matchup_strength": 0.20,
+            "redundancy": 0.09,
+            "role_balance": 0.09,
+            "matchup_strength": 0.18,
+            "resilience": 0.04,
+            "inevitability": 0.03,
         }
     if archetype == "combo":
         return {
-            "kill_turn_score": 0.15,
-            "mulligan_keep": 0.15,
+            "kill_turn_score": 0.14,
+            "mulligan_keep": 0.14,
             "mana_consistency": 0.10,
-            "synergy_density": 0.20,
-            "redundancy": 0.15,
-            "role_balance": 0.05,
-            "matchup_strength": 0.20,
+            "synergy_density": 0.18,
+            "redundancy": 0.14,
+            "role_balance": 0.04,
+            "matchup_strength": 0.16,
+            "resilience": 0.06,
+            "inevitability": 0.04,
         }
     if archetype == "control":
         return {
-            "kill_turn_score": 0.05,
-            "mulligan_keep": 0.15,
-            "mana_consistency": 0.20,
-            "synergy_density": 0.10,
-            "redundancy": 0.10,
-            "role_balance": 0.20,
-            "matchup_strength": 0.20,
+            "kill_turn_score": 0.04,
+            "mulligan_keep": 0.13,
+            "mana_consistency": 0.18,
+            "synergy_density": 0.09,
+            "redundancy": 0.09,
+            "role_balance": 0.17,
+            "matchup_strength": 0.16,
+            "resilience": 0.08,
+            "inevitability": 0.06,
         }
     # midrange
     return {
-        "kill_turn_score": 0.15,
-        "mulligan_keep": 0.15,
-        "mana_consistency": 0.15,
-        "synergy_density": 0.10,
-        "redundancy": 0.10,
-        "role_balance": 0.15,
-        "matchup_strength": 0.20,
+        "kill_turn_score": 0.13,
+        "mulligan_keep": 0.14,
+        "mana_consistency": 0.14,
+        "synergy_density": 0.09,
+        "redundancy": 0.09,
+        "role_balance": 0.14,
+        "matchup_strength": 0.17,
+        "resilience": 0.06,
+        "inevitability": 0.04,
     }
 
 
@@ -243,6 +260,8 @@ def compute_fitness(
     matchup_games: int = 50,
     matchup_opponents: dict | None = None,
     format_id: str = "modern",
+    deep_eval: bool = False,
+    deep_eval_games: int = 150,
 ) -> FitnessVector:
     profiles = [p for p, _ in deck]
     role_profile = _aggregate_role_profile(profiles)
@@ -304,6 +323,22 @@ def compute_fitness(
         matchup_score = matrix.avg_winrate or 0.0
         matchup_data = matrix.by_opponent
 
+    # 7. Deep-eval axes — resilience to interaction + inevitability.
+    #    Expensive (extra goldfish passes), so gated off in the hot
+    #    anneal loop and run only for final / rationale-time evaluation.
+    resilience = 0.5
+    inevitability = 0.5
+    deep_eval_data: dict = {}
+    if deep_eval:
+        from app.sim.evaluation import evaluate_deck
+        ev = evaluate_deck(
+            deck, format_id=format_id, games=deep_eval_games,
+            max_turns=max_turns, seed=seed, policy=policy, mulligan_profile=mp,
+        )
+        resilience = ev.interaction_resilience
+        inevitability = ev.inevitability
+        deep_eval_data = ev.to_dict()
+
     fv = FitnessVector(
         kill_turn_score=kt_score,
         mulligan_keep=mulligan_keep,
@@ -312,11 +347,14 @@ def compute_fitness(
         redundancy=red_score,
         role_balance=rb_score,
         matchup_strength=matchup_score,
+        resilience=resilience,
+        inevitability=inevitability,
         raw={
             "avg_kill_turn": goldfish_report.avg_kill_turn,
             "win_rate": goldfish_report.wins / max(1, goldfish_report.games_played),
             "archetype": archetype,
             "matchup_matrix": matchup_data,
+            "deep_eval": deep_eval_data,
         },
     )
     return fv

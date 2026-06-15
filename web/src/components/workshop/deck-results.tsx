@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import { ProvenanceBanner } from "./provenance-banner";
 import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
@@ -8,16 +8,80 @@ import type { ExportTarget } from "@/lib/api";
 import { groupByType } from "@/lib/group-by-type";
 import type { ArchetypePackage, CardRef, CardTypeMap, CommanderProfile, DeckResponse, MetaSummaryResponse } from "@/lib/types";
 
+const BASIC_LAND_NAMES = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"]);
+
+function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
+  // Unique non-basic cards across mainboard, sideboard, and commander —
+  // basics aren't worth a marketplace click.
+  const seen = new Set<string>();
+  const shoppable: CardRef[] = [];
+  const commanderRefs: CardRef[] = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
+  for (const ref of [...commanderRefs, ...deck.mainboard, ...deck.sideboard]) {
+    if (BASIC_LAND_NAMES.has(ref.name) || seen.has(ref.name)) continue;
+    seen.add(ref.name);
+    shoppable.push(ref);
+  }
+  if (!shoppable.length) return null;
+  // The whole deck — including basics — goes into the one-click cart.
+  const commanderEntries = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
+  const massEntryUrl = tcgplayerMassEntryUrl([
+    ...commanderEntries,
+    ...deck.mainboard,
+    ...deck.sideboard,
+  ]);
+  return (
+    <div className="panel results-card">
+      <div className="label">Shop This Deck</div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Buy the whole list in one TCGplayer cart at the cheapest available prices,
+        or grab individual singles below.
+      </p>
+      <a
+        href={massEntryUrl}
+        target="_blank"
+        rel="noreferrer sponsored"
+        className="button"
+        style={{ marginBottom: 12 }}
+      >
+        Buy entire deck on TCGplayer
+      </a>
+      <details>
+        <summary style={{ cursor: "pointer" }}>
+          {shoppable.length} cards to shop individually
+        </summary>
+        <ul className="card-list" style={{ marginTop: 8 }}>
+          {shoppable.map((card) => (
+            <li key={`shop-${card.name}`} className="card-row">
+              <span>{card.quantity}x {card.name}</span>
+              <a
+                href={tcgplayerSearchUrl(card.name)}
+                target="_blank"
+                rel="noreferrer sponsored"
+                className="chip"
+              >
+                TCGplayer
+              </a>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+    </div>
+  );
+}
+
 type Props = {
   deck: DeckResponse;
   meta: MetaSummaryResponse | null;
   selectedCommanderName: string;
   selectedCommanderProfile: CommanderProfile | null;
-  chatPanel: ReactNode;
+  refinePrompt: string;
+  onRefinePromptChange: (value: string) => void;
+  onRefine: () => void;
   onExport: (target: ExportTarget) => void;
   exportContent: string;
   onOpenCard: (name: string) => void;
-  onApplyOptimized?: (next: DeckResponse) => void;
+  loading: boolean;
 };
 
 function PackageList({ title, packages }: { title: string; packages: ArchetypePackage[] }) {
@@ -93,89 +157,24 @@ export function GroupedDeckList({
   );
 }
 
-const BASIC_LAND_NAMES = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"]);
-
-function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
-  // Unique non-basic cards across mainboard, sideboard, and commander —
-  // basics aren't worth a marketplace click.
-  const seen = new Set<string>();
-  const shoppable: CardRef[] = [];
-  const commanderRefs: CardRef[] = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
-  for (const ref of [...commanderRefs, ...deck.mainboard, ...deck.sideboard]) {
-    if (BASIC_LAND_NAMES.has(ref.name) || seen.has(ref.name)) continue;
-    seen.add(ref.name);
-    shoppable.push(ref);
-  }
-  if (!shoppable.length) return null;
-  // The whole deck — including basics — goes into the one-click cart.
-  const commanderEntries = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
-  const massEntryUrl = tcgplayerMassEntryUrl([
-    ...commanderEntries,
-    ...deck.mainboard,
-    ...deck.sideboard,
-  ]);
-  return (
-    <div className="panel results-card">
-      <div className="label">Shop This Deck</div>
-      <p className="muted" style={{ marginTop: 0 }}>
-        Buy the whole list in one TCGplayer cart at the cheapest available prices,
-        or grab individual singles below.
-      </p>
-      <a
-        href={massEntryUrl}
-        target="_blank"
-        rel="noreferrer sponsored"
-        className="button"
-        style={{ marginBottom: 12 }}
-      >
-        Buy entire deck on TCGplayer
-      </a>
-      <details>
-        <summary style={{ cursor: "pointer" }}>
-          {shoppable.length} cards to shop individually
-        </summary>
-        <ul className="card-list" style={{ marginTop: 8 }}>
-          {shoppable.map((card) => (
-            <li key={`shop-${card.name}`} className="card-row">
-              <span>{card.quantity}x {card.name}</span>
-              <a
-                href={tcgplayerSearchUrl(card.name)}
-                target="_blank"
-                rel="noreferrer sponsored"
-                className="chip"
-              >
-                TCGplayer
-              </a>
-            </li>
-          ))}
-        </ul>
-      </details>
-      <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
-    </div>
-  );
-}
-
 export function DeckResults({
   deck,
   meta,
   selectedCommanderName,
   selectedCommanderProfile,
-  chatPanel,
+  refinePrompt,
+  onRefinePromptChange,
+  onRefine,
   onExport,
   exportContent,
   onOpenCard,
-  onApplyOptimized
+  loading
 }: Props) {
   const [exportTarget, setExportTarget] = useState<ExportTarget>("plain");
 
   return (
     <>
-      <ProvenanceBanner
-        provenance={deck.provenance}
-        commanderRequested={Boolean(deck.commander)}
-        currentDeck={deck}
-        onApplyOptimized={onApplyOptimized}
-      />
+      <ProvenanceBanner provenance={deck.provenance} commanderRequested={Boolean(deck.commander)} />
 
       <div className="panel results-card">
         <div className="deck-columns">
@@ -406,9 +405,24 @@ export function DeckResults({
         </div>
       ) : null}
 
-      <ShopDeckPanel deck={deck} />
+      <div className="panel results-card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <label className="label" htmlFor="refine">Refine Deck</label>
+          <span style={{ fontSize: "0.75rem", color: refinePrompt.length > 1200 ? "orange" : "#9ca3af" }}>{refinePrompt.length}/1500</span>
+        </div>
+        <textarea
+          id="refine"
+          className="textarea"
+          value={refinePrompt}
+          maxLength={1500}
+          onChange={(event) => onRefinePromptChange(event.target.value)}
+        />
+        <button type="button" className="button secondary" onClick={onRefine} disabled={loading} style={{ marginTop: 12 }}>
+          Apply Refinement
+        </button>
+      </div>
 
-      {chatPanel}
+      <ShopDeckPanel deck={deck} />
 
       <div className="panel results-card">
         <div className="label">Export Deck</div>

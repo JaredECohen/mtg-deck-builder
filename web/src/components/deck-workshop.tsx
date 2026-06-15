@@ -1,27 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 import { AnalysisResults } from "./workshop/analysis-results";
 import { AnalyzeForm, type ManualZone } from "./workshop/analyze-form";
 import { CardDetailModal } from "./workshop/card-detail-modal";
 import { CommanderPicker, type CommanderMode } from "./workshop/commander-picker";
-import { DeckChat } from "./workshop/deck-chat";
 import { DeckRationaleView } from "./workshop/deck-rationale";
 import { DeckResults } from "./workshop/deck-results";
-import { SavedDecksPanel } from "./workshop/saved-decks-panel";
+import { DeckEvaluationPanel } from "./workshop/deck-evaluation-panel";
+import { DeckDiffView } from "./workshop/deck-diff-view";
 import { FormatColorPicker } from "./workshop/format-color-picker";
 import { GenerateForm } from "./workshop/generate-form";
 import { StrategyPicker } from "./workshop/strategy-picker";
 import { useCardDetail } from "@/hooks/use-card-detail";
 import { useDataStatus } from "@/hooks/use-data-status";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
-import { useDeckChat } from "@/hooks/use-deck-chat";
+import { useDeckEvaluation } from "@/hooks/use-deck-evaluation";
 import { useDeckGenerator } from "@/hooks/use-deck-generator";
 import { useDeckRationale } from "@/hooks/use-deck-rationale";
-import { useSavedDecks } from "@/hooks/use-saved-decks";
-import type { ExportTarget } from "@/lib/api";
+import { useExperienceMode } from "@/hooks/use-experience-mode";
+import { diffDecks, type DeckDiffResult, type ExportTarget } from "@/lib/api";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import { activeTags, parseBudgetInput, type StrategyId } from "@/lib/strategies";
 import type { CardRef, CommanderProfile, FormatName } from "@/lib/types";
@@ -32,13 +31,16 @@ type BuilderMode = "generate" | "analyze";
 export function DeckWorkshop() {
   const [builderMode, setBuilderMode] = useState<BuilderMode>("generate");
   const [format, setFormat] = useState<FormatName>("modern");
-  const [colors, setColors] = useState<string[]>([]);
-  const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
-  const [budget, setBudget] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [colors, setColors] = useState<string[]>(["U", "R"]);
+  const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>(["aggro", "spellslinger"]);
+  const [budget, setBudget] = useState("400");
+  const [prompt, setPrompt] = useState("Build me a strong Modern prowess deck that feels explosive and is still friendly to a newer player.");
   const [refinePrompt, setRefinePrompt] = useState("Make it a bit cheaper without losing too much pressure.");
   const [exportContent, setExportContent] = useState("");
-  const [expertMode, setExpertMode] = useState(false);
+  const experience = useExperienceMode();
+  const expertMode = experience.detailed;
+  const setExpertMode = (value: boolean) => experience.setMode(value ? "expert" : "beginner");
+  const [deckDiff, setDeckDiff] = useState<DeckDiffResult | null>(null);
   const [commanderMode, setCommanderMode] = useState<CommanderMode>("recommend");
   const [commanderSort, setCommanderSort] = useState<CommanderSort>("match");
   const [commanderSearch, setCommanderSearch] = useState("");
@@ -49,6 +51,7 @@ export function DeckWorkshop() {
   const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
   const [manualCommander, setManualCommander] = useState("");
   const [manualNotes, setManualNotes] = useState("Tell me how this deck plays, what shell it resembles, and what I should improve.");
+  const [manualImportText, setManualImportText] = useState("");
   const [deepAnalysis, setDeepAnalysis] = useState(true);
 
   const dataStatus = useDataStatus();
@@ -56,57 +59,7 @@ export function DeckWorkshop() {
   const generator = useDeckGenerator();
   const analyzer = useDeckAnalyzer();
   const rationale = useDeckRationale();
-  const chat = useDeckChat();
-  const savedDecks = useSavedDecks();
-
-  async function handleSaveDeck() {
-    if (!deck) return;
-    const chatTurns = chat.bubbles.map((b) => ({ role: b.role, content: b.content }));
-    await savedDecks.save(deck, chatTurns);
-  }
-
-  async function handleLoadSavedDeck(deckId: string) {
-    const loaded = await savedDecks.load(deckId);
-    if (loaded) {
-      generator.setDeckDirect(loaded.deck);
-      setBuilderMode("generate");
-      if (loaded.chatHistory.length > 0) {
-        chat.restore(loaded.chatHistory);
-      } else {
-        chat.reset();
-      }
-    }
-  }
-
-  async function handleShareDeck() {
-    if (!deck) return;
-    // Save first to get an ID, then copy the share URL.
-    const chatTurns = chat.bubbles.map((b) => ({ role: b.role, content: b.content }));
-    const summary = await savedDecks.save(deck, chatTurns);
-    if (!summary) return;
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("deck", summary.id);
-    const shareUrl = url.toString();
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // Older browsers / non-secure contexts. Fall back to prompt.
-      window.prompt("Copy this link to share the deck:", shareUrl);
-    }
-  }
-
-  // On mount, if ?deck=<id> is in the URL, load that saved deck. Lets share
-  // links open directly into the workspace with the deck populated.
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    const deckId = searchParams?.get("deck");
-    if (!deckId) return;
-    void handleLoadSavedDeck(deckId);
-    // Only run on mount + when the param changes; intentionally ignore
-    // the handler dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  const evaluation = useDeckEvaluation();
 
   const handleRequestRationale = async () => {
     if (format !== "modern") return;
@@ -208,8 +161,9 @@ export function DeckWorkshop() {
       return;
     }
     setExportContent("");
+    setDeckDiff(null);
+    evaluation.reset();
     analyzer.reset();
-    chat.reset();
     await generator.generate({
       format,
       colors,
@@ -234,27 +188,40 @@ export function DeckWorkshop() {
     });
   }
 
+  async function handleImport() {
+    const parsed = await analyzer.importText(format, manualImportText);
+    if (!parsed) return;
+    setManualMainboard(parsed.mainboard);
+    setManualSideboard(parsed.sideboard);
+    setManualCommander(parsed.commander ?? "");
+  }
+
   function handleClearDraft() {
     setManualMainboard([]);
     setManualSideboard([]);
     setManualCommander("");
+    setManualImportText("");
     analyzer.reset();
     clearManualDraft();
   }
 
-  async function handleRefine(prompt: string) {
+  async function handleRefine() {
     setExportContent("");
-    return generator.refine(prompt);
+    const before = deck?.mainboard ?? [];
+    const updated = await generator.refine(refinePrompt);
+    if (updated && before.length) {
+      try {
+        setDeckDiff(await diffDecks(before, updated.mainboard));
+      } catch {
+        /* diff is best-effort */
+      }
+      evaluation.reset();
+    }
   }
 
-  async function handleChatSend(message: string) {
+  async function handleEvaluate() {
     if (!deck) return;
-    await chat.send(deck, message);
-  }
-
-  async function handleChatApply(bubbleId: string, refinement: string) {
-    const updated = await handleRefine(refinement);
-    if (updated) chat.markApplied(bubbleId);
+    await evaluation.evaluate(deck.format, deck.mainboard);
   }
 
   async function handleExport(target: ExportTarget) {
@@ -303,12 +270,6 @@ export function DeckWorkshop() {
 
         <StrategyPicker selected={selectedStrategies} onChange={setSelectedStrategies} />
 
-        <SavedDecksPanel
-          decks={savedDecks.decks}
-          onLoad={(id) => void handleLoadSavedDeck(id)}
-          onDelete={(id) => void savedDecks.remove(id)}
-        />
-
         {builderMode === "generate" ? (
           <GenerateForm
             expertMode={expertMode}
@@ -327,14 +288,17 @@ export function DeckWorkshop() {
             manualSideboard={manualSideboard}
             manualCommander={manualCommander}
             manualNotes={manualNotes}
+            importText={manualImportText}
             loading={loading}
             deepAnalysis={deepAnalysis}
             onDeepAnalysisChange={setDeepAnalysis}
             onCommanderChange={setManualCommander}
             onNotesChange={setManualNotes}
+            onImportTextChange={setManualImportText}
             onAddCard={addManualCard}
             onChangeQuantity={setManualQuantity}
             onMoveCard={moveManualCard}
+            onImport={() => void handleImport()}
             onClearDraft={handleClearDraft}
             onAnalyze={() => void handleAnalyze()}
             onOpenCard={(name) => void cardDetail.open(name)}
@@ -344,42 +308,7 @@ export function DeckWorkshop() {
 
       <section className="results-grid" aria-label="Deck output">
         <div className="panel results-card panel-strong">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div className="eyebrow">Deck Workshop</div>
-            {builderMode === "generate" && deck ? (
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => generator.undo()}
-                  disabled={generator.history.length === 0 || generator.loading}
-                  style={{ fontSize: 13, padding: "6px 14px" }}
-                  title="Revert to the previous deck state (up to 5 levels)"
-                >
-                  Undo
-                </button>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => void handleSaveDeck()}
-                  disabled={savedDecks.saving}
-                  style={{ fontSize: 13, padding: "6px 14px" }}
-                >
-                  {savedDecks.saving ? "Saving…" : "Save deck"}
-                </button>
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => void handleShareDeck()}
-                  disabled={savedDecks.saving}
-                  style={{ fontSize: 13, padding: "6px 14px" }}
-                  title="Save the deck and copy a share link to your clipboard"
-                >
-                  Share link
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <div className="eyebrow">Deck Workshop</div>
           <h2 style={{ marginTop: 8, fontSize: 32 }}>
             {builderMode === "generate"
               ? (deck?.title ?? "Competitive deck output appears here")
@@ -398,9 +327,6 @@ export function DeckWorkshop() {
             </p>
           ) : null}
           {error ? <p style={{ color: "#fca5a5" }} role="alert">{error}</p> : null}
-          {analyzer.warnings.length ? (
-            <p style={{ color: "#fcd34d" }} role="status">{analyzer.warnings.join(" ")}</p>
-          ) : null}
 
           {builderMode === "generate" && deck ? <ResultStats label="Quality" score={deck.score} extra={{ price: deck.estimated_price_usd }} /> : null}
           {builderMode === "analyze" && analysis ? (
@@ -426,21 +352,56 @@ export function DeckWorkshop() {
               meta={generator.meta}
               selectedCommanderName={selectedCommanderName}
               selectedCommanderProfile={selectedCommanderProfile}
-              chatPanel={
-                <DeckChat
-                  bubbles={chat.bubbles}
-                  sending={chat.sending}
-                  error={chat.error}
-                  refining={generator.loading}
-                  onSend={(message) => void handleChatSend(message)}
-                  onApplyRefinement={(bubbleId, refinement) => void handleChatApply(bubbleId, refinement)}
-                />
-              }
+              refinePrompt={refinePrompt}
+              onRefinePromptChange={setRefinePrompt}
+              onRefine={() => void handleRefine()}
               onExport={(target) => void handleExport(target)}
               exportContent={exportContent}
               onOpenCard={(name) => void cardDetail.open(name)}
-              onApplyOptimized={(next) => generator.setDeckDirect(next)}
+              loading={loading}
             />
+            {deckDiff ? (
+              <div className="panel results-card" style={{ marginTop: 16 }}>
+                <DeckDiffView diff={deckDiff} />
+              </div>
+            ) : null}
+            <div className="panel results-card" style={{ marginTop: 16 }}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold">Simulation verdict</div>
+                  <div className="text-xs muted">
+                    Run the evaluation engine — resilience, flood/screw, inevitability, and a confidence-interval win rate. ~1–2s.
+                  </div>
+                </div>
+                <div className="chips">
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => setExpertMode(!expertMode)}
+                    aria-pressed={expertMode}
+                    title="Toggle beginner / expert detail"
+                  >
+                    {expertMode ? "Expert view" : "Beginner view"}
+                  </button>
+                  <button
+                    type="button"
+                    className="chip active"
+                    onClick={() => void handleEvaluate()}
+                    disabled={evaluation.loading}
+                  >
+                    {evaluation.loading ? "Evaluating…" : "Evaluate deck"}
+                  </button>
+                </div>
+              </div>
+              {evaluation.error ? (
+                <p style={{ color: "#fca5a5" }} role="alert">{evaluation.error}</p>
+              ) : null}
+              {evaluation.evaluation ? (
+                <div style={{ marginTop: 12 }}>
+                  <DeckEvaluationPanel evaluation={evaluation.evaluation} detailed={expertMode} />
+                </div>
+              ) : null}
+            </div>
             {format === "modern" ? (
               <RationalePanel
                 rationale={rationale.rationale}
@@ -489,10 +450,6 @@ function ResultStats({
   extra?: { price?: number | null };
   health?: { value: string; explanation: string };
 }) {
-  // Only treat the price as renderable when it's a real finite number —
-  // never show "$NaN".
-  const price = extra?.price;
-  const hasPrice = typeof price === "number" && Number.isFinite(price);
   return (
     <div className="stats stats-four" style={{ marginTop: 18 }}>
       <div className="stat">
@@ -516,8 +473,8 @@ function ResultStats({
         <strong>{score.synergy}</strong>
       </div>
       <div className="stat">
-        <span className="muted">{hasPrice ? "Est. Price" : "Curve"}</span>
-        <strong>{hasPrice ? `$${price.toFixed(0)}` : score.curve}</strong>
+        <span className="muted">{extra?.price !== undefined ? "Est. Price" : "Curve"}</span>
+        <strong>{extra?.price !== undefined && extra?.price !== null ? `$${extra.price.toFixed(0)}` : score.curve}</strong>
       </div>
     </div>
   );
