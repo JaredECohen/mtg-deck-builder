@@ -206,7 +206,13 @@ def refine_deck(request: RefineDeckRequest, req: Request) -> DeckResponse:
 
 
 @app.post("/v1/decks/chat", response_model=ChatDeckResponse)
-def chat_deck(request: ChatDeckRequest, req: Request) -> ChatDeckResponse:
+def chat_deck(
+    request: ChatDeckRequest,
+    req: Request,
+    # Spends LLM tokens on every call, so it is gated like optimize/prose/save.
+    # A no-op while MTG_API_KEY is unset (auth disabled).
+    _key: str | None = Depends(require_api_key),
+) -> ChatDeckResponse:
     client_ip = req.client.host if req.client else "unknown"
     if not deck_rate_limiter.is_allowed(f"chat:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many chat requests. Please wait before trying again.")

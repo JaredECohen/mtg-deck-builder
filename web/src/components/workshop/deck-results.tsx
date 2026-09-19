@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { DeckChat } from "./deck-chat";
 import { ProvenanceBanner } from "./provenance-banner";
+import { useDeckChat } from "@/hooks/use-deck-chat";
 import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
 import type { ExportTarget } from "@/lib/api";
 import { groupByType } from "@/lib/group-by-type";
@@ -171,6 +173,44 @@ export function DeckResults({
   loading
 }: Props) {
   const [exportTarget, setExportTarget] = useState<ExportTarget>("plain");
+
+  // "Ask About This Deck". The chat API is stateless — the server gets the
+  // current deck plus the transcript on every turn — so the conversation should
+  // survive a refinement of the same deck (the refiner even renames it) and
+  // start over when a different deck arrives (new generation, undo, a loaded
+  // deck). This component sees both ways a refinement starts — its Refine button
+  // and a chat proposal — so a deck change while one is in flight is "same deck";
+  // any other deck change is a new one.
+  const chat = useDeckChat();
+  const { reset: resetChat, markApplied } = chat;
+  const [pendingApply, setPendingApply] = useState<{ bubbleId: string; refinement: string } | null>(null);
+  const refineInFlight = useRef(false);
+  const startRefine = useCallback(() => {
+    refineInFlight.current = true;
+    onRefine();
+  }, [onRefine]);
+  useEffect(() => {
+    if (refineInFlight.current) {
+      refineInFlight.current = false;
+      return;
+    }
+    resetChat();
+    setPendingApply(null);
+  }, [deck, resetChat]);
+  useEffect(() => {
+    // A refinement that failed leaves the deck unchanged; don't let its marker
+    // swallow the reset for the next generation.
+    if (!loading) refineInFlight.current = false;
+  }, [loading]);
+  // A proposed change goes through the existing Refine flow: it lands in the
+  // Refine box (visible, editable, undoable like any refinement) and the refine
+  // fires once the parent's state carries it — the callback reads that state.
+  useEffect(() => {
+    if (!pendingApply || loading || refinePrompt !== pendingApply.refinement) return;
+    startRefine();
+    markApplied(pendingApply.bubbleId);
+    setPendingApply(null);
+  }, [pendingApply, refinePrompt, loading, startRefine, markApplied]);
 
   return (
     <>
@@ -405,6 +445,20 @@ export function DeckResults({
         </div>
       ) : null}
 
+      <DeckChat
+        bubbles={chat.bubbles}
+        sending={chat.sending}
+        error={chat.error}
+        refining={loading}
+        onSend={(message) => void chat.send(deck, message)}
+        onApplyRefinement={(bubbleId, refinement) => {
+          onRefinePromptChange(refinement);
+          setPendingApply({ bubbleId, refinement });
+        }}
+        onEditRefinement={onRefinePromptChange}
+        onClear={resetChat}
+      />
+
       <div className="panel results-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <label className="label" htmlFor="refine">Refine Deck</label>
@@ -417,7 +471,7 @@ export function DeckResults({
           maxLength={1500}
           onChange={(event) => onRefinePromptChange(event.target.value)}
         />
-        <button type="button" className="button secondary" onClick={onRefine} disabled={loading} style={{ marginTop: 12 }}>
+        <button type="button" className="button secondary" onClick={startRefine} disabled={loading} style={{ marginTop: 12 }}>
           Apply Refinement
         </button>
       </div>

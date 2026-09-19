@@ -157,6 +157,13 @@ actually buy MTG singles). Surfaces:
   TCGplayer** button that opens a single [Mass Entry](https://www.tcgplayer.com/massentry)
   cart pre-filled with the whole list at the cheapest available sellers, plus
   per-card single links.
+- **Ask About This Deck** chat panel under every generated deck (`POST /v1/decks/chat`,
+  API-key gated like the other LLM endpoints). Questions get deck-specific answers;
+  a message that asks for a change comes back with a proposed refinement and an
+  **Apply to deck** button that runs it through the normal Refine flow (visible in
+  the Refine box, undoable). The transcript is held client-side and resets when a
+  different deck is generated. Needs `ANTHROPIC_API_KEY` on the API; without it the
+  panel reports that chat is unavailable.
 
 TCGplayer's program runs through [Impact](https://impact.com); once approved you
 get a deep-link prefix — set both variables above to it. Links are wrapped at the
