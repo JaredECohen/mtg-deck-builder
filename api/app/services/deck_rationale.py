@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any
 
+from app.config import SKILLS_DIR
 from app.critic.envelope import DeckEnvelope
 from app.llm_usage import log_usage
 from app.optimizer.fitness import OptimizerCandidate
@@ -151,6 +152,13 @@ def _prose_cache_key(rationale: DeckRationale) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def goldfish_skill_prompt() -> str:
+    """The goldfish-coach Skill text from the repo's `.claude/skills/`, or "" when
+    absent — resolved from the repo root, never the process cwd."""
+    skill_path = SKILLS_DIR / "goldfish-coach" / "SKILL.md"
+    return skill_path.read_text() if skill_path.exists() else ""
+
+
 def _invoke_goldfish_coach(rationale: DeckRationale) -> CoachProse | None:
     """Call the ``goldfish-coach`` Skill via the Anthropic SDK to produce
     narrated prose blocks. Returns None if the API key is absent, the
@@ -170,12 +178,10 @@ def _invoke_goldfish_coach(rationale: DeckRationale) -> CoachProse | None:
         if cached is not None:
             return cached
     try:
-        from pathlib import Path
         from anthropic import Anthropic  # lazy
     except Exception:  # noqa: BLE001
         return None
-    skill_path = Path(".claude/skills/goldfish-coach/SKILL.md")
-    system_prompt = skill_path.read_text() if skill_path.exists() else ""
+    system_prompt = goldfish_skill_prompt()
     if not system_prompt:
         return None
     try:

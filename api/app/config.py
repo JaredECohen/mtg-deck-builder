@@ -8,6 +8,9 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 load_dotenv(ROOT_DIR / ".env", override=False)
 APP_DIR = Path(__file__).resolve().parent
+# Versioned LLM system prompts. Resolved from the repo root so the API can be
+# served from api/ (as documented) and still find them.
+SKILLS_DIR = ROOT_DIR / ".claude" / "skills"
 DATA_DIR = APP_DIR / "data"
 CARD_CACHE_PATH = DATA_DIR / "cards.sample.json"
 ARCHETYPE_PATH = DATA_DIR / "archetypes.sample.json"

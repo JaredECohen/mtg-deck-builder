@@ -25,8 +25,10 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
+from app.config import SKILLS_DIR
 from app.critic.envelope import Critique, CritiqueItem, DeckEnvelope, Verdict
 from app.llm_usage import log_usage
 
@@ -174,6 +176,20 @@ def _retry_call(fn: Callable[[], Any], *, attempts: int = 3, base_delay: float =
     raise last_exc
 
 
+def _skill_prompt(skill_dir: str) -> str:
+    """The Skill's SKILL.md text, or "" when absent.
+
+    A bare skill name resolves under the repo's `.claude/skills/`; a path is used
+    as given. Nothing here depends on the process cwd — the API is served from
+    `api/`, where a cwd-relative `.claude/skills/...` does not exist.
+    """
+    path = Path(skill_dir)
+    if not path.is_absolute() and len(path.parts) == 1:
+        path = SKILLS_DIR / path
+    skill_path = path / "SKILL.md"
+    return skill_path.read_text() if skill_path.exists() else ""
+
+
 def _approx_tokens(text: str) -> int:
     """Rough token count — 4 chars / token. Good enough for cost gating
     where exact billing precision isn't required."""
@@ -196,16 +212,14 @@ class AnthropicBuilder(BuilderClient):
         self,
         model: str | None = None,
         *,
-        skill_dir: str = ".claude/skills/builder-responder",
+        skill_dir: str = "builder-responder",
         budget: CostBudget | None = None,
     ):
         from anthropic import Anthropic  # lazy
-        from pathlib import Path
 
         self._anthropic = Anthropic()  # picks up ANTHROPIC_API_KEY from env
         self.model = model or os.getenv("MTG_BUILDER_MODEL", "claude-opus-4-7")
-        skill_path = Path(skill_dir) / "SKILL.md"
-        self.system_prompt = skill_path.read_text() if skill_path.exists() else ""
+        self.system_prompt = _skill_prompt(skill_dir)
         self.budget = budget or CostBudget.from_env()
 
     def revise(self, envelope: DeckEnvelope, critique: Critique) -> DeckEnvelope:
@@ -265,15 +279,12 @@ class OpenAICritic(CriticClient):
         self,
         model: str | None = None,
         *,
-        skill_dir: str = ".claude/skills/deck-critic",
+        skill_dir: str = "deck-critic",
         client_factory: Callable[[], Any] | None = None,
         budget: CostBudget | None = None,
     ):
-        from pathlib import Path
-
         self.model = model or os.getenv("MTG_CRITIC_MODEL", "gpt-5.5")
-        skill_path = Path(skill_dir) / "SKILL.md"
-        self.system_prompt = skill_path.read_text() if skill_path.exists() else ""
+        self.system_prompt = _skill_prompt(skill_dir)
         if client_factory is None:
             from openai import OpenAI  # lazy
             self._client = OpenAI()  # picks up OPENAI_API_KEY from env
