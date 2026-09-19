@@ -26,6 +26,7 @@ from threading import RLock
 from typing import Any
 
 from app.critic.envelope import DeckEnvelope
+from app.llm_usage import log_usage
 from app.optimizer.fitness import OptimizerCandidate
 
 
@@ -179,15 +180,17 @@ def _invoke_goldfish_coach(rationale: DeckRationale) -> CoachProse | None:
         return None
     try:
         client = Anthropic()
+        model = os.getenv("MTG_COACH_MODEL", "claude-haiku-4-5-20251001")
         message = client.messages.create(
-            model=os.getenv("MTG_COACH_MODEL", "claude-haiku-4-5-20251001"),
+            model=model,
             max_tokens=1024,
-            system=system_prompt,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
             messages=[{
                 "role": "user",
                 "content": json.dumps(rationale.to_dict()),
             }],
         )
+        log_usage("goldfish_coach", model, getattr(message, "usage", None))
         text = message.content[0].text
         payload = json.loads(text)
         prose = CoachProse(

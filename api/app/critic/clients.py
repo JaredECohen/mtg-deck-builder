@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from app.critic.envelope import Critique, CritiqueItem, DeckEnvelope, Verdict
+from app.llm_usage import log_usage
 
 
 logger = logging.getLogger(__name__)
@@ -219,14 +220,21 @@ class AnthropicBuilder(BuilderClient):
         )
 
         def _call():
+            # The skill prompt is identical across every round of a job; as a
+            # marked block it is read from cache once the model's floor is met.
+            # (An empty text block is rejected, so an absent prompt stays a string.)
             return self._anthropic.messages.create(
                 model=self.model,
                 max_tokens=self.budget.max_tokens_per_call,
-                system=self.system_prompt,
+                system=(
+                    [{"type": "text", "text": self.system_prompt, "cache_control": {"type": "ephemeral"}}]
+                    if self.system_prompt else self.system_prompt
+                ),
                 messages=[{"role": "user", "content": user_payload}],
             )
 
         message = _retry_call(_call)
+        log_usage("critic_builder", self.model, getattr(message, "usage", None))
         text = message.content[0].text
         try:
             payload = json.loads(text)
@@ -293,6 +301,7 @@ class OpenAICritic(CriticClient):
             )
 
         resp = _retry_call(_call)
+        log_usage("critic_review", self.model, getattr(resp, "usage", None), provider="openai")
         raw = resp.choices[0].message.content
         try:
             payload = json.loads(raw)

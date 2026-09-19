@@ -12,6 +12,8 @@ from typing import Any
 import anthropic
 from pydantic import BaseModel
 
+from app.llm_usage import log_usage
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,6 +134,7 @@ def interpret_refinement(prompt: str) -> RefinementIntent:
             system=[{"type": "text", "text": _REFINE_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
         )
+        log_usage("interpret_refinement", _FAST_MODEL, getattr(response, "usage", None))
         data: dict[str, Any] = _extract_json(response)
         return RefinementIntent.model_validate(data)
     except Exception:
@@ -201,6 +204,7 @@ def interpret_generate_prompt(prompt: str) -> GeneratePromptIntent:
             system=[{"type": "text", "text": _GENERATE_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
         )
+        log_usage("interpret_generate_prompt", _FAST_MODEL, getattr(response, "usage", None))
         data: dict[str, Any] = _extract_json(response)
         return GeneratePromptIntent.model_validate(data)
     except Exception:
@@ -360,6 +364,7 @@ def refine_blend(
             ],
             messages=[{"role": "user", "content": user_content}],
         )
+        log_usage("refine_blend", _FAST_MODEL, getattr(response, "usage", None))
         data = _extract_json(response)
         validated = BlendRefinement.model_validate(data)
         cards: list[tuple[str, int]] = []
@@ -521,6 +526,7 @@ def refine_compose(
             system=[{"type": "text", "text": _REFINE_COMPOSE_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_content}],
         )
+        log_usage("refine_compose", _FAST_MODEL, getattr(response, "usage", None))
         data = _extract_json(response)
         validated = ComposeFromScratch.model_validate(data)
         cards: list[tuple[str, int]] = []
@@ -590,6 +596,7 @@ def compose_from_scratch(
             system=[{"type": "text", "text": _COMPOSE_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_content}],
         )
+        log_usage("compose_from_scratch", _FAST_MODEL, getattr(response, "usage", None))
         data = _extract_json(response)
         validated = ComposeFromScratch.model_validate(data)
         cards: list[tuple[str, int]] = []
@@ -665,7 +672,12 @@ def chat_about_deck(
         content = (turn.get("content") or "").strip()
         if role in {"user", "assistant"} and content:
             messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": user_message})
+    # The newest turn carries the conversation's one cache marker (the deck block
+    # holds the other), so each turn reads the history the previous turn wrote.
+    messages.append({
+        "role": "user",
+        "content": [{"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}}],
+    })
 
     try:
         response = client.messages.create(
@@ -677,6 +689,7 @@ def chat_about_deck(
             ],
             messages=messages,
         )
+        log_usage("chat_about_deck", _FAST_MODEL, getattr(response, "usage", None))
         data = _extract_json(response)
         reply = (data.get("reply") or "").strip()
         suggested = data.get("suggested_refinement")
@@ -752,6 +765,7 @@ def enrich_deck_analysis(
             system=[{"type": "text", "text": _ANALYSIS_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_content}],
         )
+        log_usage("enrich_deck_analysis", _ANALYSIS_MODEL, getattr(response, "usage", None))
         data: dict[str, Any] = _extract_json(response)
         enrichment = DeckEnrichment.model_validate(data)
         _enrichment_cache_put(cache_key, enrichment.model_dump())
