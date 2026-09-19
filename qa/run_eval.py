@@ -382,6 +382,13 @@ def llm_analysis_batch(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]
 
         try:
             body = _post_openai(payload)
+            usage = body.get("usage") or {}
+            cached = (usage.get("input_tokens_details") or {}).get("cached_tokens")
+            print(
+                f"llm usage | batch_start={start} input_tokens={usage.get('input_tokens')} "
+                f"cached_tokens={cached} output_tokens={usage.get('output_tokens')}",
+                file=sys.stderr,
+            )
             parsed = json.loads(_extract_output_text(body))
             for evaluation in parsed.get("evaluations", []):
                 evaluation["status"] = "completed"
