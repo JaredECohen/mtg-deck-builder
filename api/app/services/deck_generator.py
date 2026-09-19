@@ -42,6 +42,7 @@ from app.services.builtin_archetypes import (
     BuiltinArchetype,
     blend_archetypes,
     detect_builtin_archetypes,
+    prefer_color_compatible,
 )
 from app.services.card_repository import CardRepository
 from app.services.deck_validator import DeckValidator
@@ -100,6 +101,9 @@ class DeckGenerator:
         # blended into a synthetic hybrid before being applied. See
         # app/services/builtin_archetypes.py for the seed map.
         matches = detect_builtin_archetypes(request.prompt, request.format)
+        # A seed outside the requested colors cannot contribute cards (color
+        # gating drops them); it would only pollute the blend's name and tags.
+        matches = prefer_color_compatible(matches, list(request.colors))
         builtin = blend_archetypes(matches, request.format) if matches else None
 
         # Compose-from-scratch fallback: when the brief has substance but no

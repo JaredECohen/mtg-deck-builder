@@ -27,6 +27,7 @@ whole deck.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -3449,15 +3450,41 @@ _META_KEYWORDS = (
 )
 
 
+def _keyword_pattern(keyword: str) -> re.Pattern[str]:
+    # Whole word or phrase, with an optional plural "s": "burn"/"burns" match,
+    # but "tron" no longer matches inside "strong", "mill" inside "million",
+    # or "storm" inside "brainstorm" — the 2026-09-19 "Mono-Green Tron +
+    # Mono-Red Prowess" title came from "s-tron-g" in the default brief.
+    return re.compile(r"(?<![a-z0-9])" + re.escape(keyword) + r"s?(?![a-z0-9])")
+
+
 def _find_matching_keyword(archetype: BuiltinArchetype, lowered_prompt: str) -> str | None:
-    """Return the first keyword from `archetype` that appears in the prompt,
-    or None. Keywords are searched in declaration order, so more-specific
-    phrases should come before broader ones inside each archetype.
+    """Return the first keyword from `archetype` that appears in the prompt as a
+    whole word or phrase, or None. Keywords are searched in declaration order,
+    so more-specific phrases should come before broader ones inside each
+    archetype.
     """
     for keyword in archetype.keywords:
-        if keyword in lowered_prompt:
+        if _keyword_pattern(keyword).search(lowered_prompt):
             return keyword
     return None
+
+
+def prefer_color_compatible(matches: list[BuiltinArchetype], colors: list[str]) -> list[BuiltinArchetype]:
+    """Keep the matched seeds that fit the requested colors, when any do.
+
+    A seed whose colors are not a subset of the request cannot contribute its
+    anchor cards (color gating drops them later) — it would only pollute the
+    blend's name and tags. If no match is compatible, or no colors were
+    requested, the matches are returned unchanged so a loosely chosen color
+    picker never silently discards the only shell the brief named. Colorless
+    seeds are always compatible.
+    """
+    if not colors:
+        return matches
+    wanted = {c.upper() for c in colors}
+    compatible = [m for m in matches if not m.colors or set(m.colors) <= wanted]
+    return compatible or matches
 
 
 def detect_builtin_archetype(prompt: str, format_name: str) -> BuiltinArchetype | None:
