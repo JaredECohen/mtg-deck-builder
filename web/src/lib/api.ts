@@ -147,7 +147,7 @@ export async function chatAboutDeck(
 ): Promise<ChatDeckResponse> {
   const response = await fetch(`${API_BASE}/v1/decks/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),  // chat is API-key gated like save/evaluate
     signal,
     body: JSON.stringify({ deck, message, history })
   });
