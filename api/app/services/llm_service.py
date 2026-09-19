@@ -10,7 +10,7 @@ from collections import OrderedDict
 from typing import Any
 
 import anthropic
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.llm_usage import log_usage
 
@@ -94,6 +94,33 @@ class RefinementIntent(BaseModel):
     include_cards: list[str] = []
     exclude_cards: list[str] = []
     color_changes: list[str] = []
+    # Copies the player asked for by name ("add 4x Lightning Bolt" → {"Lightning
+    # Bolt": 4}); the count is the target number of copies in the deck. Cards
+    # named without a count are absent here and seed at one copy as before.
+    include_quantities: dict[str, int] = {}
+
+    @field_validator("include_quantities", mode="before")
+    @classmethod
+    def _positive_int_quantities(cls, value: Any) -> dict[str, int]:
+        if not isinstance(value, dict):
+            return {}
+        cleaned: dict[str, int] = {}
+        for name, qty in value.items():
+            try:
+                count = int(qty)
+            except (TypeError, ValueError):
+                continue
+            if count > 0 and isinstance(name, str) and name.strip():
+                cleaned[name.strip()] = count
+        return cleaned
+
+    def requested_copies(self, name: str) -> int | None:
+        """The stated copy count for `name`, matched case-insensitively."""
+        lowered = name.lower()
+        for key, count in self.include_quantities.items():
+            if key.lower() == lowered:
+                return count
+        return None
 
 
 _REFINE_SYSTEM = """You are an MTG deck-building assistant.
@@ -107,7 +134,8 @@ Schema:
   "remove_playstyle_tags": [...],
   "include_cards": [...],
   "exclude_cards": [...],
-  "color_changes": [...]
+  "color_changes": [...],
+  "include_quantities": {"<exact card name>": <int>}
 }
 
 Rules:
@@ -116,7 +144,8 @@ Rules:
 - Valid playstyle tags: aggro, control, midrange, combo, tempo, ramp, spells, tokens, tribal, lifegain, graveyard, sacrifice, interactive, prowess
 - color_changes: WUBRG letters to add ("add blue" → ["U"])
 - include_cards / exclude_cards: exact card names the player mentions
-- Return null / empty array for anything not mentioned"""
+- include_quantities: when the player states a count for a card to add ("add 4x Lightning Bolt", "add 2 Bolt", "run a playset of Bolt" → 4), map its exact name to that count; the count is how many copies the deck should end up with. Omit cards named without a count.
+- Return null / empty array / empty object for anything not mentioned"""
 
 
 def interpret_refinement(prompt: str) -> RefinementIntent:
