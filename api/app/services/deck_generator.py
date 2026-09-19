@@ -800,9 +800,20 @@ class DeckGenerator:
             if ref.name.lower() != commander_lower and ref.name.lower() not in exclude_set
         ]
         for name in intent.include_cards:
-            if not any(ref.name.lower() == name.lower() for ref in seed_cards):
-                resolved = self.repository.get_card(name)
-                seed_cards.append(CardRef(name=resolved.name if resolved else name, quantity=1))
+            resolved = self.repository.get_card(name)
+            canonical = resolved.name if resolved else name
+            # A stated count ("add 4x Lightning Bolt") is the target number of
+            # copies; the generator honours seed quantities up to the format's
+            # limit. Without a count a new card seeds at one copy, as before.
+            requested = intent.requested_copies(name) or intent.requested_copies(canonical)
+            existing_index = next(
+                (i for i, ref in enumerate(seed_cards) if ref.name.lower() == canonical.lower()),
+                None,
+            )
+            if existing_index is None:
+                seed_cards.append(CardRef(name=canonical, quantity=requested or 1))
+            elif requested and seed_cards[existing_index].quantity < requested:
+                seed_cards[existing_index] = CardRef(name=canonical, quantity=requested)
 
         colors = list(dict.fromkeys(deck.colors + intent.color_changes))
 
