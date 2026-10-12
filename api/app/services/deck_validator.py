@@ -8,11 +8,11 @@ from app.constants import (
     COMMANDER_LAND_RANGE,
     CONSTRUCTED_DECK_SIZE,
     CONSTRUCTED_LAND_RANGE,
-    MAX_COPIES,
     ROLE_TAGS,
     SIDEBOARD_SIZE,
 )
 from app.models import CardRecord, CardRef, ScoreBreakdown, ValidateDeckRequest, ValidationResult
+from app.rules import can_be_commander, copy_limit, is_basic_land
 from app.services.card_repository import CardRepository
 
 
@@ -25,7 +25,10 @@ class DeckValidator:
         warnings: list[str] = []
         main_count = sum(card.quantity for card in request.mainboard)
         side_count = sum(card.quantity for card in request.sideboard)
+        # Copies are counted across mainboard + sideboard (+ commander), keyed
+        # by canonical card name, against each card's own copy limit.
         name_counter = Counter[str]()
+        copy_limits: dict[str, int] = {}
         mainboard_land_count = 0
         commander_identity: set[str] = set()
         commander_resolved = False
@@ -43,12 +46,10 @@ class DeckValidator:
             legality = card.legalities.get(request.format, "not_legal")
             if legality not in {"legal", "restricted"}:
                 errors.append(f"{ref.name} is not legal in {request.format}.")
-            if legality == "restricted" and ref.quantity > 1:
-                errors.append(f"{ref.name} is restricted in {request.format} and may only appear once.")
 
             if count_mainboard_lands and "Land" in card.type_line:
                 mainboard_land_count += ref.quantity
-                if "Basic Land" in card.type_line:
+                if is_basic_land(card):
                     basic_color = self._basic_land_color(card.name)
                     if basic_color:
                         mana_source_count[basic_color] += ref.quantity
@@ -56,8 +57,10 @@ class DeckValidator:
                     for color in card.color_identity or card.colors:
                         mana_source_count[color] += ref.quantity
 
-            if "Basic Land" not in card.type_line:
-                name_counter[ref.name.lower()] += ref.quantity
+            limit = copy_limit(card, request.format)
+            if limit is not None:
+                name_counter[card.name] += ref.quantity
+                copy_limits[card.name] = limit
 
             if count_mainboard_lands:
                 if "Land" not in card.type_line:
@@ -80,17 +83,27 @@ class DeckValidator:
                 commander_legality = commander_card.legalities.get(request.format, "not_legal")
                 if commander_legality not in {"legal", "restricted"}:
                     errors.append(f"{request.commander} is not legal in {request.format}.")
+                if not can_be_commander(commander_card):
+                    errors.append(f"{commander_card.name} can't be your commander (not a legendary creature).")
                 commander_identity = set(commander_card.color_identity or commander_card.colors)
                 commander_resolved = True
+                # The commander is one of the deck's 100 cards, so a copy in
+                # the 99 breaks singleton.
+                commander_limit = copy_limit(commander_card, request.format)
+                if commander_limit is not None:
+                    name_counter[commander_card.name] += 1
+                    copy_limits[commander_card.name] = commander_limit
 
-        if request.format == "commander":
-            for name, quantity in name_counter.items():
-                if quantity > 1:
-                    errors.append(f"{name.title()} exceeds Commander singleton rules.")
-        else:
-            for name, quantity in name_counter.items():
-                if quantity > MAX_COPIES:
-                    errors.append(f"{name.title()} exceeds the {MAX_COPIES}-copy limit.")
+        for name, quantity in name_counter.items():
+            limit = copy_limits[name]
+            if quantity <= limit:
+                continue
+            if request.format == "commander" and limit == 1:
+                errors.append(f"{name} exceeds Commander singleton rules.")
+            elif limit == 1:
+                errors.append(f"{name} is restricted in {request.format} and may only appear once.")
+            else:
+                errors.append(f"{name} exceeds the {limit}-copy limit.")
 
         if request.format == "commander":
             if not request.commander:
@@ -109,9 +122,11 @@ class DeckValidator:
                     if not self.repository.fits_color_identity(card, commander_identity):
                         errors.append(f"{ref.name} falls outside the commander's color identity.")
         else:
-            if main_count != CONSTRUCTED_DECK_SIZE:
-                errors.append(f"Constructed decks must have exactly {CONSTRUCTED_DECK_SIZE} cards in the mainboard.")
-            if side_count not in {0, SIDEBOARD_SIZE}:
+            if main_count < CONSTRUCTED_DECK_SIZE:
+                errors.append(f"Constructed decks must have at least {CONSTRUCTED_DECK_SIZE} cards in the mainboard.")
+            if side_count > SIDEBOARD_SIZE:
+                errors.append(f"Sideboards may have at most {SIDEBOARD_SIZE} cards (this one has {side_count}).")
+            elif side_count not in {0, SIDEBOARD_SIZE}:
                 warnings.append(f"Competitive constructed decks usually run a {SIDEBOARD_SIZE}-card sideboard.")
 
         mana_score = 100
@@ -217,7 +232,7 @@ class DeckValidator:
             "Swamp": "B",
             "Mountain": "R",
             "Forest": "G",
-        }.get(name)
+        }.get(name.removeprefix("Snow-Covered "))
 
     @staticmethod
     def _card_roles(card: CardRecord) -> set[str]:

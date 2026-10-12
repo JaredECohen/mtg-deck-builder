@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATABASE_URL
 from app.db import session_scope
+from app.rules import can_be_commander
 from app.services.affiliate import ensure_tcgplayer_link
 from app.db_models import Archetype, Card
 from app.models import (
@@ -523,9 +524,7 @@ class CardRepository:
     def is_legal_commander(self, card: CardRecord) -> bool:
         if card.legalities.get("commander", "not_legal") != "legal":
             return False
-        if "Legendary" not in card.type_line:
-            return False
-        return "Creature" in card.type_line or "Planeswalker" in card.type_line
+        return can_be_commander(card)
 
     def get_card(self, name: str) -> CardRecord | None:
         normalized = self._normalize_name(name)

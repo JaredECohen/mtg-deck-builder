@@ -429,8 +429,8 @@ class DeckResponse(BaseModel):
     def check_deck_sizes(self) -> "DeckResponse":
         if self.format == "commander" and sum(card.quantity for card in self.mainboard) != 99:
             raise ValueError("Commander decks must include 99 cards in the mainboard.")
-        if self.format != "commander" and sum(card.quantity for card in self.mainboard) != 60:
-            raise ValueError("Constructed decks must include 60 cards in the mainboard.")
+        if self.format != "commander" and sum(card.quantity for card in self.mainboard) < 60:
+            raise ValueError("Constructed decks must include at least 60 cards in the mainboard.")
         return self
 
 

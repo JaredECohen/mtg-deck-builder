@@ -38,6 +38,7 @@ from app.constants import (
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
+from app.rules import copy_limit, is_basic_land
 from app.services.builtin_archetypes import (
     BuiltinArchetype,
     blend_archetypes,
@@ -1419,7 +1420,7 @@ class DeckGenerator:
         notes: list[DeckCardExplanation] = []
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Basic Land" in card.type_line:
+            if not card or is_basic_land(card):
                 continue
             role = self._primary_role(card)
             notes.append(
@@ -1564,12 +1565,7 @@ class DeckGenerator:
 
     @staticmethod
     def _copy_limit(card: CardRecord, format_name: str) -> int | None:
-        if "Basic Land" in card.type_line:
-            return None
-        legality = card.legalities.get(format_name, "not_legal")
-        if format_name == "commander" or legality == "restricted":
-            return 1
-        return 4
+        return copy_limit(card, format_name)
 
     def _commander_identity(self, commander_name: str | None, fallback_colors: list[str]) -> set[str]:
         if not commander_name:
