@@ -27,6 +27,8 @@ import pytest
 _REQUIRES_FULL_DATASET = {
     "tests/test_api.py::test_colorless_commander_search_returns_only_colorless_options",
     "tests/test_api.py::test_colorless_commander_validation_rejects_colored_cards",
+    "tests/test_api.py::test_commander_identity_covers_every_requested_color",
+    "tests/test_api.py::test_commander_is_never_in_its_own_99",
     "tests/test_api.py::test_commander_decks_never_contain_off_color_cards",
     "tests/test_api.py::test_explicit_commander_provenance_does_not_leak_unrelated_archetypes",
     "tests/test_api.py::test_explicit_narrow_color_commander_only_contains_legal_cards",

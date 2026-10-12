@@ -1022,9 +1022,22 @@ class DeckGenerator:
         # Hard-filter: a chosen commander must satisfy any explicit color
         # request the user passed in. A 5-color Sliver shell can never satisfy
         # a mono-W request, even if its support depth is overwhelming.
+        #
+        # Color fit is judged on the commander card's color identity, never the
+        # archetype row's colors: a U/R "Spellslinger" shell keyed to mono-U
+        # Talrand used to win a U/R request, and identity filtering then
+        # stripped every red card (36 Islands, zero red).
         requested_set = {color for color in colors if color and color != "C"} if colors else set()
+
+        def identity_of(commander_name: str | None) -> set[str]:
+            card = self.repository.get_card(commander_name) if commander_name else None
+            return set(card.color_identity or card.colors) if card else set()
+
+        def covers_request(identity: set[str]) -> bool:
+            return requested_set.issubset(identity)
+
         if requested_set:
-            candidates = [c for c in candidates if set(c.colors).issubset(requested_set)]
+            candidates = [c for c in candidates if c.commander and identity_of(c.commander).issubset(requested_set)]
         archetype_commander_card = self.repository.get_card(archetype.commander) if archetype.commander else None
         archetype_commander_ok = (
             archetype_commander_card is not None
@@ -1033,7 +1046,9 @@ class DeckGenerator:
         )
         if not candidates and archetype_commander_ok and archetype.commander:
             return archetype.commander, f"Selected {archetype.commander} because no stronger commander corpus match was available.", archetype
-        best_score = float("-inf")
+        # Rank by (covers every requested color, score): a commander that can
+        # actually play all requested colors always beats one that can't.
+        best_rank: tuple[bool, float] = (False, float("-inf"))
         best_choice: ArchetypeRecord | None = None
         best_reason = ""
         requested_color_set = set(colors)
@@ -1042,8 +1057,9 @@ class DeckGenerator:
             package = candidate.metadata.commander_package
             if not candidate.commander or package is None:
                 continue
-            color_fit = len(requested_color_set & set(candidate.colors))
-            exact_color_fit = requested_color_set.issubset(set(candidate.colors)) if requested_color_set else True
+            identity = identity_of(candidate.commander)
+            color_fit = len(requested_set & identity)
+            exact_color_fit = covers_request(identity)
             theme_fit = len(requested_tag_set & {self._canonicalize_tag(tag) for tag in candidate.tags})
             support_depth = package.support_depth
             package_tags = {self._canonicalize_tag(tag) for pkg in package.synergy_packages for tag in pkg.tags}
@@ -1054,8 +1070,8 @@ class DeckGenerator:
                 score += 12
             if request.include_cards and candidate.commander in request.include_cards:
                 score += 25
-            if score > best_score:
-                best_score = score
+            if (exact_color_fit, score) > best_rank:
+                best_rank = (exact_color_fit, score)
                 best_choice = candidate
                 best_reason = (
                     f"Selected {candidate.commander} for color fit ({color_fit}), theme fit ({theme_fit}), "
@@ -1063,9 +1079,10 @@ class DeckGenerator:
                 )
         pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags)
         if pool_commander is not None:
-            pool_score = 18 + len(requested_color_set & set(self._commander_identity(pool_commander, colors))) * 8
+            pool_identity = identity_of(pool_commander)
+            pool_score = 18 + len(requested_set & pool_identity) * 8
             pool_score += len(requested_tag_set & {self._canonicalize_tag(tag) for tag in (self.repository.get_card(pool_commander).tags if self.repository.get_card(pool_commander) else [])}) * 8
-            if pool_score > best_score:
+            if (covers_request(pool_identity), pool_score) > best_rank:
                 return pool_commander, pool_reason, archetype
         if best_choice:
             return best_choice.commander, best_reason, best_choice
@@ -1166,6 +1183,10 @@ class DeckGenerator:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
         excluded = {name.lower() for name in request.exclude_cards}
+        # The commander is the 100th card, never one of the 99. Corpus
+        # signature packages list it, so exclude it from every fill path.
+        if commander:
+            excluded.add(commander.lower())
         # Seed the canonical staples first so a Sliver Queen build never
         # ships without Sol Ring / Command Tower / Arcane Signet again.
         self._seed_commander_baseline(counts, commander_identity, excluded, request.format, request.budget)
@@ -1865,8 +1886,10 @@ class DeckGenerator:
         expanded_tags = set(requested_tags)
         for tag in requested_tags:
             expanded_tags.update(THEME_TO_TAGS.get(tag, {tag}))
+        requested_real = {color for color in requested_color_set if color and color != "C"}
         best_name: str | None = None
-        best_score = float("-inf")
+        # (covers every requested color, score): see _select_commander.
+        best_rank: tuple[bool, float] = (False, float("-inf"))
         for card in self.repository.all_cards():
             if not self.repository.is_legal_commander(card):
                 continue
@@ -1877,8 +1900,9 @@ class DeckGenerator:
             color_score = len(identity) * 2
             cost_score = max(0, 6 - card.mana_value)
             score = tag_score + color_score + cost_score
-            if score > best_score:
-                best_score = score
+            rank = (requested_real.issubset(identity), score)
+            if rank > best_rank:
+                best_rank = rank
                 best_name = card.name
         if best_name is None:
             return None, None
@@ -1890,7 +1914,7 @@ class DeckGenerator:
             if quantity <= 0:
                 continue
             card = self.repository.get_card(name)
-            if not card or "Basic Land" in card.type_line:
+            if not card or is_basic_land(card):
                 continue
             weight = 100.0 if "Land" in card.type_line else 10.0 + card.mana_value
             if "interaction" in card.tags:

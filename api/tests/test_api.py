@@ -659,3 +659,33 @@ def test_manual_analysis_exact_swaps_use_specific_cards() -> None:
     assert payload["swap_recommendations"]
     assert any(item["category"] in {"Shell Alignment", "Interaction", "Draw", "Threat", "Engine"} for item in payload["swap_recommendations"])
     assert all(item["cut_card"] != item["add_card"] for item in payload["swap_recommendations"])
+
+
+def test_commander_identity_covers_every_requested_color() -> None:
+    """A U/R request used to pick mono-U Talrand from a U/R archetype row and
+    strip every red card. The chosen commander must be able to play all
+    requested colors, and the deck must actually contain each of them."""
+    for colors, tags in ((["U", "R"], ["aggro", "spells"]), (["W", "B"], ["tokens"])):
+        response = client.post(
+            "/v1/decks/generate",
+            json={"format": "commander", "colors": colors, "playstyle_tags": tags},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        commander = client.get(f"/v1/cards/{payload['commander']}").json()["card"]
+        assert set(colors) <= set(commander["color_identity"]), (colors, payload["commander"])
+        deck_colors: set[str] = set()
+        for ref in payload["mainboard"]:
+            card = client.get(f"/v1/cards/{ref['name']}").json()["card"]
+            deck_colors.update(card["colors"])
+        assert set(colors) <= deck_colors, (colors, deck_colors)
+
+
+def test_commander_is_never_in_its_own_99() -> None:
+    response = client.post(
+        "/v1/decks/generate",
+        json={"format": "commander", "colors": ["B", "G", "U"], "playstyle_tags": ["graveyard"]},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["commander"] not in {ref["name"] for ref in payload["mainboard"]}
