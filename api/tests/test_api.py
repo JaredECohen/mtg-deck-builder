@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.main as main_module
 from app.main import app
 from app.scripts.build_archetypes import main as build_archetypes_main
 from app.scripts.ingest_tournament_decks import main as ingest_tournament_main
@@ -58,6 +59,8 @@ def test_validate_bad_deck() -> None:
     payload = response.json()
     assert payload["is_legal"] is False
     assert payload["errors"]
+    assert "prompt_fit" not in payload["score"]
+    assert "budget_fit" not in payload["score"]
 
 
 def test_export_csv_format() -> None:
@@ -224,6 +227,10 @@ def test_commander_search_and_detail_endpoints() -> None:
     assert search_response.status_code == 200
     search_payload = search_response.json()
     assert search_payload["commanders"]
+    search_provenance = search_payload["commanders"][0]["provenance"]
+    assert search_provenance["source_type"] in {"corpus", "fallback"}
+    assert 0 <= search_provenance["confidence"] <= 1
+    assert isinstance(search_provenance["retrieved_from"], list)
 
     commander_name = search_payload["commanders"][0]["name"]
     detail_response = client.get(f"/v1/commanders/{commander_name}")
@@ -231,6 +238,8 @@ def test_commander_search_and_detail_endpoints() -> None:
     detail_payload = detail_response.json()["commander"]
     assert detail_payload["card"]["name"] == commander_name
     assert "strategy_summary" in detail_payload
+    assert detail_payload["provenance"]["source_type"] in {"corpus", "fallback"}
+    assert detail_payload["provenance"]["evidence_count"] >= 0
 
 
 def test_explicit_commander_selection_builds_around_requested_commander() -> None:
@@ -262,6 +271,34 @@ def test_invalid_explicit_commander_returns_400() -> None:
     assert response.status_code == 400
 
 
+def test_commander_generation_fails_closed_when_final_validator_rejects(monkeypatch) -> None:
+    """Generation bugs must become clear failures, never illegal deck payloads."""
+    real_validate = main_module.validator.validate
+
+    def reject_commander(request):
+        result = real_validate(request)
+        if request.format != "commander":
+            return result
+        return result.model_copy(update={
+            "is_legal": False,
+            "errors": ["Injected final legality failure."],
+        })
+
+    monkeypatch.setattr(main_module.validator, "validate", reject_commander)
+    response = client.post(
+        "/v1/decks/generate",
+        json={
+            "format": "commander",
+            "commander_name": "The First Sliver",
+            "playstyle_tags": ["tribal"],
+            "theme_tags": ["slivers"],
+        },
+    )
+    assert response.status_code == 400
+    assert "final legality gate" in response.json()["detail"]
+    assert "Injected final legality failure" in response.json()["detail"]
+
+
 def test_planeswalker_commander_is_searchable_and_buildable() -> None:
     search_response = client.get("/v1/commanders", params={"search": "Aminatou", "limit": 5})
     assert search_response.status_code == 200
@@ -289,6 +326,25 @@ def test_colorless_commander_search_returns_only_colorless_options() -> None:
     commanders = search_response.json()["commanders"]
     assert commanders
     assert all(item["colors"] == [] for item in commanders)
+
+
+def test_colorless_commander_validation_rejects_colored_cards() -> None:
+    search_response = client.get("/v1/commanders", params={"colors": "C", "limit": 1})
+    assert search_response.status_code == 200
+    commander_name = search_response.json()["commanders"][0]["name"]
+    response = client.post(
+        "/v1/decks/validate",
+        json={
+            "format": "commander",
+            "commander": commander_name,
+            "mainboard": [{"name": "Mountain", "quantity": 99}],
+            "sideboard": [],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_legal"] is False
+    assert any("color identity" in error for error in payload["errors"])
 
 
 def test_card_search_endpoint_returns_matches() -> None:

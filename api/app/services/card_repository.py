@@ -27,6 +27,7 @@ from app.models import (
     CommanderProfile,
     CommanderSearchResult,
     DataStatusResponse,
+    DeckProvenance,
 )
 
 
@@ -332,6 +333,7 @@ class CardRepository:
                     package_richness=package_richness,
                     ranking_score=round(ranking_score, 2),
                     image_uri=card.image_uri or next((face.image_uri for face in card.faces if face.image_uri), None),
+                    provenance=self._commander_provenance(card.name, related_archetypes),
                 )
             )
 
@@ -365,7 +367,10 @@ class CardRepository:
             return CommanderProfile(
                 card=card,
                 strategy_summary=best.strategy,
-                colors=best.colors or list(card.color_identity or card.colors),
+                # Color identity is a card fact, not archetype metadata. A
+                # malformed corpus row must never broaden a commander's UI or
+                # generation constraints.
+                colors=list(card.color_identity or card.colors),
                 tags=tags,
                 popularity=float(best.source_count),
                 support_depth=package.support_depth if package else best.source_count,
@@ -381,6 +386,7 @@ class CardRepository:
                 interaction_package=package.interaction_package if package else self._fallback_packages("interaction", tags),
                 land_package=package.land_package if package else best.metadata.land_packages[:8],
                 related_archetypes=[archetype.name for archetype in archetypes[:5]],
+                provenance=self._commander_provenance(card.name, archetypes),
             )
 
         fallback_tags = list(dict.fromkeys(card.tags + self._infer_commander_tags(card)))
@@ -407,6 +413,44 @@ class CardRepository:
             interaction_package=self._fallback_packages("interaction", fallback_tags),
             land_package=self._fallback_land_package(commander_colors),
             related_archetypes=[],
+            provenance=self._commander_provenance(card.name, []),
+        )
+
+    @staticmethod
+    def _commander_provenance(
+        commander_name: str,
+        archetypes: list[ArchetypeRecord],
+    ) -> DeckProvenance:
+        """Describe the evidence behind a commander recommendation/profile.
+
+        A commander being format-legal is factual; the recommendation quality
+        is not. Keep those concepts separate by exposing whether ranking and
+        packages came from observed corpus shells or deterministic card-text
+        and role heuristics.
+        """
+        if not archetypes:
+            return DeckProvenance(
+                source_type="fallback",
+                confidence=0.25,
+                evidence_count=0,
+                retrieved_from=[],
+                fallback_used=True,
+                notes=[
+                    f"No corpus shell is keyed to {commander_name}; tags and support packages are inferred from the legal card pool.",
+                ],
+            )
+
+        evidence_count = sum(max(0, archetype.source_count) for archetype in archetypes)
+        confidence = min(0.95, 0.55 + math.log1p(evidence_count) * 0.08)
+        return DeckProvenance(
+            source_type="corpus",
+            confidence=round(confidence, 3),
+            evidence_count=evidence_count,
+            retrieved_from=[archetype.name for archetype in archetypes[:5]],
+            fallback_used=False,
+            notes=[
+                f"Recommendation and packages are backed by {len(archetypes)} corpus shell(s) keyed to {commander_name}.",
+            ],
         )
 
     def card_packages_by_role_theme(

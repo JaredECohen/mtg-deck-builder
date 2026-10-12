@@ -218,6 +218,12 @@ class DeckGenerator:
         validation = self.validator.validate(
             ValidateDeckRequest(format=request.format, mainboard=mainboard, sideboard=sideboard, commander=commander)
         )
+        if request.format == "commander" and not validation.is_legal:
+            details = "; ".join(validation.errors) or "unknown commander legality failure"
+            raise ValueError(
+                "Commander generation failed its final legality gate; no deck was returned. "
+                f"{details}"
+            )
         estimated_price = self._estimate_price(mainboard, sideboard, commander)
         warnings = validation.warnings[:] + include_warnings + legality_actions
         if request.budget is not None and estimated_price is not None and estimated_price > request.budget:
@@ -1670,6 +1676,7 @@ class DeckGenerator:
         # dual land in a mono-R modern deck is technically legal but is never
         # what the user asked for (the U source is dead weight).
         identity = {color for color in colors if color and color != "C"}
+        enforce_identity = format_name == "commander" or bool(colors)
         for package in packages:
             if self._land_total(counts) >= target_lands:
                 break
@@ -1683,7 +1690,7 @@ class DeckGenerator:
             # and the basics backfill below covers the shortfall.
             if not self._fits_budget_request(card, budget, exempt_lands=False):
                 continue
-            if identity and not self.repository.fits_color_identity(card, identity):
+            if enforce_identity and not self.repository.fits_color_identity(card, identity):
                 continue
             limit = self._copy_limit(card, format_name)
             if limit is not None and counts[card.name] >= limit:
@@ -1811,7 +1818,12 @@ class DeckGenerator:
             card = self.repository.get_card(package.name)
             if not card or package.name.lower() in excluded:
                 continue
-            if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
+            if not self._is_card_legal_record(card, format_name):
+                continue
+            if format_name == "commander":
+                if not self.repository.fits_color_identity(card, set(colors)):
+                    continue
+            elif not self._matches_color_request(card, colors):
                 continue
             if counts[card.name] >= (self._copy_limit(card, format_name) or 99):
                 continue

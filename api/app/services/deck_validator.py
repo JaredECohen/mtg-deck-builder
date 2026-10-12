@@ -28,6 +28,7 @@ class DeckValidator:
         name_counter = Counter[str]()
         mainboard_land_count = 0
         commander_identity: set[str] = set()
+        commander_resolved = False
         role_counts: Counter[str] = Counter()
         color_symbol_demand: Counter[str] = Counter()
         mana_value_buckets: Counter[int] = Counter()
@@ -80,6 +81,7 @@ class DeckValidator:
                 if commander_legality not in {"legal", "restricted"}:
                     errors.append(f"{request.commander} is not legal in {request.format}.")
                 commander_identity = set(commander_card.color_identity or commander_card.colors)
+                commander_resolved = True
 
         if request.format == "commander":
             for name, quantity in name_counter.items():
@@ -97,7 +99,9 @@ class DeckValidator:
                 errors.append(f"Commander decks must have exactly {COMMANDER_DECK_SIZE} cards in the mainboard.")
             if side_count != 0:
                 warnings.append("Commander decks typically do not use a sideboard.")
-            if commander_identity:
+            # An empty identity is meaningful: colorless commanders may only
+            # contain colorless cards. Do not use truthiness as the gate.
+            if commander_resolved:
                 for ref in request.mainboard + request.sideboard:
                     card = self.repository.get_card(ref.name)
                     if not card:

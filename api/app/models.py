@@ -491,6 +491,7 @@ class CommanderSearchResult(BaseModel):
     package_richness: int = 0
     ranking_score: float = 0
     image_uri: str | None = None
+    provenance: DeckProvenance
 
 
 class CommanderProfile(BaseModel):
@@ -512,6 +513,7 @@ class CommanderProfile(BaseModel):
     interaction_package: list[ArchetypePackage] = Field(default_factory=list)
     land_package: list[ArchetypePackage] = Field(default_factory=list)
     related_archetypes: list[str] = Field(default_factory=list)
+    provenance: DeckProvenance
 
 
 class CommanderSearchResponse(BaseModel):
