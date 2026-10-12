@@ -8,9 +8,10 @@ type Props = {
   colors: string[];
   onFormatChange: (format: FormatName) => void;
   onColorsChange: (colors: string[]) => void;
+  showColors?: boolean;
 };
 
-export function FormatColorPicker({ format, colors, onFormatChange, onColorsChange }: Props) {
+export function FormatColorPicker({ format, colors, onFormatChange, onColorsChange, showColors = true }: Props) {
   return (
     <>
       <div className="panel form-card panel-strong">
@@ -23,22 +24,24 @@ export function FormatColorPicker({ format, colors, onFormatChange, onColorsChan
           <option value="commander">Commander</option>
         </select>
       </div>
-      <div className="panel form-card">
-        <span className="label">Colors</span>
-        <div className="chips">
-          {COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              className={`chip ${colors.includes(color) ? "active" : ""}`}
-              onClick={() => onColorsChange(toggleValue(color, colors))}
-              aria-pressed={colors.includes(color)}
-            >
-              {color}
-            </button>
-          ))}
+      {showColors ? (
+        <div className="panel form-card">
+          <span className="label">Colors</span>
+          <div className="chips">
+            {COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={`chip ${colors.includes(color) ? "active" : ""}`}
+                onClick={() => onColorsChange(toggleValue(color, colors))}
+                aria-pressed={colors.includes(color)}
+              >
+                {color}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
     </>
   );
 }

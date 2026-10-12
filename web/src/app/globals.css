@@ -67,6 +67,8 @@ a:focus-visible {
   max-width: 1320px;
   margin: 0 auto;
   padding: 32px 20px 64px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero {
@@ -159,6 +161,118 @@ a:focus-visible {
   display: grid;
   grid-template-columns: 420px 1fr;
   gap: 24px;
+}
+
+.workshop-root {
+  margin-top: 20px;
+}
+
+.workshop-root .builder {
+  margin-top: 16px;
+}
+
+.workshop-mode-bar {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workshop-mode-title {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.workshop-result-title {
+  margin: 8px 0 0;
+  font-size: 32px;
+}
+
+.workshop-data-status {
+  margin-top: 12px;
+}
+
+.workflow-error {
+  color: #fca5a5;
+}
+
+.workshop-stats,
+.workshop-legality {
+  margin-top: 18px;
+}
+
+.health-label {
+  font-size: 16px !important;
+}
+
+.health-explanation {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.evaluation-heading,
+.optimizer-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.optimizer-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.optimizer-copy {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.evaluation-output {
+  margin-top: 12px;
+}
+
+.rationale-dismiss {
+  margin-left: 12px;
+}
+
+.commander-evidence {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.commander-rank-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.selected-commander-proof {
+  margin-top: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 12px;
+  background: rgba(52, 211, 153, 0.06);
+  font-size: 13px;
+}
+
+.import-warning {
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.import-warning ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
 }
 
 .form-grid,
@@ -677,6 +791,26 @@ a:focus-visible {
     display: none;
   }
 
+  /* Put the working surface before marketing on narrow screens. Both
+     workflows stay mounted, so switching modes does not discard a draft or
+     generated deck. */
+  .workshop-root {
+    order: -1;
+    margin-top: 0;
+  }
+
+  .hero {
+    order: 0;
+    margin-top: 24px;
+  }
+
+  .workshop-mode-bar {
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    padding: 12px 14px;
+  }
+
   .hero-compact {
     margin-bottom: 0;
   }
@@ -712,6 +846,29 @@ a:focus-visible {
 }
 
 @media (max-width: 540px) {
+  .workshop-mode-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .workshop-mode-bar .chips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .workshop-mode-bar .chip {
+    width: 100%;
+  }
+
+  .workshop-result-title {
+    font-size: 25px;
+  }
+
+  .hero .subhead {
+    display: none;
+  }
+
   .deck-columns {
     gap: 12px;
   }

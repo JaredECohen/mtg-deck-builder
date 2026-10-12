@@ -302,6 +302,7 @@ export type CommanderSearchResult = {
   package_richness: number;
   ranking_score: number;
   image_uri?: string | null;
+  provenance: DeckProvenance;
 };
 
 export type CommanderProfile = {
@@ -323,6 +324,7 @@ export type CommanderProfile = {
   interaction_package: ArchetypePackage[];
   land_package: ArchetypePackage[];
   related_archetypes: string[];
+  provenance: DeckProvenance;
 };
 
 export type CommanderSearchResponse = {
