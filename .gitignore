@@ -15,3 +15,7 @@ api/data
 *.tsbuildinfo
 qa/__pycache__
 qa/artifacts
+# Claude-only project memory (core + topic files) — not for humans
+.claude/memory/
+# safety net: a stray root MEMORY.md from an older session must stay invisible too
+MEMORY.md
