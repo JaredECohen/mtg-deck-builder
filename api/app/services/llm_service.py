@@ -12,6 +12,7 @@ from typing import Any
 import anthropic
 from pydantic import BaseModel, field_validator
 
+from app.config import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
 from app.llm_usage import log_usage
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,11 @@ def _get_client() -> anthropic.Anthropic | None:
             if _client is None:
                 key = os.getenv("ANTHROPIC_API_KEY")
                 if key:
-                    _client = anthropic.Anthropic(api_key=key)
+                    _client = anthropic.Anthropic(
+                        api_key=key,
+                        timeout=LLM_TIMEOUT_SECONDS,
+                        max_retries=LLM_MAX_RETRIES,
+                    )
     return _client
 
 

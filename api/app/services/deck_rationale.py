@@ -185,7 +185,9 @@ def _invoke_goldfish_coach(rationale: DeckRationale) -> CoachProse | None:
     if not system_prompt:
         return None
     try:
-        client = Anthropic()
+        from app.config import LLM_BACKGROUND_TIMEOUT_SECONDS, LLM_MAX_RETRIES
+
+        client = Anthropic(timeout=LLM_BACKGROUND_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         model = os.getenv("MTG_COACH_MODEL", "claude-haiku-4-5-20251001")
         message = client.messages.create(
             model=model,

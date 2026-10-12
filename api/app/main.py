@@ -52,7 +52,7 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
-from app.services.deck_history_service import DeckHistoryService
+from app.services.deck_history_service import DeckHistoryService, owner_id
 from app.services.vector_retrieval import CardVectorRetriever
 
 repository = CardRepository()
@@ -304,7 +304,7 @@ def save_deck(
     key: str | None = Depends(require_api_key),
 ) -> dict:
     """Persist a deck to history and mint a share token. When auth is
-    enabled the API key becomes the deck's owner."""
+    enabled a hash of the API key becomes the deck's owner."""
     return deck_history.save(
         name=request.name,
         format_id=request.format,
@@ -313,7 +313,7 @@ def save_deck(
         commander=request.commander,
         notes=request.notes,
         evaluation=request.evaluation,
-        owner=key,
+        owner=owner_id(key),
     )
 
 
@@ -322,12 +322,16 @@ def deck_history_list(
     limit: int = 50,
     key: str | None = Depends(require_api_key),
 ) -> dict:
-    return {"decks": deck_history.history(owner=key, limit=max(1, min(limit, 200)))}
+    return {"decks": deck_history.history(owner=owner_id(key), limit=max(1, min(limit, 200)))}
 
 
 @app.get("/v1/decks/saved/{deck_id}")
-def get_saved_deck(deck_id: str) -> dict:
-    deck = deck_history.get(deck_id)
+def get_saved_deck(
+    deck_id: str,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    """Owner-only read by id. Public reads go through the share token."""
+    deck = deck_history.get(deck_id, owner=owner_id(key))
     if deck is None:
         raise HTTPException(status_code=404, detail="saved deck not found")
     return deck
@@ -346,7 +350,7 @@ def delete_saved_deck(
     deck_id: str,
     key: str | None = Depends(require_api_key),
 ) -> dict:
-    if not deck_history.delete(deck_id, owner=key):
+    if not deck_history.delete(deck_id, owner=owner_id(key)):
         raise HTTPException(status_code=404, detail="saved deck not found")
     return {"deleted": deck_id}
 
@@ -445,7 +449,7 @@ def meta_summary(format: FormatName) -> MetaSummaryResponse:
 
 @app.get("/v1/cards", response_model=CardSearchResponse)
 def card_search(query: str, format: FormatName | None = None, limit: int = 12) -> CardSearchResponse:
-    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=limit))
+    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=max(1, min(limit, 50))))
 
 
 @app.get("/v1/cards/{card_name}/similar")
@@ -494,7 +498,7 @@ def commander_search(
         theme_tags=[tag for tag in (theme_tags or "").split(",") if tag],
         search=search,
         sort=sort,
-        limit=limit,
+        limit=max(1, min(limit, 100)),
     )
     return CommanderSearchResponse(commanders=commanders)
 

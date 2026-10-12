@@ -219,7 +219,7 @@ export type DataStatusResponse = {
   card_count: number;
   archetype_source: "database" | "sample";
   archetype_count: number;
-  database_url: string;
+  database_backend: string;
   scryfall_ingested: boolean;
 };
 

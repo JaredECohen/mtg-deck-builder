@@ -68,7 +68,6 @@ export type DeckDiffResult = {
 export type SavedDeck = {
   id: string;
   share_token: string;
-  owner: string | null;
   name: string;
   format: FormatName;
   commander: string | null;

@@ -32,3 +32,11 @@ CORS_ORIGINS: list[str] = [o.strip() for o in _raw_cors.split(",") if o.strip()]
 # "https://tcgplayer.pxf.io/c/123456/789012/21018". When set, every
 # TCGplayer purchase link served by the API is wrapped for attribution.
 TCGPLAYER_AFFILIATE_URL = os.getenv("TCGPLAYER_AFFILIATE_URL", "").strip()
+# LLM request timeouts (seconds). The SDK defaults (600 s, 2 retries) would let a
+# provider stall pin a request thread for half an hour; every caller already has
+# a deterministic fallback, so fail fast instead. Interactive calls (generate,
+# refine, chat, analysis) use the short timeout; background jobs (critic loop,
+# coach prose) produce longer outputs and get the long one.
+LLM_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_TIMEOUT_SECONDS", "30"))
+LLM_BACKGROUND_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_BACKGROUND_TIMEOUT_SECONDS", "120"))
+LLM_MAX_RETRIES = int(os.getenv("MTG_LLM_MAX_RETRIES", "1"))

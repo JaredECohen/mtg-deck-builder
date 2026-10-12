@@ -8,6 +8,7 @@ from urllib.parse import quote_plus
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 
 logger = logging.getLogger(__name__)
 
@@ -772,7 +773,7 @@ class CardRepository:
             card_count=card_count,
             archetype_source=archetype_source,
             archetype_count=archetype_count,
-            database_url=DATABASE_URL,
+            database_backend=make_url(DATABASE_URL).get_backend_name(),
             scryfall_ingested=card_source == "database" and card_count > 1000,
         )
 

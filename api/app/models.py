@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -10,9 +10,23 @@ ModeName = Literal["fast-competitive", "constraint-aware", "creative-but-viable"
 ExperienceLevel = Literal["beginner", "expert"]
 
 
+# Request-size bounds. Several endpoints are public and some spend LLM tokens,
+# so every free-text field and list a client sends is capped. The web UI caps
+# prompts at 1,500 characters, so these leave headroom for API callers.
+PromptText = Annotated[str, Field(max_length=2_000)]
+ChatText = Annotated[str, Field(max_length=8_000)]
+CardName = Annotated[str, Field(min_length=1, max_length=200)]
+CardNameList = Annotated[list[CardName], Field(max_length=100)]
+TagList = Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=20)]
+
+
 class CardRef(BaseModel):
-    name: str
+    name: CardName
     quantity: int = Field(ge=1, le=100)
+
+
+# A decklist is at most a few hundred entries; anything larger is abuse.
+CardRefList = Annotated[list[CardRef], Field(max_length=250)]
 
 
 class TournamentDeckIngestMetadata(BaseModel):
@@ -177,7 +191,9 @@ class DataStatusResponse(BaseModel):
     card_count: int
     archetype_source: Literal["database", "sample"]
     archetype_count: int
-    database_url: str
+    # Backend name only ("sqlite", "postgresql"). This endpoint is public, so
+    # the URL itself (path, host, credentials) is never exposed.
+    database_backend: str
     scryfall_ingested: bool
 
 
@@ -198,33 +214,33 @@ class ArchetypeRecord(BaseModel):
 
 class GenerateDeckRequest(BaseModel):
     format: FormatName
-    colors: list[str] = Field(default_factory=list)
-    commander_name: str | None = None
-    playstyle_tags: list[str] = Field(default_factory=list)
-    theme_tags: list[str] = Field(default_factory=list)
+    colors: TagList = Field(default_factory=list)
+    commander_name: CardName | None = None
+    playstyle_tags: TagList = Field(default_factory=list)
+    theme_tags: TagList = Field(default_factory=list)
     budget: float | None = Field(default=None, ge=0)
-    include_cards: list[str] = Field(default_factory=list)
-    exclude_cards: list[str] = Field(default_factory=list)
-    seed_cards: list[CardRef] = Field(default_factory=list)
+    include_cards: CardNameList = Field(default_factory=list)
+    exclude_cards: CardNameList = Field(default_factory=list)
+    seed_cards: CardRefList = Field(default_factory=list)
     mode: ModeName = "constraint-aware"
     experience_level: ExperienceLevel = "beginner"
-    prompt: str = ""
+    prompt: PromptText = ""
 
 
 class RefineDeckRequest(BaseModel):
     deck: "DeckResponse"
-    refinement_prompt: str
+    refinement_prompt: PromptText
 
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: ChatText
 
 
 class ChatDeckRequest(BaseModel):
     deck: "DeckResponse"
-    message: str
-    history: list[ChatMessage] = Field(default_factory=list)
+    message: PromptText
+    history: list[ChatMessage] = Field(default_factory=list, max_length=40)
 
 
 class ChatDeckResponse(BaseModel):
@@ -234,47 +250,47 @@ class ChatDeckResponse(BaseModel):
 
 class ValidateDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
 
 
 class AnalyzeDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
-    notes: str = ""
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
+    notes: PromptText = ""
     deep_analysis: bool = True
 
 
 class DiffDeckRequest(BaseModel):
-    before: list[CardRef]
-    after: list[CardRef]
+    before: CardRefList
+    after: CardRefList
 
 
 class SaveDeckRequest(BaseModel):
-    name: str = "Untitled deck"
+    name: Annotated[str, Field(max_length=200)] = "Untitled deck"
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
-    notes: str = ""
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
+    notes: PromptText = ""
     evaluation: dict = Field(default_factory=dict)
 
 
 class EvaluateDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
     games: int = Field(default=200, ge=20, le=1000)
     seed: int = 1729
 
 
 class ParseDecklistRequest(BaseModel):
     format: FormatName
-    deck_text: str
+    deck_text: Annotated[str, Field(max_length=100_000)]
 
 
 class ParsedDecklistResponse(BaseModel):
