@@ -5,32 +5,75 @@ import type {
   CommanderSearchResponse,
   DataStatusResponse,
   DeckAnalysisResponse,
+  DeckDiffResult,
   DeckResponse,
   FormatName,
+  GenerationMode,
   JobRecord,
+  MatchType,
   MetaSummaryResponse,
   OptimizerJobRequest,
   OptimizerJobResponse,
   ParsedDecklistResponse
 } from "@/lib/types";
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+// Every request goes through the same-origin proxy (app/api/backend), which
+// forwards to the API and adds the server-side API key. No key is in the bundle.
+export const API_BASE = "/api/backend";
 
-/** JSON headers plus the optional X-API-Key when configured. */
-function jsonHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (API_KEY) headers["X-API-Key"] = API_KEY;
-  return headers;
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
+// Mirrors the backend's request bounds so oversized input is trimmed or fails
+// here with a clear message instead of a 422.
+export const MAX_PROMPT_CHARS = 2_000;
+export const MAX_CARD_NAMES = 100;
+export const MAX_DECKLIST_ENTRIES = 250;
+
+function errorDetail(detail: unknown): string | null {
+  if (typeof detail === "string") return detail;
+  // FastAPI validation errors: [{loc, msg, ...}]
+  if (Array.isArray(detail) && detail.length) {
+    const first = detail[0] as { msg?: unknown; loc?: unknown };
+    if (typeof first?.msg === "string") {
+      const field = Array.isArray(first.loc) ? first.loc.filter((part) => part !== "body").join(".") : "";
+      return field ? `${field}: ${first.msg}` : first.msg;
+    }
+  }
+  return null;
 }
 
 async function jsonOrThrow<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("The deck service needs an API key. Set MTG_API_KEY for the web server.");
+    }
+    if (response.status === 429) {
+      throw new Error("Too many requests right now. Wait a moment and try again.");
+    }
     // Non-JSON (e.g. HTML error pages) parses to null and uses the fallback.
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail ?? detail?.error ?? detail?.message ?? fallback);
+    const body = await response.json().catch(() => null);
+    throw new Error(errorDetail(body?.detail) ?? body?.error ?? body?.message ?? fallback);
   }
   return (await response.json()) as T;
+}
+
+function clampText(value: string | undefined, max = MAX_PROMPT_CHARS): string {
+  return (value ?? "").slice(0, max);
+}
+
+/** Trim, de-duplicate (case-insensitively) and cap a list of card names. */
+export function clampNames(names: string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of names ?? []) {
+    const name = raw.trim().slice(0, 200);
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= MAX_CARD_NAMES) break;
+  }
+  return out;
 }
 
 export type CardRefInput = { name: string; quantity: number };
@@ -56,14 +99,7 @@ export type DeckEvaluation = {
   unresolved_cards: string[];
 };
 
-export type DeckDiffResult = {
-  added: { name: string; quantity: number }[];
-  removed: { name: string; quantity: number }[];
-  increased: { name: string; from: number; to: number; delta: number }[];
-  decreased: { name: string; from: number; to: number; delta: number }[];
-  unchanged: { name: string; quantity: number }[];
-  summary: { cards_added: number; cards_removed: number; total_changes: number; identical: boolean };
-};
+export type { DeckDiffResult };
 
 export type SavedDeck = {
   id: string;
@@ -81,7 +117,7 @@ export type SavedDeck = {
 
 export type SimilarCardsResponse = {
   card: string;
-  mode: "pgvector" | "lexical";
+  mode: string;
   similar: { name: string; score: number }[];
 };
 
@@ -94,6 +130,15 @@ export type GenerateDeckInput = {
   budget?: number;
   experience_level?: "beginner" | "expert";
   prompt?: string;
+  // Expert controls. Left undefined, the backend defaults apply.
+  mode?: GenerationMode;
+  match_type?: MatchType;
+  bracket?: number | null;
+  include_cards?: string[];
+  exclude_cards?: string[];
+  owned_cards?: string[];
+  /** Build from a specific retrieved shell (an "Also consider" alternative). */
+  archetype_name?: string | null;
 };
 
 export async function fetchDataStatus(signal?: AbortSignal): Promise<DataStatusResponse | null> {
@@ -107,21 +152,30 @@ export async function fetchDataStatus(signal?: AbortSignal): Promise<DataStatusR
 }
 
 export async function generateDeck(input: GenerateDeckInput, signal?: AbortSignal): Promise<DeckResponse> {
+  // Only fields the user actually set are sent, so the backend's defaults
+  // (not hidden client defaults) apply to everything else.
+  const body: Record<string, unknown> = {
+    format: input.format,
+    colors: input.colors,
+    commander_name: input.commander_name,
+    playstyle_tags: input.playstyle_tags,
+    theme_tags: input.theme_tags,
+    budget: input.budget,
+    experience_level: input.experience_level ?? "beginner",
+    prompt: clampText(input.prompt)
+  };
+  if (input.mode) body.mode = input.mode;
+  if (input.match_type) body.match_type = input.match_type;
+  if (input.bracket != null) body.bracket = input.bracket;
+  if (input.include_cards?.length) body.include_cards = clampNames(input.include_cards);
+  if (input.exclude_cards?.length) body.exclude_cards = clampNames(input.exclude_cards);
+  if (input.owned_cards?.length) body.owned_cards = clampNames(input.owned_cards);
+  if (input.archetype_name) body.archetype_name = input.archetype_name.slice(0, 200);
   const response = await fetch(`${API_BASE}/v1/decks/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     signal,
-    body: JSON.stringify({
-      format: input.format,
-      colors: input.colors,
-      commander_name: input.commander_name,
-      playstyle_tags: input.playstyle_tags,
-      theme_tags: input.theme_tags,
-      budget: input.budget,
-      mode: "constraint-aware",
-      experience_level: input.experience_level ?? "beginner",
-      prompt: input.prompt ?? ""
-    })
+    body: JSON.stringify(body)
   });
   return jsonOrThrow<DeckResponse>(response, "Generation failed");
 }
@@ -129,9 +183,9 @@ export async function generateDeck(input: GenerateDeckInput, signal?: AbortSigna
 export async function refineDeck(deck: DeckResponse, prompt: string, signal?: AbortSignal): Promise<DeckResponse> {
   const response = await fetch(`${API_BASE}/v1/decks/refine`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     signal,
-    body: JSON.stringify({ deck, refinement_prompt: prompt })
+    body: JSON.stringify({ deck, refinement_prompt: clampText(prompt) })
   });
   return jsonOrThrow<DeckResponse>(response, "Refinement failed");
 }
@@ -147,36 +201,49 @@ export async function chatAboutDeck(
 ): Promise<ChatDeckResponse> {
   const response = await fetch(`${API_BASE}/v1/decks/chat`, {
     method: "POST",
-    headers: jsonHeaders(),  // chat is API-key gated like save/evaluate
+    headers: JSON_HEADERS,
     signal,
-    body: JSON.stringify({ deck, message, history })
+    // The backend accepts at most 40 turns of history.
+    body: JSON.stringify({ deck, message: clampText(message), history: history.slice(-40) })
   });
   return jsonOrThrow<ChatDeckResponse>(response, "Deck chat failed");
 }
 
-export type ExportTarget = "arena" | "plain" | "csv" | "moxfield";
+export type ExportTarget = "arena" | "plain" | "csv" | "moxfield" | "archidekt";
 
-export async function exportDeck(deck: DeckResponse, target: ExportTarget): Promise<{ content: string; target: ExportTarget }> {
+export async function exportDeck(
+  deck: DeckResponse,
+  target: ExportTarget,
+  signal?: AbortSignal
+): Promise<{ content: string; target: ExportTarget }> {
   const response = await fetch(`${API_BASE}/v1/decks/export`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
+    signal,
     body: JSON.stringify({ deck, target })
   });
   return jsonOrThrow<{ content: string; target: ExportTarget }>(response, "Export failed");
 }
 
-export async function analyzeDeck(payload: {
-  format: FormatName;
-  commander?: string;
-  mainboard: { name: string; quantity: number }[];
-  sideboard: { name: string; quantity: number }[];
-  notes: string;
-  deep_analysis?: boolean;
-}): Promise<DeckAnalysisResponse> {
+export async function analyzeDeck(
+  payload: {
+    format: FormatName;
+    commander?: string;
+    mainboard: { name: string; quantity: number }[];
+    sideboard: { name: string; quantity: number }[];
+    notes: string;
+    deep_analysis?: boolean;
+  },
+  signal?: AbortSignal
+): Promise<DeckAnalysisResponse> {
+  if (payload.mainboard.length > MAX_DECKLIST_ENTRIES || payload.sideboard.length > MAX_DECKLIST_ENTRIES) {
+    throw new Error(`A decklist can have at most ${MAX_DECKLIST_ENTRIES} different cards.`);
+  }
   const response = await fetch(`${API_BASE}/v1/decks/analyze`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    headers: JSON_HEADERS,
+    signal,
+    body: JSON.stringify({ ...payload, notes: clampText(payload.notes) })
   });
   return jsonOrThrow<DeckAnalysisResponse>(response, "Analysis failed");
 }
@@ -184,9 +251,9 @@ export async function analyzeDeck(payload: {
 export async function parseDeckText(format: FormatName, deck_text: string, signal?: AbortSignal): Promise<ParsedDecklistResponse> {
   const response = await fetch(`${API_BASE}/v1/decks/parse`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     signal,
-    body: JSON.stringify({ format, deck_text })
+    body: JSON.stringify({ format, deck_text: deck_text.slice(0, 100_000) })
   });
   return jsonOrThrow<ParsedDecklistResponse>(response, "Deck import failed");
 }
@@ -217,8 +284,8 @@ export async function fetchCommanderProfile(name: string, signal?: AbortSignal):
   return jsonOrThrow<CommanderProfileResponse>(response, "Commander profile failed");
 }
 
-export async function fetchCardDetail(name: string): Promise<CardDetailResponse> {
-  const response = await fetch(`${API_BASE}/v1/cards/${encodeURIComponent(name)}`);
+export async function fetchCardDetail(name: string, signal?: AbortSignal): Promise<CardDetailResponse> {
+  const response = await fetch(`${API_BASE}/v1/cards/${encodeURIComponent(name)}`, { signal });
   return jsonOrThrow<CardDetailResponse>(response, "Could not load card details.");
 }
 
@@ -230,8 +297,8 @@ export async function fetchMetaSummary(format: FormatName, signal?: AbortSignal)
 export async function submitOptimizerJob(payload: OptimizerJobRequest): Promise<OptimizerJobResponse> {
   const response = await fetch(`${API_BASE}/v1/jobs/optimize`, {
     method: "POST",
-    headers: jsonHeaders(),
-    body: JSON.stringify(payload),
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload)
   });
   return jsonOrThrow<OptimizerJobResponse>(response, "Optimizer submission failed");
 }
@@ -241,17 +308,20 @@ export async function fetchJob(jobId: string): Promise<JobRecord> {
   return jsonOrThrow<JobRecord>(response, "Job poll failed");
 }
 
-export async function evaluateDeck(payload: {
-  format: FormatName;
-  mainboard: CardRefInput[];
-  sideboard?: CardRefInput[];
-  commander?: string;
-  games?: number;
-  seed?: number;
-}, signal?: AbortSignal): Promise<DeckEvaluation> {
+export async function evaluateDeck(
+  payload: {
+    format: FormatName;
+    mainboard: CardRefInput[];
+    sideboard?: CardRefInput[];
+    commander?: string;
+    games?: number;
+    seed?: number;
+  },
+  signal?: AbortSignal
+): Promise<DeckEvaluation> {
   const response = await fetch(`${API_BASE}/v1/decks/evaluate`, {
     method: "POST",
-    headers: jsonHeaders(),
+    headers: JSON_HEADERS,
     signal,
     body: JSON.stringify(payload)
   });
@@ -261,7 +331,7 @@ export async function evaluateDeck(payload: {
 export async function diffDecks(before: CardRefInput[], after: CardRefInput[]): Promise<DeckDiffResult> {
   const response = await fetch(`${API_BASE}/v1/decks/diff`, {
     method: "POST",
-    headers: jsonHeaders(),
+    headers: JSON_HEADERS,
     body: JSON.stringify({ before, after })
   });
   return jsonOrThrow<DeckDiffResult>(response, "Deck diff failed");
@@ -278,24 +348,42 @@ export async function saveDeck(payload: {
 }): Promise<SavedDeck> {
   const response = await fetch(`${API_BASE}/v1/decks/save`, {
     method: "POST",
-    headers: jsonHeaders(),
-    body: JSON.stringify(payload)
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ ...payload, name: payload.name.slice(0, 200), notes: clampText(payload.notes) })
   });
   return jsonOrThrow<SavedDeck>(response, "Saving deck failed");
 }
 
 export async function fetchDeckHistory(limit = 50): Promise<SavedDeck[]> {
-  const response = await fetch(`${API_BASE}/v1/decks/history?limit=${limit}`, { headers: jsonHeaders() });
+  const response = await fetch(`${API_BASE}/v1/decks/history?limit=${limit}`);
   const body = await jsonOrThrow<{ decks: SavedDeck[] }>(response, "Could not load deck history");
   return body.decks;
 }
 
-export async function fetchSharedDeck(token: string): Promise<SavedDeck> {
-  const response = await fetch(`${API_BASE}/v1/decks/shared/${encodeURIComponent(token)}`);
+export async function fetchSharedDeck(token: string, signal?: AbortSignal): Promise<SavedDeck> {
+  const response = await fetch(`${API_BASE}/v1/decks/shared/${encodeURIComponent(token)}`, { signal });
   return jsonOrThrow<SavedDeck>(response, "Shared deck not found");
 }
 
-export async function fetchSimilarCards(name: string, k = 10): Promise<SimilarCardsResponse> {
-  const response = await fetch(`${API_BASE}/v1/cards/${encodeURIComponent(name)}/similar?k=${k}`);
+export async function fetchSavedDeck(id: string): Promise<SavedDeck> {
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`);
+  return jsonOrThrow<SavedDeck>(response, "Saved deck not found");
+}
+
+export async function deleteSavedDeck(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await jsonOrThrow<{ deleted: string }>(response, "Could not delete the saved deck");
+}
+
+/** Similar cards, optionally restricted to cards legal in `format` and inside `colors`. */
+export async function fetchSimilarCards(
+  name: string,
+  options: { k?: number; format?: FormatName; colors?: string[] } = {},
+  signal?: AbortSignal
+): Promise<SimilarCardsResponse> {
+  const params = new URLSearchParams({ k: String(options.k ?? 8) });
+  if (options.format) params.set("format", options.format);
+  if (options.colors) params.set("colors", options.colors.join(","));
+  const response = await fetch(`${API_BASE}/v1/cards/${encodeURIComponent(name)}/similar?${params.toString()}`, { signal });
   return jsonOrThrow<SimilarCardsResponse>(response, "Similar-card lookup failed");
 }

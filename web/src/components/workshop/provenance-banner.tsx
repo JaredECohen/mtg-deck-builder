@@ -32,6 +32,11 @@ const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; descr
     label: "Built-in seed",
     description: "Built from a curated archetype template that matched your brief.",
     tone: "neutral"
+  },
+  template: {
+    label: "Template-based",
+    description: "Built from a curated archetype template, not from observed tournament results.",
+    tone: "neutral"
   }
 };
 
