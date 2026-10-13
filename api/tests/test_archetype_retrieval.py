@@ -1,5 +1,4 @@
-from app.db import session_scope
-from app.db_models import Archetype, TournamentDeck
+from app.db_models import TournamentDeck
 from app.scripts.build_archetypes import build_signature, deck_weight, main as build_archetypes_main
 from app.scripts.ingest_tournament_decks import main as ingest_tournament_main
 from app.services.card_repository import CardRepository

@@ -239,7 +239,6 @@ def build_synergy_graph(profiles: list[CardProfile]) -> SynergyGraph:
             return cached
 
     graph = SynergyGraph()
-    by_name: dict[str, CardProfile] = {p.name: p for p in profiles}
 
     # 1. produces → requires (e.g. treasure → sacrifice_outlet)
     for src in profiles:

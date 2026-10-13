@@ -34,7 +34,6 @@ def choose_land_to_play(state: GameState) -> CardInPlay | None:
                 needed_colors.add(color)
 
     def score(land: CardInPlay) -> tuple[int, int, int]:
-        type_l = (land.profile.cost_vector.alt_costs or [])
         produces_needed = 1 if any(p in needed_colors for p in _produces(land)) else 0
         # Crude: lands flagged as "tapped" or with high etb_tapped_prior get
         # deprioritized turn 1 / 2.

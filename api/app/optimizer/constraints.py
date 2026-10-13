@@ -8,9 +8,8 @@ off-color cards, and dropped includes during refinement.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable
 
-from app.optimizer.format_config import FORMATS, FormatConfig, get_format_config
+from app.optimizer.format_config import FormatConfig, get_format_config
 from app.oracle.profile import CardProfile
 from app.rules import is_basic_type_line
 

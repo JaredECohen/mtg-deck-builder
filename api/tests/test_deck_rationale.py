@@ -11,8 +11,6 @@ from app.oracle.profile import (
     RoleWeights,
 )
 from app.services.deck_rationale import (
-    DeckRationale,
-    MulliganGuide,
     build_deck_rationale,
 )
 

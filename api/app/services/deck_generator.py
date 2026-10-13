@@ -37,7 +37,6 @@ from app.models import (
 from app.constants import (
     CANONICAL_TAGS,
     COMMANDER_DECK_SIZE,
-    COMMANDER_LAND_FLOOR,
     COMMANDER_ROLE_TARGETS,
     CONSTRUCTED_DECK_SIZE,
     LAND_TARGET_AGGRO,
@@ -57,6 +56,7 @@ from app.services.game_plan import build_game_plan
 from app.services.grounding import card_mentions, ground_text
 from app.services.builtin_archetypes import (
     BUILTIN_ARCHETYPES,
+    ManaBaseTemplate,
     BuiltinArchetype,
     blend_archetypes,
     detect_builtin_archetypes,
@@ -65,7 +65,6 @@ from app.services.builtin_archetypes import (
 from app.services.card_repository import CardRepository
 from app.services.deck_validator import DeckValidator
 from app.services.llm_service import (
-    RefinementIntent,
     compose_from_scratch,
     interpret_generate_prompt,
     interpret_refinement,
@@ -1671,7 +1670,6 @@ class DeckGenerator:
         best_rank: tuple[bool, float] = (False, float("-inf"))
         best_choice: ArchetypeRecord | None = None
         best_reason = ""
-        requested_color_set = set(colors)
         requested_tag_set = set(requested_tags)
         for candidate in candidates:
             package = candidate.metadata.commander_package

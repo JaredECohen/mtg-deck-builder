@@ -18,7 +18,6 @@ Known underdogs in the current simulator:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 
 from app.oracle.profile import (
     CardProfile,

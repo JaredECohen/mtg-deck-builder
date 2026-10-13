@@ -18,7 +18,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from app.oracle.profile import CardProfile, RoleWeights
+from app.oracle.profile import CardProfile
 
 
 @dataclass

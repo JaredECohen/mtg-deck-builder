@@ -1,0 +1,11 @@
+# Lint configuration (CI runs `ruff check app tests`).
+# The rule set is deliberately bug-focused — syntax errors, undefined names,
+# unused imports/variables, redefinitions, mutable defaults — not style. Widen
+# it (e.g. "I", "UP", "B") as a separate, mechanical change.
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82", "F401", "F811", "F841", "B006"]

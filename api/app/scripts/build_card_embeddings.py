@@ -19,7 +19,6 @@ import argparse
 import json
 import sys
 
-from sqlalchemy.orm import Session
 
 from app.db import get_engine, session_scope
 from app.db_models import Base, Card, CardEmbedding

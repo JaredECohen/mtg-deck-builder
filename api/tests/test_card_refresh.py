@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from app.services.card_refresh import SUSPECT_SETS, CardRefreshService
 

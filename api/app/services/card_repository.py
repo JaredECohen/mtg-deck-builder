@@ -6,7 +6,6 @@ import math
 import unicodedata
 from datetime import date
 from functools import cached_property
-from urllib.parse import quote_plus
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select

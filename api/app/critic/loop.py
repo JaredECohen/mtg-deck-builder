@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from app.critic.clients import BuilderClient, CostBudget, CriticClient
 from app.critic.envelope import Critique, DeckEnvelope, Verdict
-from app.critic.rubric import RUBRIC_BY_ID, run_rubric
+from app.critic.rubric import run_rubric
 
 
 @dataclass

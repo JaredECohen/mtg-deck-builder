@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from app.oracle.profile import Action, ActionKind, Effect, TriggerType
+from app.oracle.profile import Action, Effect, TriggerType
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'])")
 _SELF_REF_RE = re.compile(r"~|CARDNAME", flags=re.IGNORECASE)

@@ -17,7 +17,6 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 
 from app.db import get_engine, session_scope
-from app.db_models import Card
 
 
 # Set codes that are categorically NOT competitive-format-legal in any of

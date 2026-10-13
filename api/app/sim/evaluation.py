@@ -23,11 +23,10 @@ it can feed both the optimizer's fitness and the human-facing rationale.
 from __future__ import annotations
 
 import math
-import statistics
 from dataclasses import dataclass, field
 
 from app.oracle.profile import CardProfile
-from app.sim.goldfish import GoldfishConfig, GoldfishReport, _play_game, goldfish
+from app.sim.goldfish import GoldfishConfig, _play_game, goldfish
 from app.sim.mulligan import MulliganProfile
 from app.sim.policy import POLICIES, select_policy
 from app.sim.state import build_initial_state

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 
 from app.oracle.profile import (
     CardProfile,
@@ -21,7 +20,6 @@ from app.optimizer import (
     validate_constraints,
 )
 from app.optimizer.fitness import _aggregate_role_profile
-from app.optimizer.swap_proposals import Swap, apply_swap
 
 
 def make_profile(name, *, cmc=1.0, pips=None, role=None, effect=None,
@@ -177,7 +175,6 @@ def test_seeder_includes_required_cards():
 
 def test_fitness_aggro_burn_higher_than_random_pile():
     pool = burn_pool()
-    constraints = OptimizerConstraints(format="modern", colors=["R"], deck_size=60)
     # Aggro-curated deck.
     aggro = []
     aggro.extend([pa for pa in pool if pa[0].name == "Lightning Bolt"][:4])

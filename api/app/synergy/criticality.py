@@ -8,7 +8,7 @@ measure the kill-turn delta. Cards whose removal slows the deck by
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from app.oracle.profile import CardProfile, ComboPrimitives, CostVector, EffectVector, RoleWeights

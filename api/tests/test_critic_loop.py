@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from app.critic import (
-    BuilderClient,
     CostBudget,
     Critique,
     CritiqueItem,
@@ -89,7 +88,6 @@ def test_loop_revises_when_critic_rejects():
         new_metrics = dict(env.simulator_metrics)
         new_metrics["avg_kill_turn"] = (env.simulator_metrics or {}).get("avg_kill_turn", 5.0) - 0.5
         new_metrics["win_rate"] = (env.simulator_metrics or {}).get("win_rate", 0.5) + 0.05
-        from dataclasses import replace
         return DeckEnvelope(
             version=env.version,
             deck=env.deck,
@@ -120,7 +118,6 @@ def test_loop_caps_at_max_rounds_and_returns_best():
     envelope = make_envelope()
 
     def stuck_revise(env, crit):
-        from dataclasses import replace
         # Each round flips kill_turn back and forth — never strictly improves.
         return DeckEnvelope(
             version=env.version,

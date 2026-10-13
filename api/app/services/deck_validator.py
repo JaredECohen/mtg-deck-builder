@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 
 from app.constants import (
     COMMANDER_DECK_SIZE,

@@ -146,7 +146,6 @@ def build_records() -> list[dict]:
             continue
 
         primary_format = archetype.formats[0] if archetype.formats else "modern"
-        target_side = SIDEBOARD_SIZE.get(primary_format, 15)
         commander = None
         if primary_format == "commander":
             # Pick the highest-quantity "Legendary"-looking anchor as commander

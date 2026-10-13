@@ -35,7 +35,6 @@ from app.models import (
     ValidateDeckRequest,
     ValidationResult,
 )
-from app.optimizer import AnnealConfig, OptimizerConstraints
 from app.rate_limiter import (
     deck_rate_limiter,
     evaluate_rate_limiter,

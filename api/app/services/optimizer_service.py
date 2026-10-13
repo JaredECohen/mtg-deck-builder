@@ -117,11 +117,7 @@ def _build_pool(
     workable when the cache hasn't been built yet.
     """
     from app.oracle.profile import (
-        ComboPrimitives,
-        CostVector,
-        EffectVector,
         PROFILE_VERSION,
-        RoleWeights,
     )
 
     cards = repository.list_cards_for_format(fmt) if hasattr(repository, "list_cards_for_format") else []

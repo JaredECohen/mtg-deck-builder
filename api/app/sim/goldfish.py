@@ -17,7 +17,7 @@ from typing import Callable, Iterable
 from app.oracle.profile import CardProfile
 from app.sim.mulligan import MulliganProfile, london_mulligan_loop
 from app.sim.policy._common import Decision
-from app.sim.state import CardInPlay, GameState, ManaPool, build_initial_state
+from app.sim.state import CardInPlay, GameState, build_initial_state
 
 
 @dataclass
