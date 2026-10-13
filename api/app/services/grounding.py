@@ -38,7 +38,8 @@ def card_mentions(sentence: str, repository: _Lookup) -> set[str]:
     sentence or when they are everyday words, to avoid "Island count…" or
     "Storm off" false positives.
     """
-    tokens = [m.group(0).strip(",") for m in _TOKEN.finditer(sentence)]
+    matches = list(_TOKEN.finditer(sentence))
+    tokens = [m.group(0).strip(",") for m in matches]
     found: set[str] = set()
     i = 0
     while i < len(tokens):
@@ -47,7 +48,9 @@ def card_mentions(sentence: str, repository: _Lookup) -> set[str]:
             continue
         matched = 0
         for length in range(min(_MAX_NAME_WORDS, len(tokens) - i), 0, -1):
-            span = " ".join(tokens[i:i + length])
+            # Cut the span from the original text so internal punctuation
+            # ("Atraxa, Praetors' Voice") survives.
+            span = sentence[matches[i].start():matches[i + length - 1].end()].strip(" ,")
             if length == 1 and (i == 0 or span.lower() in _COMMON_WORDS):
                 continue
             card = repository.get_card(span)
