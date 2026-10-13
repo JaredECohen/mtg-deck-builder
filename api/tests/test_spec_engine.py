@@ -167,3 +167,48 @@ def test_every_deck_gets_a_game_plan(fmt):
         assert all(entry["take_out"] for entry in plan["sideboard_guide"])
     else:
         assert plan["commander_packages"]
+
+
+# ── A8 / A9: modes, alternatives, archetype_name; deterministic refine ───
+
+
+def test_creative_mode_varies_the_flex_slots_and_stays_legal():
+    base = dict(format="commander", colors=["B", "G"], playstyle_tags=["graveyard"])
+    standard = _generate(**base)
+    creative = _generate(**base, mode="creative-but-viable")
+    assert creative["is_legal"], creative["validation_errors"]
+    assert _names(creative) != _names(standard)
+
+
+def test_alternatives_can_be_built_by_name():
+    deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"])
+    assert 1 <= len(deck["alternatives"]) <= 2
+    alternative = deck["alternatives"][0]
+    built = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"], archetype_name=alternative["name"])
+    assert alternative["name"].lower() in built["title"].lower()
+    assert built["is_legal"]
+
+
+@pytest.mark.parametrize(
+    ("prompt", "includes", "excludes", "quantities"),
+    [
+        ("add 4x Burst Lightning", ["Burst Lightning"], [], {"Burst Lightning": 4}),
+        ("Swap Swan Song for 4 Burst Lightning", ["Burst Lightning"], ["Swan Song"], {"Burst Lightning": 4}),
+        ("cut Lava Dart, add 2 Lightning Helix", ["Lightning Helix"], ["Lava Dart"], {"Lightning Helix": 2}),
+        ("Add a playset of Lightning Helix", ["Lightning Helix"], [], {"Lightning Helix": 4}),
+        ("make it cheaper", [], [], {}),
+    ],
+)
+def test_refine_reads_card_names_without_an_llm(prompt, includes, excludes, quantities):
+    from app.main import generator
+
+    assert generator._parse_refine_cards(prompt) == (includes, excludes, quantities)
+
+
+def test_no_llm_refine_adds_the_requested_copies():
+    deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"])
+    response = client.post("/v1/decks/refine", json={"deck": deck, "refinement_prompt": "add 4x Burst Lightning"})
+    assert response.status_code == 200, response.text
+    refined = response.json()
+    assert sum(r["quantity"] for r in refined["mainboard"] if r["name"] == "Burst Lightning") == 4
+    assert refined["changes"]["summary"]["total_changes"] > 0

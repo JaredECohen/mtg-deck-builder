@@ -55,6 +55,7 @@ from app.services.deck_diff import diff_decks
 from app.services.game_plan import build_game_plan
 from app.services.grounding import card_mentions, ground_text
 from app.services.builtin_archetypes import (
+    BUILTIN_ARCHETYPES,
     BuiltinArchetype,
     blend_archetypes,
     detect_builtin_archetypes,
@@ -163,13 +164,23 @@ class DeckGenerator:
         # A seed outside the requested colors cannot contribute cards (color
         # gating drops them); it would only pollute the blend's name and tags.
         matches = prefer_color_compatible(matches, list(request.colors))
+        if request.archetype_name:
+            # "Build this alternative": a named builtin seed wins; a named
+            # corpus shell is honored in retrieval.
+            forced = next(
+                (b for b in BUILTIN_ARCHETYPES
+                 if b.display_name.lower() == request.archetype_name.lower() and request.format in b.formats),
+                None,
+            )
+            matches = [forced] if forced else []
         builtin = blend_archetypes(matches, request.format) if matches else None
 
         # Compose-from-scratch fallback: when the brief has substance but no
         # builtin matched, ask Claude to compose ~30 anchor cards instead of
         # letting the corpus pick a near-miss shell. Synthesizes a transient
         # BuiltinArchetype so the rest of the pipeline doesn't change.
-        if builtin is None and request.prompt and request.prompt.strip():
+        # Fast-competitive stays on known shells; it never composes a new one.
+        if builtin is None and request.prompt and request.prompt.strip() and request.mode != "fast-competitive" and not request.archetype_name:
             composed = compose_from_scratch(
                 format_name=request.format,
                 colors=list(request.colors),
@@ -606,6 +617,30 @@ class DeckGenerator:
                 summary=candidate.strategy,
                 commander=candidate.commander,
             ))
+        if len(out) < 2 and deck.format != "commander":
+            # Curated seeds that fit the colors and playstyle (built through
+            # archetype_name, which resolves builtin names).
+            wanted = {self._canonicalize_tag(tag) for tag in deck.playstyle_tags}
+            taken = {alt.name.lower() for alt in out} | {name.lower() for name in deck.source_archetypes} | {deck.title.lower()}
+            for seed in BUILTIN_ARCHETYPES:
+                if len(out) >= 2:
+                    break
+                if deck.format not in seed.formats or seed.display_name.lower() in taken:
+                    continue
+                if any(seed.display_name.lower() in name for name in taken):
+                    continue
+                if deck_colors and not set(seed.colors) <= deck_colors:
+                    continue
+                if wanted and not wanted & {self._canonicalize_tag(tag) for tag in seed.playstyle_tags}:
+                    continue
+                out.append(DeckAlternative(
+                    name=seed.display_name,
+                    source_type="template",
+                    colors=list(seed.colors),
+                    tags=list(seed.playstyle_tags + seed.theme_tags)[:6],
+                    key_cards=[name for name, _ in seed.anchor_cards if not self._is_land_name(name)][:6],
+                    summary=seed.strategy,
+                ))
         return out
 
     def _is_land_name(self, name: str) -> bool:
@@ -824,11 +859,34 @@ class DeckGenerator:
         if builtin is not None:
             return self._synthesize_outcome_from_builtin(builtin, request)
 
+        if request.archetype_name:
+            named = [a for a in self.repository.archetypes_for_format(request.format)
+                     if a.name.lower() == request.archetype_name.lower()]
+            if named:
+                others = self.repository.top_archetypes(
+                    format_name=request.format, colors=request.colors,
+                    theme_tags=request.playstyle_tags + request.theme_tags, limit=4, strict_colors=True,
+                )
+                base = named[0]
+                return _RetrievalOutcome(
+                    base=base,
+                    candidates=[base] + [a for a in others if a.name != base.name],
+                    source_type="template" if base.metadata.evidence == "template" else "corpus",
+                    confidence=min(1.0, 0.45 + 0.05 * min(10, base.source_count)),
+                    evidence_count=base.source_count,
+                    retrieved_from=[base.name],
+                    fallback_used=False,
+                    notes=[f"Built from the {base.name} shell you picked."],
+                )
+
+        # Fast-competitive: the most-played shell in the colors (meta
+        # presence), not the closest theme match.
+        retrieval_tags = [] if request.mode == "fast-competitive" else request.playstyle_tags + request.theme_tags
         # Strict color subset first — stops a 4C shell from beating a 2C match.
         candidates = self.repository.top_archetypes(
             format_name=request.format,
             colors=request.colors,
-            theme_tags=request.playstyle_tags + request.theme_tags,
+            theme_tags=retrieval_tags,
             limit=8,
             strict_colors=True,
         )
@@ -1051,6 +1109,13 @@ class DeckGenerator:
 
     def refine(self, deck: DeckResponse, prompt: str) -> DeckResponse:
         intent = interpret_refinement(prompt)
+        if not intent.include_cards and not intent.exclude_cards:
+            # No LLM (or it found no cards): read "add 4x X", "cut Y",
+            # "swap A for B" deterministically.
+            includes, excludes, quantities = self._parse_refine_cards(prompt)
+            intent = intent.model_copy(update={
+                "include_cards": includes, "exclude_cards": excludes, "include_quantities": quantities,
+            })
 
         previous = deck.constraints
         current_price = deck.estimated_price_usd or 0
@@ -1151,6 +1216,50 @@ class DeckGenerator:
                 f"The refined deck costs about ${regenerated.estimated_price_usd:.2f}, over the ${budget:.2f} budget it was built under."
             )
         return regenerated
+
+    _SWAP = re.compile(r"\b(?:swap|replace|trade)\s+(?P<out>.+?)\s+(?:for|with)\s+(?P<in>.+)", re.IGNORECASE)
+    _REMOVE = re.compile(r"\b(?:remove|cut|drop|exclude|lose|take out|no more|without|get rid of)\b", re.IGNORECASE)
+    _ADD = re.compile(r"\b(?:add|include|play|put in|run|more|bring in|use)\b", re.IGNORECASE)
+    _COUNT = re.compile(r"\b(\d+)\s*x?\s*$|\ba playset of\s*$|\bfour (?:copies of )?\s*$", re.IGNORECASE)
+
+    def _parse_refine_cards(self, prompt: str) -> tuple[list[str], list[str], dict[str, int]]:
+        includes: list[str] = []
+        excludes: list[str] = []
+        quantities: dict[str, int] = {}
+
+        def count_before(clause: str, name: str) -> int | None:
+            idx = clause.lower().find(name.split(" // ")[0].lower())
+            if idx < 0:
+                return None
+            match = self._COUNT.search(clause[:idx])
+            if not match:
+                return None
+            return int(match.group(1)) if match.group(1) else 4
+
+        for clause in re.split(r"[.;\n]|,|\band then\b", prompt):
+            clause = clause.strip()
+            if not clause:
+                continue
+            swap = self._SWAP.search(clause)
+            if swap:
+                excludes += sorted(card_mentions(swap.group("out"), self.repository) or [])
+                for name in sorted(card_mentions(swap.group("in"), self.repository)):
+                    includes.append(name)
+                    if (n := count_before(swap.group("in"), name)):
+                        quantities[name] = n
+                continue
+            for part in re.split(r"\band\b", clause):
+                mentions = sorted(card_mentions(part, self.repository) or card_mentions(" " + part, self.repository))
+                if not mentions:
+                    continue
+                if self._REMOVE.search(part):
+                    excludes += mentions
+                elif self._ADD.search(part) or self._REMOVE.search(clause) is None:
+                    for name in mentions:
+                        includes.append(name)
+                        if (n := count_before(part, name)):
+                            quantities[name] = n
+        return list(dict.fromkeys(includes)), list(dict.fromkeys(excludes)), quantities
 
     def _preserve_land_count(
         self,
@@ -1312,10 +1421,15 @@ class DeckGenerator:
         # everything else is filled from the format card pool ranked by
         # color and theme match.
         from_builtin = archetype.source_count == 0 and not archetype.metadata.core_cards
-        if from_builtin:
-            ranked_candidates = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        pool_ranked = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        if request.mode == "creative-but-viable":
+            # Flex slots from a rotated slice of the themed pool instead of
+            # the corpus packages: same quality band, different picks.
+            ranked_candidates = self._novelty_order(pool_ranked, request)
+        elif from_builtin:
+            ranked_candidates = pool_ranked
         else:
-            ranked_candidates = [item["name"] for item in package_candidates] + self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+            ranked_candidates = [item["name"] for item in package_candidates] + pool_ranked
         nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
         while self._nonland_total(counts) < nonland_target:
             if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
@@ -1721,6 +1835,9 @@ class DeckGenerator:
 
         themed_candidates = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="engine", theme_tags=requested_tags, limit=30)]
         fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded)
+        if request.mode == "creative-but-viable":
+            themed_candidates = []
+            fallback_ranked = self._novelty_order(fallback_ranked, request, window=150)
         seen = set()
         ranked_nonlands = []
         for name in themed_candidates + fallback_ranked:
@@ -2754,6 +2871,19 @@ class DeckGenerator:
         allow = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
         mld, extra = self._bracket_pool
         return bracket_rules.excluded_for_bracket(request.bracket, allow, mld, extra)
+
+    @staticmethod
+    def _novelty_order(ranked: list[str], request: GenerateDeckRequest, window: int = 60) -> list[str]:
+        """Deterministically rotate the top of a ranked list so creative builds
+        pick different (still top-ranked) cards than constraint-aware ones,
+        and different requests get different rotations."""
+        head, tail = ranked[:window], ranked[window:]
+        if not head:
+            return ranked
+        key = json.dumps([request.format, sorted(request.colors), sorted(request.playstyle_tags), request.prompt])
+        shift = int(hashlib.sha1(key.encode("utf-8")).hexdigest(), 16) % len(head)
+        shift = max(shift, len(head) // 3)
+        return head[shift:] + head[:shift] + tail
 
     def _excluded_names(self, names: list[str]) -> set[str]:
         """Lower-cased exclusions, plus each one's canonical card name, so
