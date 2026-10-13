@@ -517,6 +517,17 @@ a:focus-visible {
   min-height: 52px;
 }
 
+/* Link-styled buttons (e.g. "Buy entire deck on TCGplayer") are inline by
+   default, which drops width/min-height/margins and lets the next line
+   overlap the button when its label wraps on phones. */
+a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 .button.secondary {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--line);

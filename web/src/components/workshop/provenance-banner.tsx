@@ -30,7 +30,7 @@ const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; descr
   },
   builtin: {
     label: "Built-in seed",
-    description: "Format has no corpus archetypes — assembled from a curated built-in template.",
+    description: "Built from a curated archetype template that matched your brief.",
     tone: "neutral"
   }
 };

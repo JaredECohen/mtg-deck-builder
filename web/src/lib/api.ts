@@ -92,6 +92,7 @@ export type GenerateDeckInput = {
   playstyle_tags: string[];
   theme_tags: string[];
   budget?: number;
+  experience_level?: "beginner" | "expert";
   prompt?: string;
 };
 
@@ -118,7 +119,7 @@ export async function generateDeck(input: GenerateDeckInput, signal?: AbortSigna
       theme_tags: input.theme_tags,
       budget: input.budget,
       mode: "constraint-aware",
-      experience_level: "beginner",
+      experience_level: input.experience_level ?? "beginner",
       prompt: input.prompt ?? ""
     })
   });
@@ -229,7 +230,7 @@ export async function fetchMetaSummary(format: FormatName, signal?: AbortSignal)
 export async function submitOptimizerJob(payload: OptimizerJobRequest): Promise<OptimizerJobResponse> {
   const response = await fetch(`${API_BASE}/v1/jobs/optimize`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify(payload),
   });
   return jsonOrThrow<OptimizerJobResponse>(response, "Optimizer submission failed");

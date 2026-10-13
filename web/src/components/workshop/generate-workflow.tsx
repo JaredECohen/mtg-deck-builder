@@ -60,9 +60,13 @@ export function GenerateWorkflow() {
     if (selectedCommanderProfile) setColors(selectedCommanderProfile.colors);
   }, [selectedCommanderProfile]);
 
+  // The budget field only renders in expert mode, so beginners must never be
+  // capped by its hidden default ("Off = no spend limit").
+  const effectiveBudget = expertMode ? budget : "";
+
   async function handleGenerate() {
-    const parsedBudget = parseBudgetInput(budget);
-    if (budget.trim() && parsedBudget === undefined) {
+    const parsedBudget = parseBudgetInput(effectiveBudget);
+    if (effectiveBudget.trim() && parsedBudget === undefined) {
       generator.setError("Budget must be a non-negative number.");
       return;
     }
@@ -80,6 +84,7 @@ export function GenerateWorkflow() {
       playstyle_tags: tags.playstyle,
       theme_tags: tags.theme,
       budget: parsedBudget,
+      experience_level: expertMode ? "expert" : "beginner",
       prompt
     });
   }
@@ -108,7 +113,7 @@ export function GenerateWorkflow() {
       format: "modern",
       colors,
       deck_size: 60,
-      budget_usd: parseBudgetInput(budget) ?? undefined,
+      budget_usd: parseBudgetInput(effectiveBudget) ?? undefined,
       include_cards: [],
       exclude_cards: [],
       archetype_recipes: [],

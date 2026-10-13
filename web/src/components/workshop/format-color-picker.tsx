@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 import { COLORS, toggleValue } from "@/lib/strategies";
 import type { FormatName } from "@/lib/types";
 
@@ -12,11 +14,14 @@ type Props = {
 };
 
 export function FormatColorPicker({ format, colors, onFormatChange, onColorsChange, showColors = true }: Props) {
+  // Rendered by both the Generate and Analyze workflows (both stay mounted),
+  // so a fixed id would be duplicated on the page.
+  const formatId = useId();
   return (
     <>
       <div className="panel form-card panel-strong">
-        <label className="label" htmlFor="format">Format</label>
-        <select id="format" className="select" value={format} onChange={(event) => onFormatChange(event.target.value as FormatName)}>
+        <label className="label" htmlFor={formatId}>Format</label>
+        <select id={formatId} className="select" value={format} onChange={(event) => onFormatChange(event.target.value as FormatName)}>
           <option value="standard">Standard</option>
           <option value="modern">Modern</option>
           <option value="pioneer">Pioneer</option>

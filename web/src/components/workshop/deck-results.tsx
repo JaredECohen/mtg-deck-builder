@@ -185,6 +185,9 @@ export function DeckResults({
   const { reset: resetChat, markApplied } = chat;
   const [pendingApply, setPendingApply] = useState<{ bubbleId: string; refinement: string } | null>(null);
   const refineInFlight = useRef(false);
+  // The chat bubble whose proposal is being applied. It is marked "Applied"
+  // only when the refined deck arrives, so a failed refine stays retryable.
+  const applyingBubble = useRef<string | null>(null);
   const startRefine = useCallback(() => {
     refineInFlight.current = true;
     onRefine();
@@ -192,25 +195,30 @@ export function DeckResults({
   useEffect(() => {
     if (refineInFlight.current) {
       refineInFlight.current = false;
+      if (applyingBubble.current) markApplied(applyingBubble.current);
+      applyingBubble.current = null;
       return;
     }
     resetChat();
     setPendingApply(null);
-  }, [deck, resetChat]);
+  }, [deck, resetChat, markApplied]);
   useEffect(() => {
     // A refinement that failed leaves the deck unchanged; don't let its marker
     // swallow the reset for the next generation.
-    if (!loading) refineInFlight.current = false;
+    if (!loading) {
+      refineInFlight.current = false;
+      applyingBubble.current = null;
+    }
   }, [loading]);
   // A proposed change goes through the existing Refine flow: it lands in the
   // Refine box (visible, editable, undoable like any refinement) and the refine
   // fires once the parent's state carries it — the callback reads that state.
   useEffect(() => {
     if (!pendingApply || loading || refinePrompt !== pendingApply.refinement) return;
+    applyingBubble.current = pendingApply.bubbleId;
     startRefine();
-    markApplied(pendingApply.bubbleId);
     setPendingApply(null);
-  }, [pendingApply, refinePrompt, loading, startRefine, markApplied]);
+  }, [pendingApply, refinePrompt, loading, startRefine]);
 
   return (
     <>
