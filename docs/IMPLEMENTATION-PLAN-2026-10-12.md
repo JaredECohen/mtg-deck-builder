@@ -307,5 +307,10 @@ Deferred, each with a reason:
 - **Price coverage.** About 22% of cards have no price. This is a data issue: they are surfaced, not guessed.
 - **`set_type` backfill.** The script needs network access to Scryfall.
 - **Human-review rubric (§21).** This is not automatable.
-- **Mono-color requests whose playstyle has no matching seed.** Mono-blue control, for example, still borrows a broader shell's name; the cards stay on-color.
-- **Analysis provenance banner.** It shows "fallback" next to a retrieved shell; this is cosmetic.
+- **Mono-color requests whose playstyle has no matching seed** (75 of 120 single-color format/playstyle combinations). These still borrow a broader shell's *structure*, but since the follow-up they are named for the request ("Mono-Blue Control") and say which shell they borrowed. Better results there need real lists or new curated seeds.
+
+Follow-up, also on `feat/spec-gaps`:
+- The analysis provenance no longer cites non-matching shells as evidence.
+- Template archetypes no longer claim tournament performance.
+- Strong tests now cover the two remaining Notion test tasks.
+- Deck chat was checked against the live LLM.
