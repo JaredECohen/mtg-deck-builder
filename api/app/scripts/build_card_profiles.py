@@ -129,6 +129,12 @@ def run(args: argparse.Namespace) -> int:
     with session_scope() as session:
         existing = set() if args.rebuild else _existing_profile_keys(session, PROFILE_VERSION)
         for card in cards:
+            # Skip before parsing: on a throttled shared CPU (the Fly VM) the
+            # parse is the slow part, and a refresh re-runs this over every card.
+            card_id = card.get("oracle_id") or card.get("scryfall_id") or card.get("name")
+            if not args.rebuild and card_id in existing:
+                skipped += 1
+                continue
             try:
                 profile = build_card_profile(card)
             except Exception as exc:
@@ -139,9 +145,6 @@ def run(args: argparse.Namespace) -> int:
                 pattern_count += 1
             else:
                 fallback_count += 1
-            if not args.rebuild and profile.card_id in existing:
-                skipped += 1
-                continue
             _persist_profile(session, profile)
             written += 1
             if written % 500 == 0:

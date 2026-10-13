@@ -30,8 +30,8 @@ primary_region = "iad"
     hard_limit = 40
 
   [[http_service.checks]]
-    # First boot builds the database (~1-2 min: Scryfall download + profiles)
-    # before the server listens; a card refresh restart takes about as long.
+    # First boot builds the database (10-15 min on a shared CPU; profiling is
+    # the slow step). Fly keeps the machine running while checks fail.
     grace_period = "180s"
     interval = "30s"
     timeout = "10s"

@@ -26,8 +26,11 @@ separate (see "Spend caps").
 | `.github/workflows/refresh-cards.yml` | Weekly Scryfall re-ingest (manual runs work too) |
 | `.dockerignore` | Keeps `web/`, `node_modules`, local DBs and `.env` out of the image |
 
-**First boot.** On an empty volume the server needs about 1–2 minutes before
-it starts listening. During that time it:
+**First boot.** On an empty volume the server needs time before it starts
+listening: about 1–2 minutes on a laptop, but 10–15 minutes on Fly. Fly's
+shared CPU is throttled under sustained load, and card profiling is the slow
+step. `fly deploy` may report failed health checks in the meantime; watch
+`fly logs` for "caches warmed". During that time it:
 
 1. downloads Scryfall (about 35k cards);
 2. ingests the tournament decks;
@@ -38,7 +41,9 @@ cache warm-up.
 
 ## 1. Fly.io (API)
 
-Install flyctl (`brew install flyctl`) and run `fly auth login`.
+Install flyctl (`brew install flyctl`) and run `fly auth login`. Add a credit
+card first (https://fly.io/trial). Trial machines are stopped after 5 minutes,
+which kills the first-boot bootstrap partway through.
 
 ```bash
 # From the repo root. Pick a globally unique app name and put it in fly.toml.
