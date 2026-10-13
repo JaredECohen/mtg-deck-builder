@@ -48,3 +48,20 @@ def _use_test_database() -> None:
 
 
 _use_test_database()
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Every test starts with empty rate-limit windows. The suite runs dozens
+    of generations per minute from one test client, so without this a test
+    fails with 429 depending on how many ran before it. Tests that exercise
+    limiting still hit the real limit within their own body."""
+    from app import rate_limiter
+
+    for limiter in vars(rate_limiter).values():
+        if isinstance(limiter, rate_limiter.InMemoryRateLimiter):
+            limiter.reset()
+    yield
