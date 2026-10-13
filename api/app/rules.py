@@ -39,6 +39,16 @@ def is_basic_land(card: CardRecord) -> bool:
     return is_basic_type_line(card.type_line)
 
 
+def is_land_card(card: CardRecord) -> bool:
+    """A card counts as a land when its front face is one.
+
+    Spell//land modal double-faced cards ("Instant // Land") are spells for
+    deck-building purposes: counting them as lands inflates the land count
+    of a deck that runs them as spells.
+    """
+    return "Land" in front_face_type_line(card.type_line)
+
+
 def copy_limit(card: CardRecord, format_name: str) -> int | None:
     """Maximum copies of ``card`` in a deck, or None for unlimited.
 

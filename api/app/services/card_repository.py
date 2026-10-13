@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from datetime import date
 from functools import cached_property
 from urllib.parse import quote_plus
 
@@ -12,7 +13,7 @@ from sqlalchemy.engine import make_url
 
 logger = logging.getLogger(__name__)
 
-from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATABASE_URL
+from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATA_STALE_DAYS, DATABASE_URL
 from app.db import session_scope
 from app.rules import can_be_commander
 from app.services.affiliate import ensure_tcgplayer_link
@@ -782,7 +783,23 @@ class CardRepository:
             archetype_count=archetype_count,
             database_backend=make_url(DATABASE_URL).get_backend_name(),
             scryfall_ingested=card_source == "database" and card_count > 1000,
+            card_data_as_of=self.card_data_as_of(),
+            stale=self.card_data_is_stale(),
         )
+
+    def card_data_as_of(self) -> str | None:
+        dates = [card.released_at for card in self._all_cards_cache if card.released_at]
+        return max(dates)[:10] if dates else None
+
+    def card_data_is_stale(self, today: date | None = None) -> bool:
+        as_of = self.card_data_as_of()
+        if not as_of:
+            return False
+        try:
+            newest = date.fromisoformat(as_of)
+        except ValueError:
+            return False
+        return ((today or date.today()) - newest).days > DATA_STALE_DAYS
 
     def _fallback_packages(self, role: str, tags: list[str]) -> list[ArchetypePackage]:
         packages = self.card_packages_by_role_theme(format_name="commander", role=role, theme_tags=tags, limit=8)

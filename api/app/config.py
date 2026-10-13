@@ -40,3 +40,6 @@ TCGPLAYER_AFFILIATE_URL = os.getenv("TCGPLAYER_AFFILIATE_URL", "").strip()
 LLM_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_TIMEOUT_SECONDS", "30"))
 LLM_BACKGROUND_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_BACKGROUND_TIMEOUT_SECONDS", "120"))
 LLM_MAX_RETRIES = int(os.getenv("MTG_LLM_MAX_RETRIES", "1"))
+# Card/legality data older than this many days (by newest card release date)
+# is reported as stale: sets and ban updates land every few weeks.
+DATA_STALE_DAYS = int(os.getenv("MTG_DATA_STALE_DAYS", "60"))

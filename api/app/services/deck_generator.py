@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import json
 import logging
 import re
 from collections import Counter, defaultdict
@@ -14,8 +16,11 @@ from app.models import (
     ArchetypeRecord,
     CardRecord,
     CardRef,
+    ColorSourcePoint,
     CommanderPackageSummary,
+    DeckAlternative,
     DeckCardExplanation,
+    DeckConstraints,
     DeckMechanic,
     DeckProvenance,
     DeckResponse,
@@ -39,7 +44,8 @@ from app.constants import (
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
-from app.rules import copy_limit, is_basic_land
+from app.rules import copy_limit, is_basic_land, is_land_card
+from app.services.deck_diff import diff_decks
 from app.services.builtin_archetypes import (
     BuiltinArchetype,
     blend_archetypes,
@@ -83,6 +89,10 @@ class DeckGenerator:
         self.validator = validator
 
     def generate(self, request: GenerateDeckRequest) -> DeckResponse:
+        # The caller's own constraints, before prompt parsing and seed
+        # anchors are merged in. Persisted on the response so a refine keeps
+        # them (budget, excludes, ...).
+        user_request = request
         if request.prompt:
             intent = interpret_generate_prompt(request.prompt)
             request = request.model_copy(update={
@@ -136,7 +146,8 @@ class DeckGenerator:
                 final_composed = refined if refined is not None else composed
                 colors_tuple = tuple(request.colors) if request.colors else ()
                 builtin = BuiltinArchetype(
-                    id="composed-" + str(abs(hash(request.prompt)) % 10_000_000),
+                    # Stable across processes (hash() is salted per process).
+                    id="composed-" + hashlib.sha1(request.prompt.encode("utf-8")).hexdigest()[:10],
                     display_name=final_composed["archetype_label"] or "Composed",
                     keywords=(),
                     formats=(request.format,),
@@ -324,7 +335,7 @@ class DeckGenerator:
             title = self._build_title(request, base, commander)
             strategy_summary = base.strategy
 
-        return DeckResponse(
+        deck = DeckResponse(
             format=request.format,
             title=title,
             colors=colors,
@@ -350,6 +361,132 @@ class DeckGenerator:
             theme_tags=request.theme_tags,
             card_types=self.repository.card_types_for(mainboard + sideboard, commander),
         )
+        return self._enrich_response(deck, user_request=user_request, outcome=outcome)
+
+    # ── Response enrichment ──────────────────────────────────────────────
+
+    @staticmethod
+    def deck_id_for(format_name: str, commander: str | None, mainboard: list[CardRef], sideboard: list[CardRef]) -> str:
+        """Stable id for an exact list: same cards → same id, in any process."""
+        def canon(refs: list[CardRef]) -> list[tuple[str, int]]:
+            merged: Counter[str] = Counter()
+            for ref in refs:
+                merged[ref.name] += ref.quantity
+            return sorted(merged.items())
+        payload = json.dumps([format_name, commander or "", canon(mainboard), canon(sideboard)])
+        return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+    def _enrich_response(
+        self,
+        deck: DeckResponse,
+        *,
+        user_request: GenerateDeckRequest,
+        outcome: "_RetrievalOutcome",
+    ) -> DeckResponse:
+        """Attach the spec-level extras that don't change the list itself:
+        stable id, persisted constraints, alternatives, color sources and
+        pricing transparency."""
+        deck.deck_id = self.deck_id_for(deck.format, deck.commander, deck.mainboard, deck.sideboard)
+        deck.constraints = DeckConstraints(
+            budget=user_request.budget,
+            include_cards=list(user_request.include_cards),
+            exclude_cards=list(user_request.exclude_cards),
+            owned_cards=list(user_request.owned_cards),
+            mode=user_request.mode,
+            match_type=user_request.match_type,
+            bracket=user_request.bracket,
+            experience_level=user_request.experience_level,
+            prompt=user_request.prompt,
+        )
+        deck.color_sources = self._color_sources(deck.mainboard, deck.colors)
+        owned = {name.lower() for name in user_request.owned_cards}
+        unpriced: list[str] = []
+        to_complete = 0.0
+        priced_any = False
+        refs = deck.mainboard + deck.sideboard + ([CardRef(name=deck.commander, quantity=1)] if deck.commander else [])
+        for ref in refs:
+            card = self.repository.get_card(ref.name)
+            if card is None or is_basic_land(card):
+                continue
+            if card.price_usd is None:
+                unpriced.append(card.name)
+                continue
+            priced_any = True
+            if card.name.lower() not in owned:
+                to_complete += card.price_usd * ref.quantity
+        deck.unpriced_cards = sorted(set(unpriced))
+        deck.cost_to_complete_usd = round(to_complete, 2) if priced_any else None
+        if deck.unpriced_cards:
+            deck.warnings.append(
+                f"{len(deck.unpriced_cards)} card(s) have no price data, so the estimate undercounts: "
+                + ", ".join(deck.unpriced_cards[:5])
+                + ("…" if len(deck.unpriced_cards) > 5 else "")
+            )
+        deck.alternatives = self._alternatives(outcome, deck)
+        return deck
+
+    def _color_sources(self, mainboard: list[CardRef], colors: list[str]) -> list[ColorSourcePoint]:
+        """Per color: mana sources among the lands vs colored pips in spells."""
+        sources: Counter[str] = Counter()
+        pips: Counter[str] = Counter()
+        for ref in mainboard:
+            card = self.repository.get_card(ref.name)
+            if card is None:
+                continue
+            if is_land_card(card):
+                produced = self._land_produces(card)
+                for color in produced:
+                    sources[color] += ref.quantity
+                continue
+            cost = card.mana_cost or "".join(face.mana_cost or "" for face in card.faces)
+            for color in "WUBRG":
+                pips[color] += cost.count(color) * ref.quantity
+        order = [c for c in "WUBRG" if c in set(colors) or sources[c] or pips[c]]
+        return [ColorSourcePoint(color=c, sources=sources[c], pips=pips[c]) for c in order]
+
+    _BASIC_COLOR = {"Plains": "W", "Island": "U", "Swamp": "B", "Mountain": "R", "Forest": "G"}
+
+    def _land_produces(self, card: CardRecord) -> set[str]:
+        for basic, color in self._BASIC_COLOR.items():
+            if basic in card.type_line:  # basic land types, incl. shocks/duals
+                return {c for b, c in self._BASIC_COLOR.items() if b in card.type_line}
+        text = card.oracle_text or ""
+        produced = {c for c in "WUBRG" if "{" + c + "}" in text}
+        if "any color" in text or "one color" in text:
+            produced |= set("WUBRG")
+        if not produced and card.color_identity:
+            produced = set(card.color_identity)
+        return produced
+
+    def _alternatives(self, outcome: "_RetrievalOutcome", deck: DeckResponse) -> list[DeckAlternative]:
+        out: list[DeckAlternative] = []
+        chosen = {name.lower() for name in deck.source_archetypes[:1]}
+        deck_colors = {c for c in deck.colors if c != "C"}
+        for candidate in outcome.candidates:
+            if candidate.name.lower() in chosen or len(out) >= 2:
+                continue
+            # An alternative must be buildable in the requested colors.
+            if deck_colors and not set(candidate.colors) <= deck_colors:
+                continue
+            if deck.selected_archetype is not None and candidate.name == deck.selected_archetype.name:
+                continue
+            key_cards = [pkg.name for pkg in candidate.metadata.core_cards[:6]] or [
+                ref.name for ref in candidate.mainboard if not self._is_land_name(ref.name)
+            ][:6]
+            out.append(DeckAlternative(
+                name=candidate.name,
+                source_type="template" if candidate.metadata.evidence == "template" else "corpus",
+                colors=list(candidate.colors),
+                tags=list(candidate.tags)[:6],
+                key_cards=key_cards,
+                summary=candidate.strategy,
+                commander=candidate.commander,
+            ))
+        return out
+
+    def _is_land_name(self, name: str) -> bool:
+        card = self.repository.get_card(name)
+        return bool(card and is_land_card(card))
 
     # ── Retrieval ────────────────────────────────────────────────────────
 
@@ -791,13 +928,16 @@ class DeckGenerator:
     def refine(self, deck: DeckResponse, prompt: str) -> DeckResponse:
         intent = interpret_refinement(prompt)
 
+        previous = deck.constraints
         current_price = deck.estimated_price_usd or 0
         if intent.budget is not None:
             budget: float | None = intent.budget
         elif intent.scale_budget_by is not None and current_price > 0:
             budget = current_price * intent.scale_budget_by
         else:
-            budget = None
+            # Keep the budget the deck was built under (it used to be dropped,
+            # so "add 4x Lightning Helix" to a $50 deck came back at $194).
+            budget = previous.budget
 
         original_tags = deck.playstyle_tags or ["midrange"]
         playstyle_tags = [t for t in original_tags if t not in intent.remove_playstyle_tags]
@@ -808,7 +948,17 @@ class DeckGenerator:
             playstyle_tags = ["midrange"]
 
         commander_lower = (deck.commander or "").lower()
-        exclude_set = {name.lower() for name in intent.exclude_cards}
+        # Constraints accumulate across refinements: earlier excludes stay
+        # excluded unless this refinement asks for the card back.
+        readded = {name.lower() for name in intent.include_cards}
+        merged_excludes = list(dict.fromkeys(
+            [name for name in previous.exclude_cards if name.lower() not in readded] + intent.exclude_cards
+        ))
+        removed = {name.lower() for name in intent.exclude_cards}
+        merged_includes = list(dict.fromkeys(
+            [name for name in previous.include_cards if name.lower() not in removed] + intent.include_cards
+        ))
+        exclude_set = {name.lower() for name in merged_excludes}
         seed_cards = [
             ref for ref in deck.mainboard
             if ref.name.lower() != commander_lower and ref.name.lower() not in exclude_set
@@ -834,8 +984,6 @@ class DeckGenerator:
         if deck.format != "commander":
             seed_cards = self._preserve_land_count(deck, seed_cards, colors, keep_lands=not intent.color_changes)
 
-        forced_includes = ([deck.commander] if deck.commander else []) + intent.include_cards
-
         request = GenerateDeckRequest(
             format=deck.format,
             colors=colors,
@@ -843,16 +991,40 @@ class DeckGenerator:
             theme_tags=deck.theme_tags or [],
             budget=budget,
             commander_name=deck.commander,
-            include_cards=list(dict.fromkeys(forced_includes)),
+            include_cards=merged_includes,
+            exclude_cards=merged_excludes,
             seed_cards=seed_cards,
-            mode="constraint-aware",
-            experience_level="beginner",
+            mode=previous.mode,
+            experience_level=previous.experience_level,
+            match_type=previous.match_type,
+            bracket=previous.bracket,
+            owned_cards=previous.owned_cards,
         )
         regenerated = self.generate(request)
+        # The original brief still describes the deck; refinements append.
+        regenerated.constraints.prompt = previous.prompt
         base_title = re.sub(r"( - Refined)+$", "", deck.title)
         regenerated.title = f"{base_title} - Refined"
+        diff = diff_decks(deck.mainboard, regenerated.mainboard).to_dict()
+        diff["sideboard"] = diff_decks(deck.sideboard, regenerated.sideboard).to_dict()["summary"]
+        regenerated.changes = diff
+        summary = diff["summary"]
         if prompt:
             regenerated.explanation.append(f"Refinement applied: {prompt}")
+        moves = (
+            [f"+{e['quantity']} {e['name']}" for e in diff["added"]]
+            + [f"+{e['delta']} {e['name']}" for e in diff["increased"]]
+            + [f"-{e['quantity']} {e['name']}" for e in diff["removed"]]
+            + [f"-{e['delta']} {e['name']}" for e in diff["decreased"]]
+        )
+        regenerated.explanation.append(
+            f"What changed: {', '.join(moves[:10])}{'…' if len(moves) > 10 else ''} "
+            f"({summary['total_changes']} card changes)." if moves else "What changed: no mainboard changes."
+        )
+        if previous.budget is not None and budget == previous.budget and regenerated.estimated_price_usd and regenerated.estimated_price_usd > budget:
+            regenerated.warnings.append(
+                f"The refined deck costs about ${regenerated.estimated_price_usd:.2f}, over the ${budget:.2f} budget it was built under."
+            )
         return regenerated
 
     def _preserve_land_count(
@@ -915,6 +1087,8 @@ class DeckGenerator:
             return self._export_csv(deck)
         if target == "moxfield":
             return self._export_moxfield(deck)
+        if target == "archidekt":
+            return self._export_archidekt(deck)
         return self.export_plain(deck)
 
     def _build_constructed_mainboard(
@@ -2108,7 +2282,9 @@ class DeckGenerator:
         return self._total_cards(counts) - self._land_total(counts)
 
     def _export_arena(self, deck: DeckResponse) -> str:
-        lines = [deck.title, ""]
+        # Arena's importer treats every line as a card or a section header,
+        # so no title line.
+        lines: list[str] = []
         if deck.commander:
             lines.append("Commander")
             lines.append(f"1 {deck.commander}")
@@ -2129,6 +2305,15 @@ class DeckGenerator:
             lines.append(f"commander,1,{deck.commander}")
         lines.extend(f"mainboard,{card.quantity},{card.name}" for card in deck.mainboard)
         lines.extend(f"sideboard,{card.quantity},{card.name}" for card in deck.sideboard)
+        return "\n".join(lines)
+
+    def _export_archidekt(self, deck: DeckResponse) -> str:
+        """Archidekt text import: "1x Name" lines with a [Category] tag."""
+        lines: list[str] = []
+        if deck.commander:
+            lines.append(f"1x {deck.commander} [Commander{{top}}]")
+        lines.extend(f"{card.quantity}x {card.name}" for card in deck.mainboard)
+        lines.extend(f"{card.quantity}x {card.name} [Sideboard]" for card in deck.sideboard)
         return "\n".join(lines)
 
     def _export_moxfield(self, deck: DeckResponse) -> str:

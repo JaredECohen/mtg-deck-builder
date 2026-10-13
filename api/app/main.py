@@ -444,7 +444,8 @@ def get_job_prose(
 @app.get("/v1/meta/summary", response_model=MetaSummaryResponse)
 def meta_summary(format: FormatName) -> MetaSummaryResponse:
     archetypes = repository.archetypes_for_format(format)
-    return MetaSummaryResponse(format=format, archetypes=archetypes)
+    dates = [a.metadata.last_seen for a in archetypes if a.metadata.last_seen]
+    return MetaSummaryResponse(format=format, archetypes=archetypes, as_of=max(dates) if dates else None)
 
 
 @app.get("/v1/cards", response_model=CardSearchResponse)
@@ -453,12 +454,36 @@ def card_search(query: str, format: FormatName | None = None, limit: int = 12) -
 
 
 @app.get("/v1/cards/{card_name}/similar")
-def similar_cards(card_name: str, k: int = 10) -> dict:
+def similar_cards(
+    card_name: str,
+    k: int = 10,
+    format: FormatName | None = None,
+    colors: str | None = None,
+) -> dict:
     """Semantic-ish nearest neighbours for a card (pgvector when wired,
-    deterministic lexical-feature cosine otherwise)."""
+    deterministic lexical-feature cosine otherwise).
+
+    With ``format`` / ``colors`` (comma-separated, e.g. ``U,R``) only cards
+    legal in that format and inside those colors come back, which is what an
+    "alternatives for this slot" suggestion needs."""
     if repository.get_card(card_name) is None:
         raise HTTPException(status_code=404, detail="Card not found")
-    hits = card_retriever.similar_to(card_name, k=max(1, min(k, 50)))
+    k = max(1, min(k, 50))
+    allowed_colors = {c for c in (colors or "").split(",") if c and c != "C"} if colors is not None else None
+    filtered = format is not None or allowed_colors is not None
+    hits = card_retriever.similar_to(card_name, k=k * 6 if filtered else k)
+    if filtered:
+        kept = []
+        for hit in hits:
+            card = repository.get_card(hit.name)
+            if card is None:
+                continue
+            if format is not None and card.legalities.get(format) not in {"legal", "restricted"}:
+                continue
+            if allowed_colors is not None and not set(card.color_identity or card.colors) <= allowed_colors:
+                continue
+            kept.append(hit)
+        hits = kept[:k]
     return {
         "card": card_name,
         "mode": card_retriever.mode,
