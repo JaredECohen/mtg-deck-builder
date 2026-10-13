@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import gzip
 import json
+import tempfile
+from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
+from sqlalchemy import delete, select
 
 from app.config import SCRYFALL_BULK_URL, SCRYFALL_USER_AGENT
 from app.db import session_scope
@@ -171,15 +176,51 @@ def printing_priority(normalized: dict[str, object]) -> tuple[int, int, str]:
     return (tier, released_year, released)
 
 
+def _iter_bulk_cards(path: Path) -> Iterator[dict[str, object]]:
+    """Cards from a downloaded bulk file: JSON Lines (gzipped or not, the
+    current Scryfall format) or a single JSON array (the older format)."""
+    with open(path, "rb") as probe:
+        gzipped = probe.read(2) == b"\x1f\x8b"
+    opener = gzip.open if gzipped else open
+    with opener(path, "rt", encoding="utf-8") as fh:
+        first = fh.read(1)
+        while first and first.isspace():
+            first = fh.read(1)
+        if first == "[":
+            yield from json.loads(first + fh.read())
+            return
+        line = first + fh.readline()
+        while line:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+            line = fh.readline()
+
+
+def _download_bulk(client: httpx.Client, entry: dict[str, object], dest: Path) -> None:
+    # Scryfall moved bulk files to gzipped JSON Lines ("jsonl_download_uri",
+    # 2026); "download_uri" was the older single-JSON-array file.
+    uri = entry.get("jsonl_download_uri") or entry.get("download_uri")
+    if not uri:
+        raise RuntimeError(f"bulk entry has no download URI (keys: {sorted(entry)})")
+    with client.stream("GET", str(uri)) as response:
+        response.raise_for_status()
+        with open(dest, "wb") as fh:
+            for chunk in response.iter_raw():
+                fh.write(chunk)
+
+
 def main() -> None:
     create_schema()
 
     headers = {"User-Agent": SCRYFALL_USER_AGENT}
-    with httpx.Client(timeout=240.0, headers=headers, follow_redirects=True) as client:
-        payload = client.get(SCRYFALL_BULK_URL).raise_for_status().json()
-        default_cards = next(item for item in payload["data"] if item["type"] == "default_cards")
-        download_uri = default_cards["download_uri"]
-        cards = client.get(download_uri).raise_for_status().json()
+    with tempfile.TemporaryDirectory(prefix="scryfall-") as tmp:
+        bulk_path = Path(tmp) / "default_cards"
+        with httpx.Client(timeout=600.0, headers=headers, follow_redirects=True) as client:
+            payload = client.get(SCRYFALL_BULK_URL).raise_for_status().json()
+            default_cards = next(item for item in payload["data"] if item["type"] == "default_cards")
+            _download_bulk(client, default_cards, bulk_path)
+        cards = list(_iter_bulk_cards(bulk_path))
 
     normalized_cards: dict[str, dict[str, object]] = {}
     skipped = 0
@@ -199,17 +240,40 @@ def main() -> None:
         session.add(run)
         session.flush()
 
+        # Rows are keyed by oracle_id, but normalized_name is unique too. When
+        # Scryfall issues a new oracle_id for an existing name, the stale row
+        # must go first or the insert violates the name constraint (the whole
+        # ingest used to roll back on that).
+        existing_ids = {
+            name: oracle_id
+            for name, oracle_id in session.execute(select(Card.normalized_name, Card.oracle_id))
+        }
+        reissued: list[str] = []
         for normalized in normalized_cards.values():
-            # set_type is used only for dedupe priority; not stored on Card.
-            payload = {k: v for k, v in normalized.items() if k != "set_type"}
-            session.merge(Card(**payload))
+            old_id = existing_ids.get(str(normalized["normalized_name"]))
+            if old_id is not None and old_id != normalized["oracle_id"]:
+                session.execute(delete(Card).where(Card.oracle_id == old_id))
+                reissued.append(str(normalized["name"]))
+        if reissued:
+            session.flush()
+            print(json.dumps({"reissued_oracle_ids": len(reissued), "sample": reissued[:10]}))
+
+        for normalized in normalized_cards.values():
+            # set_type is stored too: the generator's joke/alchemy/memorabilia
+            # gate reads it (it was dropped here, leaving 97% of cards null).
+            session.merge(Card(**normalized))
             processed += 1
             if processed % 2000 == 0:
                 session.flush()
 
         run.status = "completed"
         run.records_processed = processed
-        run.notes = json.dumps({"skipped": skipped, "source_type": "default_cards", "deduped_names": len(normalized_cards)})
+        run.notes = json.dumps({
+            "skipped": skipped,
+            "source_type": "default_cards",
+            "deduped_names": len(normalized_cards),
+            "reissued_oracle_ids": len(reissued),
+        })
 
     print(json.dumps({"status": "ok", "records_processed": processed, "skipped": skipped}))
 

@@ -2,10 +2,10 @@
 
 Deterministic, LLM-free run of `qa/benchmark.py` (see `qa/README.md`).
 
-- Run at: `2026-10-13 01:29 UTC`
-- Git commit: `38b0ed0`
-- Database: full local DB (read-only temp copy) (33794 cards, 92 archetypes, card data as of 2026-07-17)
-- Scenarios: 108 (constructed 60, commander 24, prompt 24); wall time 51.8 s
+- Run at: `2026-10-13 03:52 UTC`
+- Git commit: `a3a099a`
+- Database: full local DB (read-only temp copy) (35218 cards, 92 archetypes, card data as of 2026-10-12)
+- Scenarios: 108 (constructed 60, commander 24, prompt 24); wall time 19.9 s
 
 ## Pass rates
 
@@ -41,9 +41,9 @@ Deterministic, LLM-free run of `qa/benchmark.py` (see `qa/README.md`).
 
 | Endpoint | Calls | p50 ms | p95 ms | max ms |
 |---|---|---|---|---|
-| generate | 108 | 166.8 | 1488.0 | 3251.9 |
-| refine | 28 | 146.0 | 2488.2 | 2707.5 |
-| validate | 136 | 6.3 | 19.4 | 212.2 |
+| generate | 108 | 65.4 | 319.3 | 1403.0 |
+| refine | 28 | 62.3 | 764.8 | 1170.5 |
+| validate | 136 | 1.9 | 3.9 | 7.6 |
 
 ## Failures
 

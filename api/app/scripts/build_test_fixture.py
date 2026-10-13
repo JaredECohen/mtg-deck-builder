@@ -5,7 +5,7 @@ needed a real card pool was either skipped (``MTG_FULL_DATASET``) or written
 against the developer's local 33k-card DB and failed in CI. This script cuts a
 small, deterministic subset of the full DB that both use:
 
-- every card named anywhere in ``app/`` or ``tests/`` source (builtin
+- every card named anywhere in ``app/``, ``tests/`` or ``qa/`` source (builtin
   archetype anchors, mana-base tables, commander staples, test literals), in
   the corpus tables (archetypes, tournament decks) and in ``app/data`` JSON;
 - every basic land (snow basics and Wastes included);
@@ -89,7 +89,12 @@ def _json_names(value: object, out: set[str]) -> None:
 
 
 def _referenced_names(conn: sqlite3.Connection) -> set[str]:
-    sources = sorted((API_DIR / "app").rglob("*.py")) + sorted((API_DIR / "tests").rglob("*.py"))
+    # qa/ holds the benchmark scenarios the CI gate runs (explicit commanders).
+    sources = (
+        sorted((API_DIR / "app").rglob("*.py"))
+        + sorted((API_DIR / "tests").rglob("*.py"))
+        + sorted((API_DIR.parent / "qa").glob("*.py"))
+    )
     names = _string_literals(sources)
     for path in sorted((API_DIR / "app" / "data").glob("*.json")):
         _json_names(json.loads(path.read_text(encoding="utf-8")), names)

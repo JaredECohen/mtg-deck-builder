@@ -817,12 +817,15 @@ class CardRepository:
             stale=self.card_data_is_stale(),
         )
 
-    def card_data_as_of(self) -> str | None:
-        dates = [card.released_at for card in self._all_cards_cache if card.released_at]
-        return max(dates)[:10] if dates else None
+    def card_data_as_of(self, today: date | None = None) -> str | None:
+        # Scryfall lists preview cards with their future release date, so
+        # the newest date can be months ahead; only count released cards.
+        cutoff = (today or date.today()).isoformat()
+        dates = [card.released_at[:10] for card in self._all_cards_cache if card.released_at and card.released_at[:10] <= cutoff]
+        return max(dates) if dates else None
 
     def card_data_is_stale(self, today: date | None = None) -> bool:
-        as_of = self.card_data_as_of()
+        as_of = self.card_data_as_of(today)
         if not as_of:
             return False
         try:
