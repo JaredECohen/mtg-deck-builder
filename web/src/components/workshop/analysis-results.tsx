@@ -1,6 +1,6 @@
 "use client";
 
-import { GroupedDeckList } from "./deck-results";
+import { GroupedDeckList, notesByCard } from "./deck-list";
 import { ProvenanceBanner } from "./provenance-banner";
 import type { CardRef, DeckAnalysisResponse, FormatName } from "@/lib/types";
 
@@ -76,7 +76,7 @@ export function AnalysisResults({ analysis, format, manualMainboard, manualSideb
                 {manualMainboard.reduce((sum, ref) => sum + ref.quantity, 0)} cards
               </span>
             </div>
-            <GroupedDeckList cards={manualMainboard} typeMap={analysis.card_types} suffix="manual-main" onOpenCard={onOpenCard} />
+            <GroupedDeckList cards={manualMainboard} typeMap={analysis.card_types} suffix="manual-main" notes={notesByCard(analysis.card_notes)} onOpenCard={onOpenCard} />
           </div>
           <div>
             <div className="label">{format === "commander" ? "Commander / Sideboard" : "Sideboard"}</div>
@@ -86,7 +86,7 @@ export function AnalysisResults({ analysis, format, manualMainboard, manualSideb
               </ul>
             ) : null}
             {manualSideboard.length ? (
-              <GroupedDeckList cards={manualSideboard} typeMap={analysis.card_types} suffix="manual-side" onOpenCard={onOpenCard} />
+              <GroupedDeckList cards={manualSideboard} typeMap={analysis.card_types} suffix="manual-side" notes={notesByCard(analysis.card_notes)} onOpenCard={onOpenCard} />
             ) : format !== "commander" ? (
               <p className="muted">No sideboard cards submitted.</p>
             ) : null}
