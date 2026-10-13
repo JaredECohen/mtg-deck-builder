@@ -208,9 +208,17 @@ class CardRepository:
                     if requested_color_set:
                         if not archetype_colors.issubset(requested_color_set):
                             continue
+                        # The empty set is a subset of everything, so a
+                        # colorless shell (Eldrazi) used to win mono-U control
+                        # and mono-R aggro requests on source count alone.
+                        if not archetype_colors and self.COLORLESS_SYMBOL not in requested_colors:
+                            continue
                     elif self.COLORLESS_SYMBOL in requested_colors and archetype_colors:
                         continue
                 elif self.COLORLESS_SYMBOL in requested_colors and archetype_colors:
+                    continue
+                elif requested_color_set and not (archetype_colors & requested_color_set):
+                    # Soft matching still needs at least one shared color.
                     continue
             score = max(1.0, float(archetype.source_count))
             if requested_colors:

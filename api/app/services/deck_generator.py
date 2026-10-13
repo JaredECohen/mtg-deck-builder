@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from collections import Counter, defaultdict
@@ -232,13 +233,6 @@ class DeckGenerator:
                 f"Estimated deck price is about ${estimated_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
             )
 
-        explanation = self._build_explanation(base, request, colors, mainboard, sideboard, warnings, commander_reason, outcome)
-        mechanics = self._build_mechanics(mainboard, commander)
-        role_summary = self._build_role_summary(mainboard)
-        sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
-        mana_curve = self._build_mana_curve(mainboard)
-        card_notes = self._build_card_notes(mainboard)
-
         # Honest confidence: replace the old "did we find a shell" signal with
         # a composite of (a) intent-match — did the brief's archetype match
         # what we built? — and (b) anchor coverage — does the mainboard
@@ -253,6 +247,16 @@ class DeckGenerator:
             mainboard=mainboard,
             request=request,
         )
+        # The explanation text quotes the confidence, so build it from the
+        # final number (it used to print the retrieval-time 0.70 next to a
+        # 95% badge).
+        outcome = dataclasses.replace(outcome, confidence=round(confidence, 3))
+        explanation = self._build_explanation(base, request, colors, mainboard, sideboard, warnings, commander_reason, outcome)
+        mechanics = self._build_mechanics(mainboard, commander)
+        role_summary = self._build_role_summary(mainboard)
+        sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
+        mana_curve = self._build_mana_curve(mainboard)
+        card_notes = self._build_card_notes(mainboard)
         # Queue sim validation for blends (2+ archetypes merged) so the
         # frontend can show a "validated by simulator" badge once the
         # optimizer finishes. Best-effort — any failure is swallowed so the
@@ -479,9 +483,8 @@ class DeckGenerator:
     ) -> _RetrievalOutcome:
         """Build a retrieval outcome from a builtin archetype seed.
 
-        Used when the requested format has no corpus archetypes at all (e.g.
-        Pioneer in our current data) but the user's brief matched a known
-        builtin shell. Synthesizes an ArchetypeRecord so downstream pipeline
+        Used whenever the user's brief matched a known builtin shell (and as
+        the last resort when a format has no corpus archetypes at all). Synthesizes an ArchetypeRecord so downstream pipeline
         steps (mainboard fill, strategy summary, sections) all run normally.
         """
         # If the archetype carries a mana_base template, strip any hand-
@@ -542,7 +545,7 @@ class DeckGenerator:
             retrieved_from=[builtin.display_name],
             fallback_used=True,
             notes=[
-                f"Format '{request.format}' has no corpus archetypes; synthesized base from built-in {builtin.display_name} seed.",
+                f"Your brief named the {builtin.display_name} archetype; built from its curated seed instead of a corpus shell.",
             ],
         )
 
@@ -828,6 +831,9 @@ class DeckGenerator:
 
         colors = list(dict.fromkeys(deck.colors + intent.color_changes))
 
+        if deck.format != "commander":
+            seed_cards = self._preserve_land_count(deck, seed_cards, colors, keep_lands=not intent.color_changes)
+
         forced_includes = ([deck.commander] if deck.commander else []) + intent.include_cards
 
         request = GenerateDeckRequest(
@@ -848,6 +854,44 @@ class DeckGenerator:
         if prompt:
             regenerated.explanation.append(f"Refinement applied: {prompt}")
         return regenerated
+
+    def _preserve_land_count(
+        self,
+        deck: DeckResponse,
+        seed_cards: list[CardRef],
+        colors: list[str],
+        *,
+        keep_lands: bool,
+    ) -> list[CardRef]:
+        """Keep a refined constructed deck at its original land count.
+
+        Excluding a land ("swap the Islands for Mountains") must not shrink the
+        mana base: the removed copies come back as on-color basics. When the
+        refinement changes colors the old lands are dropped instead, so the
+        builder derives a fresh mana base for the new colors.
+        """
+        def is_land(name: str) -> bool:
+            card = self.repository.get_card(name)
+            return bool(card and "Land" in card.type_line)
+
+        if not keep_lands:
+            return [ref for ref in seed_cards if not is_land(ref.name)]
+        original_lands = sum(ref.quantity for ref in deck.mainboard if is_land(ref.name))
+        seeded_lands = sum(ref.quantity for ref in seed_cards if is_land(ref.name))
+        shortfall = original_lands - seeded_lands
+        if shortfall <= 0:
+            return seed_cards
+        basics = self._basic_lands_for_colors(colors) or ["Wastes"]
+        seeded_basics = [ref.name for ref in seed_cards if ref.name in basics]
+        # Prefer a basic the deck (or the refinement) already runs.
+        target = seeded_basics[0] if seeded_basics else basics[0]
+        out = list(seed_cards)
+        index = next((i for i, ref in enumerate(out) if ref.name == target), None)
+        if index is None:
+            out.append(CardRef(name=target, quantity=shortfall))
+        else:
+            out[index] = CardRef(name=target, quantity=out[index].quantity + shortfall)
+        return out
 
     def export_plain(self, deck: DeckResponse) -> str:
         lines = [deck.title, f"Format: {deck.format}"]
@@ -904,9 +948,21 @@ class DeckGenerator:
                 counts[card.name] = max(counts[card.name], 2)
 
         # Seed from prior deck (refine path): preserve original quantities for cards that still pass all filters
+        seeded_land_total = 0
+        protected: set[str] = set()
         for ref in request.seed_cards:
             card = self.repository.get_card(ref.name)
-            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+            if not card or ref.name.lower() in excluded:
+                continue
+            if "Land" in card.type_line:
+                # A refine seeds the previous mana base (see
+                # _preserve_land_count). Keep it as-is: it is the land target.
+                if self._is_card_legal_record(card, request.format) and (
+                    is_basic_land(card) or self._matches_color_request(card, colors)
+                ):
+                    limit = self._copy_limit(card, request.format)
+                    counts[card.name] = min(ref.quantity, limit or ref.quantity)
+                    seeded_land_total += counts[card.name]
                 continue
             if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
                 continue
@@ -914,8 +970,25 @@ class DeckGenerator:
                 continue
             limit = self._copy_limit(card, request.format)
             counts[card.name] = min(ref.quantity, limit or ref.quantity)
+            protected.add(card.name)
+        # Cards the user explicitly asked for are cut last of all.
+        requested = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
+        protected |= requested
+        if seeded_land_total:
+            # The seeded mana base replaces the retrieved shell's lands, which
+            # were added by the archetype loop above (e.g. Steam Vents pushing
+            # out the Mountains a user just swapped in).
+            seeded_land_names = {
+                card.name
+                for ref in request.seed_cards
+                if (card := self.repository.get_card(ref.name)) is not None and "Land" in card.type_line
+            }
+            for name in list(counts):
+                card = self.repository.get_card(name)
+                if card and "Land" in card.type_line and name not in seeded_land_names:
+                    del counts[name]
 
-        target_lands = self._target_land_count(archetype, requested_tags)
+        target_lands = seeded_land_total or self._target_land_count(archetype, requested_tags)
         package_candidates = self.repository.card_packages_by_role_theme(
             format_name=request.format,
             role="engine",
@@ -938,9 +1011,11 @@ class DeckGenerator:
         while self._nonland_total(counts) < nonland_target:
             if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
                 break
-        self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format, budget=request.budget)
-        while self._total_cards(counts) > CONSTRUCTED_DECK_SIZE:
-            self._trim_excess_land_or_spell(counts, colors)
+        if not seeded_land_total:
+            # A seeded (refined) mana base is kept as the user left it; only a
+            # fresh build derives lands from the shell and rebalances basics.
+            self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format, budget=request.budget)
+        self._trim_to_size(counts, colors, target_lands, protected, requested)
         max_fill_iters = 200
         for _ in range(max_fill_iters):
             if self._total_cards(counts) >= CONSTRUCTED_DECK_SIZE:
@@ -1293,7 +1368,7 @@ class DeckGenerator:
             "corpus": f"Started from the {archetype.name} shell, backed by {outcome.evidence_count} corpus deck(s) of supporting evidence.",
             "fallback": f"No matching corpus shell was found — the deck was assembled from the legal card pool using deterministic role and color filters (low confidence: {outcome.confidence:.2f}).",
             "hybrid": f"Started from the {archetype.name} shell but most slots were filled by deterministic fallbacks (mixed confidence: {outcome.confidence:.2f}).",
-            "builtin": f"No corpus archetype was available for this format — assembled from the built-in {archetype.name} seed and filled from the legal card pool.",
+            "builtin": f"Assembled from the curated {archetype.name} seed your brief matched, then filled from the legal card pool.",
         }[outcome.source_type]
         notes = [
             provenance_blurb,
@@ -1325,7 +1400,7 @@ class DeckGenerator:
             "corpus": f"Backed by {outcome.evidence_count} corpus deck(s); confidence {outcome.confidence:.2f}.",
             "fallback": f"No matching corpus shell — assembled from card pool. Confidence {outcome.confidence:.2f}.",
             "hybrid": f"Hybrid of corpus shell and card-pool fallback. Confidence {outcome.confidence:.2f}.",
-            "builtin": f"Built from a curated {archetype.name} seed (no corpus archetype for this format). Confidence {outcome.confidence:.2f}.",
+            "builtin": f"Built from the curated {archetype.name} seed. Confidence {outcome.confidence:.2f}.",
         }[outcome.source_type]
         sections = [
             DeckSectionSummary(
@@ -1927,6 +2002,58 @@ class DeckGenerator:
             counts[name] -= 1
             if counts[name] <= 0:
                 del counts[name]
+
+    def _trim_to_size(
+        self,
+        counts: Counter[str],
+        colors: list[str],
+        target_lands: int,
+        protected: set[str],
+        requested: set[str] | None = None,
+    ) -> None:
+        """Cut a constructed list back to 60 without gutting the mana base.
+
+        Spells over the nonland budget go first: unprotected cards, then kept
+        cards, and cards the user explicitly requested last. Lands are only
+        trimmed down to ``target_lands``. The old
+        trim always took basics first, so a refine whose seeds plus a new
+        corpus shell overflowed 60 shipped with zero lands.
+        """
+        nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
+        while (before := self._total_cards(counts)) > CONSTRUCTED_DECK_SIZE:
+            if self._nonland_total(counts) > nonland_target:
+                if not self._decrement_nonland(counts, protected):
+                    if not self._decrement_nonland(counts, requested or set()):
+                        self._decrement_nonland(counts, set())
+            elif not self._decrement_basic(counts, colors):
+                self._decrement_least_important(counts, "modern")
+            if self._total_cards(counts) == before:
+                break  # nothing removable; leave it for the validator to report
+
+    def _decrement_nonland(self, counts: Counter[str], protected: set[str]) -> bool:
+        """Remove one copy of the highest-cost unprotected nonland card."""
+        candidates: list[tuple[float, str]] = []
+        for name, quantity in counts.items():
+            card = self.repository.get_card(name)
+            if quantity <= 0 or name in protected or not card or "Land" in card.type_line:
+                continue
+            candidates.append((card.mana_value, name))
+        if not candidates:
+            return False
+        _, name = max(candidates)
+        counts[name] -= 1
+        if counts[name] <= 0:
+            del counts[name]
+        return True
+
+    def _decrement_basic(self, counts: Counter[str], colors: list[str]) -> bool:
+        for basic_land in reversed(self._basic_lands_for_colors(colors)):
+            if counts[basic_land] > 0:
+                counts[basic_land] -= 1
+                if counts[basic_land] <= 0:
+                    del counts[basic_land]
+                return True
+        return False
 
     def _trim_excess_land_or_spell(self, counts: Counter[str], colors: list[str]) -> None:
         for basic_land in reversed(self._basic_lands_for_colors(colors)):
