@@ -422,6 +422,17 @@ class DeckGenerator:
         else:
             title = self._build_title(request, base, commander, colors)
             strategy_summary = base.strategy
+            if outcome.source_type == "hybrid" and request.format != "commander":
+                # The shell is broader than the request (e.g. a 4-color shell
+                # for mono-blue control): name the deck for what was asked
+                # and say where its structure came from, instead of
+                # "Mono-Blue Legacy Reanimator".
+                wanted = (request.theme_tags[:1] or request.playstyle_tags[:1] or ["Deck"])[0]
+                title = f"{self._color_label(colors)} {wanted.replace('-', ' ').title()}"
+                strategy_summary = (
+                    f"A {self._color_label(colors).lower()} {wanted} list. No shell in the corpus plays exactly these "
+                    f"colors, so its structure is borrowed from {base.name} and every card is filtered to your colors."
+                )
 
         # Prose must describe the deck that was built: drop sentences that
         # name cards filtering or the LLM left out of the final list.

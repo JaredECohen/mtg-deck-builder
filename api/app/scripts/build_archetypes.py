@@ -147,12 +147,15 @@ def infer_name(deck: TournamentDeck, tags: list[str], colors: list[str]) -> str:
     return f"{color_name} {theme}".strip()
 
 
-def infer_strategy(deck: TournamentDeck, tags: list[str]) -> str:
+def infer_strategy(deck: TournamentDeck, tags: list[str], evidence: str = "observed") -> str:
     if deck.commander:
         focus = ", ".join(tags[:3]) or "synergy"
         return f"Built around {deck.commander}, this commander archetype converts commander identity into a consistent {focus} plan."
     focus = ", ".join(tags[:3]) or "pressure and interaction"
-    return f"This tournament-derived shell consistently performs by leaning on {focus} and preserving a coherent curve."
+    if evidence == "template":
+        # No performance claim: a template encodes a shape, not results.
+        return f"A curated template that leans on {focus} with a coherent curve (an archetype's shape, not observed tournament results)."
+    return f"This tournament-derived shell leans on {focus} and keeps a coherent curve."
 
 
 def weighted_card_packages(
@@ -475,7 +478,7 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
         "format": rep.format,
         "colors": colors,
         "tags": tags,
-        "strategy": infer_strategy(rep, tags),
+        "strategy": infer_strategy(rep, tags, evidence),
         "commander": rep.commander,
         "mainboard": rep.mainboard,
         "sideboard": rep.sideboard,
