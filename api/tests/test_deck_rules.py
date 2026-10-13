@@ -182,3 +182,27 @@ def test_relentless_rats_allowed_in_commander():
     # Rats are black; Kenrith's identity covers it.
     result = _validate("commander", {"Relentless Rats": 30, "Mountain": 69}, commander="Kenrith, the Returned King")
     assert result.is_legal, result.errors
+
+
+# ── Color-source warning (Notion: "color source warning fires when color
+#    demand is unmet") ──────────────────────────────────────────────────
+
+CARDS["Counterspell"] = _card("Counterspell", "Instant", "Counter target spell.", ["U"])
+CARDS["Counterspell"].mana_cost = "{U}{U}"
+CARDS["Island"] = _card("Island", "Basic Land — Island")
+CARDS["Opt"] = _card("Opt", "Instant", "Scry 1. Draw a card.", ["U"])
+
+
+def test_color_source_warning_names_the_unsupported_color():
+    # Eight blue cards (the validator's demand unit), zero blue sources:
+    # the warning must name blue and only blue.
+    result = _validate("modern", {"Counterspell": 4, "Opt": 4, "Lightning Bolt": 4, "Mountain": 48})
+    blue = [w for w in result.warnings if "U requirements" in w]
+    assert blue, result.warnings
+    assert "only 0 likely sources" in blue[0]
+    assert not any("R requirements" in w for w in result.warnings)
+
+
+def test_color_source_warning_is_quiet_when_sources_cover_demand():
+    result = _validate("modern", {"Counterspell": 4, "Opt": 4, "Island": 26, "Mountain": 26})
+    assert not any("requirements" in w for w in result.warnings), result.warnings

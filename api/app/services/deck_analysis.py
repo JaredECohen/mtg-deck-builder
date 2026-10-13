@@ -150,9 +150,23 @@ class DeckAnalysisService:
             confidence = 0.45 + similarity * 0.4
             notes.append(f"Partial overlap with {retrieved_from[0]} (similarity {similarity:.2f}); other slots are read off heuristics.")
         else:
-            source_type = "fallback"
-            confidence = max(0.2, similarity * 0.5)
-            notes.append("No archetype overlapped meaningfully; analysis falls back on role/curve heuristics.")
+            # Too far from every shell to count as evidence: report none, and
+            # name the closest one only as context (the banner used to say
+            # "fallback" next to "Evidence decks: 3, Retrieved shells: ...").
+            notes.append(
+                f"No archetype overlapped meaningfully (closest: {retrieved_from[0]}, similarity {similarity:.2f}); "
+                "analysis falls back on role/curve heuristics."
+            )
+            return DeckProvenance(
+                source_type="fallback",
+                confidence=round(max(0.2, similarity * 0.5), 3),
+                evidence_count=0,
+                retrieved_from=[],
+                fallback_used=True,
+                notes=notes,
+            )
+        if source_type == "corpus" and all(archetype.metadata.evidence == "template" for archetype, _ in nearest[:3]):
+            source_type = "template"
         return DeckProvenance(
             source_type=source_type,
             confidence=round(confidence, 3),

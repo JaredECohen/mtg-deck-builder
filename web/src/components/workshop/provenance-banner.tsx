@@ -10,6 +10,16 @@ type Props = {
   currentDeck?: DeckResponse | null;
   /** Called when the user accepts the optimizer's improved deck. */
   onApplyOptimized?: (next: DeckResponse) => void;
+  /** "analysis" describes a comparison against shells, not a build. */
+  context?: "generated" | "analysis";
+};
+
+const ANALYSIS_DESCRIPTION: Record<DeckProvenance["source_type"], string> = {
+  corpus: "Compared against closely matching archetype shells in the corpus.",
+  hybrid: "Partly matches a known shell; the rest is read from role and curve heuristics.",
+  fallback: "No known shell is close to this list, so the read comes from role and curve heuristics.",
+  builtin: "Compared against a curated archetype template.",
+  template: "Compared against curated archetype templates, not observed tournament results."
 };
 
 export const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; description: string; tone: "good" | "warn" | "neutral" }> = {
@@ -70,7 +80,7 @@ function optimizerToMainboard(cards: { name: string }[]): { name: string; quanti
   return Array.from(counts.entries()).map(([name, quantity]) => ({ name, quantity }));
 }
 
-export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, onApplyOptimized }: Props) {
+export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, onApplyOptimized, context = "generated" }: Props) {
   const llmAdded = provenance.llm_added_cards ?? [];
   const substitutions = provenance.budget_substitutions ?? [];
   const dropped = provenance.dropped_includes ?? [];
@@ -140,7 +150,9 @@ export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, 
         ) : null}
         <span className="muted">Evidence decks: {provenance.evidence_count}</span>
       </div>
-      <p className="muted" style={{ marginTop: 8 }}>{meta.description}</p>
+      <p className="muted" style={{ marginTop: 8 }}>
+        {context === "analysis" ? ANALYSIS_DESCRIPTION[provenance.source_type] : meta.description}
+      </p>
       {provenance.retrieved_from.length ? (
         <p className="muted" style={{ marginTop: 4 }}>
           Retrieved shells: {provenance.retrieved_from.slice(0, 3).join(", ")}

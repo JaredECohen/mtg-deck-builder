@@ -27,7 +27,7 @@ function DeckCardRow({ card, suffix, quantityLabel, onOpen }: { card: CardRef; s
 export function AnalysisResults({ analysis, format, manualMainboard, manualSideboard, manualCommander, onOpenCard }: Props) {
   return (
     <>
-      <ProvenanceBanner provenance={analysis.provenance} commanderRequested={Boolean(analysis.commander)} />
+      <ProvenanceBanner provenance={analysis.provenance} commanderRequested={Boolean(analysis.commander)} context="analysis" />
 
       <div className="panel results-card">
         <div className="label">What This Deck Is Doing</div>

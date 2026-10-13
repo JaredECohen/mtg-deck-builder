@@ -295,3 +295,15 @@ def test_analysis_name_normalization_folds_accents():
 
     assert _norm("Lim-Dûl's Vault") == _norm("Lim-Dul's Vault")
     assert _norm("Æther Vial") == _norm("Aether Vial")
+
+
+def test_refine_cheapest_possible_does_not_crash_and_gets_cheaper():
+    """Notion: "refine with 'cheapest possible' prompt does not crash"."""
+    deck = _generate(format="modern", colors=["U", "R"], playstyle_tags=["tempo"])
+    response = client.post("/v1/decks/refine", json={"deck": deck, "refinement_prompt": "cheapest possible"})
+    assert response.status_code == 200, response.text
+    refined = response.json()
+    assert refined["is_legal"], refined["validation_errors"]
+    assert sum(r["quantity"] for r in refined["mainboard"]) == 60
+    if deck["estimated_price_usd"] and refined["estimated_price_usd"] is not None:
+        assert refined["estimated_price_usd"] <= deck["estimated_price_usd"]
