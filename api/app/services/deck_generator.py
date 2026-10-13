@@ -393,17 +393,21 @@ class DeckGenerator:
                 # Avoid stuttering when the display_name already includes the
                 # format word ("Legacy Reanimator" → "Legacy Legacy Reanimator").
                 format_word = request.format.title()
-                if builtin.display_name.lower().startswith(request.format.lower()):
-                    title = builtin.display_name
+                display = builtin.display_name
+                if colors and set(c for c in colors if c != "C") != set(builtin.colors):
+                    # A Boros Burn seed built mono-red is "Mono-Red Burn".
+                    display = self._color_titled(display, colors)
+                if display.lower().startswith(request.format.lower()):
+                    title = display
                 else:
-                    title = f"{format_word} {builtin.display_name}"
+                    title = f"{format_word} {display}"
             strategy_summary = (
                 builtin.strategy
                 or f"Built from a {builtin.display_name} seed: canonical anchor cards in this archetype, "
                 f"with the rest filled from the {request.format} card pool."
             )
         else:
-            title = self._build_title(request, base, commander)
+            title = self._build_title(request, base, commander, colors)
             strategy_summary = base.strategy
 
         # Prose must describe the deck that was built: drop sentences that
@@ -904,6 +908,13 @@ class DeckGenerator:
                 fallback_used=False,
                 notes=[],
             )
+        # No corpus shell inside the colors: a curated seed that fits the
+        # colors and playstyle beats borrowing a broader shell (mono-red
+        # aggro used to come back as "RU Spells Ramp").
+        seed = self._seed_for_request(request)
+        if seed is not None:
+            return self._synthesize_outcome_from_builtin(seed, request)
+
         # Soft fallback: relax color subset to overlap. Mark as hybrid so the
         # response still tells the user the corpus only partially matched.
         soft_candidates = self.repository.top_archetypes(
@@ -1880,7 +1891,7 @@ class DeckGenerator:
         )
         return self._counts_to_refs(counts)
 
-    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None) -> str:
+    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None, colors: list[str] | None = None) -> str:
         # Commander branch: "{commander} — {short archetype label}". Strips
         # the commander name from the archetype label if the clusterer
         # embedded it (e.g. "Yawgmoth, Thran Physician Aristocrats Combo
@@ -1896,16 +1907,37 @@ class DeckGenerator:
                 return commander
             return f"{commander} — {short_label}"
 
-        # Constructed: prefer the corpus archetype name; only prepend a
-        # single playstyle/theme modifier if the corpus name doesn't
-        # already start with one.
-        archetype_name = archetype.name or ""
-        modifiers = [tag.title() for tag in request.theme_tags[:1] + request.playstyle_tags[:1] if tag]
-        modifier_words = {m.lower() for m in modifiers}
-        starts_with_modifier = archetype_name.split(" ", 1)[0].lower() in modifier_words if archetype_name else False
-        if starts_with_modifier or not modifiers:
-            return archetype_name
-        return f"{modifiers[0]} {archetype_name}".strip()
+        # Constructed: the shell's name, re-labelled with the colors the deck
+        # actually plays (no "Control Azorius Control" stutter, no "RU Spells
+        # Ramp" on a mono-red list).
+        return self._color_titled(archetype.name or request.format.title(), colors or request.colors or archetype.colors)
+
+    _COLOR_LABELS: dict[frozenset[str], str] = {
+        frozenset("W"): "Mono-White", frozenset("U"): "Mono-Blue", frozenset("B"): "Mono-Black",
+        frozenset("R"): "Mono-Red", frozenset("G"): "Mono-Green",
+        frozenset("WU"): "Azorius", frozenset("UB"): "Dimir", frozenset("BR"): "Rakdos", frozenset("RG"): "Gruul",
+        frozenset("GW"): "Selesnya", frozenset("WB"): "Orzhov", frozenset("UR"): "Izzet", frozenset("BG"): "Golgari",
+        frozenset("RW"): "Boros", frozenset("GU"): "Simic",
+        frozenset("GWU"): "Bant", frozenset("WUB"): "Esper", frozenset("UBR"): "Grixis", frozenset("BRG"): "Jund",
+        frozenset("RGW"): "Naya", frozenset("WBG"): "Abzan", frozenset("URW"): "Jeskai", frozenset("BGU"): "Sultai",
+        frozenset("RWB"): "Mardu", frozenset("GUR"): "Temur",
+    }
+    _LEADING_COLOR_WORDS = re.compile(
+        r"^(?:(?:mono-(?:white|blue|black|red|green)|[2-5]-colou?r|four-colou?r|five-colou?r|colou?rless"
+        r"|[wubrg]{1,5}|[wubrg](?:/[wubrg])+|white|blue|black|red|green|azorius|dimir|rakdos|gruul|selesnya"
+        r"|orzhov|izzet|golgari|boros|simic|bant|esper|grixis|jund|naya|abzan|jeskai|sultai|mardu|temur|domain)\s+)+",
+        re.IGNORECASE,
+    )
+
+    def _color_label(self, colors: list[str]) -> str:
+        real = frozenset(c for c in colors if c in "WUBRG")
+        if not real:
+            return "Colorless"
+        return self._COLOR_LABELS.get(real) or f"{len(real)}-Color"
+
+    def _color_titled(self, name: str, colors: list[str]) -> str:
+        core = self._LEADING_COLOR_WORDS.sub("", name).strip() or name
+        return f"{self._color_label(colors)} {core}".strip()
 
     def _build_explanation(
         self,
@@ -2876,6 +2908,28 @@ class DeckGenerator:
         allow = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
         mld, extra = self._bracket_pool
         return bracket_rules.excluded_for_bracket(request.bracket, allow, mld, extra)
+
+    def _seed_for_request(self, request: GenerateDeckRequest) -> BuiltinArchetype | None:
+        """Best curated seed inside the requested colors, by exact color
+        match then playstyle/theme overlap. None without colors or overlap."""
+        wanted_colors = {c for c in request.colors if c != "C"}
+        if not wanted_colors:
+            return None
+        wanted_tags = {self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags}
+        best: tuple[tuple[int, int, int], BuiltinArchetype] | None = None
+        for seed in BUILTIN_ARCHETYPES:
+            if request.format not in seed.formats or seed.id.startswith("mechanic-"):
+                continue
+            seed_colors = set(seed.colors)
+            if not seed_colors or not seed_colors <= wanted_colors:
+                continue
+            overlap = len(wanted_tags & {self._canonicalize_tag(tag) for tag in seed.playstyle_tags + seed.theme_tags})
+            if wanted_tags and not overlap:
+                continue
+            rank = (int(seed_colors == wanted_colors), overlap, -len(seed.id))
+            if best is None or rank > best[0]:
+                best = (rank, seed)
+        return best[1] if best else None
 
     @staticmethod
     def _novelty_order(ranked: list[str], request: GenerateDeckRequest, window: int = 60) -> list[str]:

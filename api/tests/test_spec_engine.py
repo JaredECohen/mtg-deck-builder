@@ -228,3 +228,23 @@ def test_synthesized_shells_are_labelled_template():
     assert deck["provenance"]["source_type"] in {"template", "hybrid", "fallback", "builtin"}
     if deck["provenance"]["source_type"] == "template":
         assert "not observed" in " ".join(deck["explanation"]).lower() or deck["sections"]
+
+
+# ── A10: titles, A12: optimizer path ─────────────────────────────────────
+
+
+def test_titles_name_the_colors_actually_played():
+    deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"])
+    assert deck["title"].split()[0] in {"Mono-Red", "Modern"}
+    assert "RU" not in deck["title"] and "Izzet" not in deck["title"]
+    title = _generate(format="standard", colors=["W", "U"], playstyle_tags=["control"])["title"]
+    assert title.split().count("Control") <= 1
+
+
+def test_optimizer_default_path_is_legal_and_on_budget(monkeypatch):
+    monkeypatch.setenv("MTG_USE_OPTIMIZER_DEFAULT", "1")
+    deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"], budget=60)
+    assert deck["is_legal"], deck["validation_errors"]
+    assert deck["estimated_price_usd"] is None or deck["estimated_price_usd"] <= 60
+    assert any("imulator" in note for note in deck["provenance"]["notes"])
+    assert sum(ref["quantity"] for ref in deck["sideboard"]) == 15

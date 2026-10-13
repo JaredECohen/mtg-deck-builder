@@ -181,10 +181,12 @@ def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait before trying again.")
 
     use_optimizer = os.getenv("MTG_USE_OPTIMIZER_DEFAULT", "").lower() in {"1", "true", "yes"}
-    if use_optimizer and request.format == "modern":
+    if use_optimizer and request.format != "commander":
         try:
             from app.services.optimizer_default_path import generate_via_optimizer
-            return generate_via_optimizer(request, repository=repository, validator=validator)
+            return generate_via_optimizer(request, repository=repository, validator=validator, generator=generator)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             logger.warning("optimizer-default path failed (%s); falling back to legacy", exc)
 
