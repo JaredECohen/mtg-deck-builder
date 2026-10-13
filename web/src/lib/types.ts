@@ -160,7 +160,7 @@ export type BudgetSubstitution = {
   saved_usd?: number | null;
 };
 
-export type DroppedIncludeReason = "unknown" | "not_legal" | "off_color" | "over_budget" | "bracket" | "excluded";
+export type DroppedIncludeReason = "unknown" | "not_legal" | "off_color" | "over_budget" | "bracket" | "excluded" | "no_room";
 
 export type DroppedInclude = {
   name: string;

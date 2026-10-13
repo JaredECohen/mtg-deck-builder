@@ -46,7 +46,8 @@ const DROPPED_REASON: Record<DroppedIncludeReason, string> = {
   off_color: "outside the deck's colors",
   over_budget: "over the budget",
   bracket: "above the target power bracket",
-  excluded: "also on the never-include list"
+  excluded: "also on the never-include list",
+  no_room: "cut to fit the deck size"
 };
 
 function formatUsd(value: number): string {
