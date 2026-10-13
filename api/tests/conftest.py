@@ -36,6 +36,13 @@ def _use_test_database() -> None:
     # Runs at conftest import, before any test module imports ``app``:
     # app.config reads DATABASE_URL once at import time.
     os.environ.setdefault("MTG_WARM_CACHES", "0")
+    # app.config loads the repo-root .env without overriding set variables, so
+    # blanking the provider keys here keeps a developer's real keys out of the
+    # suite: no billed calls, and the deterministic fallbacks CI exercises.
+    # Tests that need a client monkeypatch one. MTG_TEST_LIVE_LLM=1 opts out.
+    if os.getenv("MTG_TEST_LIVE_LLM") != "1":
+        for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+            os.environ[key] = ""
     override = os.getenv("MTG_TEST_DATABASE_URL")
     if override:
         os.environ["DATABASE_URL"] = override

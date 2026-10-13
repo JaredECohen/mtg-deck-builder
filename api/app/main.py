@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-from app.auth import require_api_key
+from app.auth import is_valid_key, require_api_key
 from app.config import CORS_ORIGINS
 from app.models import (
     AnalyzeDeckRequest,
@@ -76,17 +76,26 @@ logger = logging.getLogger(__name__)
 
 # Behind a reverse proxy (the Next.js /api/backend proxy, a load balancer)
 # every request arrives from the proxy's address, so per-client rate limits
-# collapse into one bucket. Set MTG_TRUST_FORWARDED=1 only when the API is
-# reachable solely through a proxy that sets X-Forwarded-For.
+# collapse into one bucket. X-Forwarded-For is trusted when:
+#   - MTG_TRUST_FORWARDED=1 (the API is reachable only through such a proxy), or
+#   - the request carries a valid X-API-Key. Only the web proxy holds the key,
+#     so a public API (e.g. Fly behind Vercel) can't be spoofed by direct callers.
 TRUST_FORWARDED = os.getenv("MTG_TRUST_FORWARDED", "").lower() in {"1", "true", "yes"}
 
 
+# On Fly.io the edge proxy sets Fly-Client-IP to the real caller (callers
+# can't override it), while req.client is Fly's internal proxy address.
+ON_FLY = bool(os.getenv("FLY_APP_NAME"))
+
+
 def client_key(req: Request) -> str:
-    if TRUST_FORWARDED:
+    if TRUST_FORWARDED or is_valid_key(req.headers.get("x-api-key")):
         forwarded = req.headers.get("x-forwarded-for", "")
         first = forwarded.split(",", 1)[0].strip()
         if first:
             return first
+    if ON_FLY and req.headers.get("fly-client-ip"):
+        return req.headers["fly-client-ip"]
     return req.client.host if req.client else "unknown"
 
 

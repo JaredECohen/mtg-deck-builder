@@ -220,19 +220,20 @@ def main() -> None:
             payload = client.get(SCRYFALL_BULK_URL).raise_for_status().json()
             default_cards = next(item for item in payload["data"] if item["type"] == "default_cards")
             _download_bulk(client, default_cards, bulk_path)
-        cards = list(_iter_bulk_cards(bulk_path))
 
-    normalized_cards: dict[str, dict[str, object]] = {}
-    skipped = 0
-    for raw_card in cards:
-        normalized = normalize_card(raw_card)
-        if not normalized:
-            skipped += 1
-            continue
-        key = str(normalized["normalized_name"])
-        existing = normalized_cards.get(key)
-        if existing is None or printing_priority(normalized) > printing_priority(existing):
-            normalized_cards[key] = normalized
+        # Stream: normalize and dedupe one printing at a time. Materializing
+        # all ~110k raw printings first needs >1 GB, more than the deploy VM.
+        normalized_cards: dict[str, dict[str, object]] = {}
+        skipped = 0
+        for raw_card in _iter_bulk_cards(bulk_path):
+            normalized = normalize_card(raw_card)
+            if not normalized:
+                skipped += 1
+                continue
+            key = str(normalized["normalized_name"])
+            existing = normalized_cards.get(key)
+            if existing is None or printing_priority(normalized) > printing_priority(existing):
+                normalized_cards[key] = normalized
 
     processed = 0
     with session_scope() as session:

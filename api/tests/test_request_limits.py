@@ -107,6 +107,28 @@ def test_forwarded_for_is_trusted_only_when_configured(monkeypatch):
     assert main_module.client_key(_Req()) == "203.0.113.7"
 
 
+def test_forwarded_for_is_trusted_from_the_keyed_proxy(monkeypatch):
+    """A public API behind the web proxy: only requests carrying the key (the
+    proxy's) may name the client IP; direct callers can't spoof it."""
+    monkeypatch.setattr(main_module, "TRUST_FORWARDED", False)
+    monkeypatch.setenv("MTG_API_KEY", "proxy-key")
+
+    class _Proxied:
+        headers = {"x-forwarded-for": "203.0.113.7", "x-api-key": "proxy-key"}
+
+        class client:  # noqa: N801
+            host = "10.0.0.1"
+
+    class _Spoofed:
+        headers = {"x-forwarded-for": "203.0.113.7", "x-api-key": "wrong"}
+
+        class client:  # noqa: N801
+            host = "198.51.100.9"
+
+    assert main_module.client_key(_Proxied()) == "203.0.113.7"
+    assert main_module.client_key(_Spoofed()) == "198.51.100.9"
+
+
 def test_identical_generate_requests_are_served_from_cache(monkeypatch):
     first = client.post("/v1/decks/generate", json=_BODY).json()
     calls = []

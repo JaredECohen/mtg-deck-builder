@@ -1,0 +1,18 @@
+# Only api/ and .claude/skills/ are copied into the image; keep the build
+# context small and free of local data and secrets.
+.git
+**/node_modules
+web
+var
+qa/artifacts
+**/__pycache__
+**/*.pyc
+api/.venv
+api/*.db
+.env
+.env.*
+!.env.example
+.claude/memory
+.claude/worktrees
+.claude/settings.local.json
+api/tests

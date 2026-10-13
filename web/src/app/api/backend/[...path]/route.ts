@@ -14,7 +14,12 @@ const PREFIX = "/api/backend";
 // is buffered and forwarded.
 const MAX_BODY_BYTES = 1_000_000;
 // Generation with LLM help can take ~30 s; leave headroom, but don't hang forever.
-const UPSTREAM_TIMEOUT_MS = 180_000;
+// Vercel stops functions at maxDuration (60 s is the Hobby ceiling). Give up
+// on the API just before that so the user gets a clean error instead of a
+// killed function. LLM calls are capped at 30 s server-side and the
+// optimizer runs as an async job, so nothing legitimate needs longer.
+export const maxDuration = 60;
+const UPSTREAM_TIMEOUT_MS = 58_000;
 // Only the API's public surface is reachable through the proxy.
 const ALLOWED_PREFIXES = ["/v1/", "/api/health", "/api/data-status"];
 const FORWARDED_REQUEST_HEADERS = ["content-type", "accept"];
