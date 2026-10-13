@@ -246,6 +246,10 @@ class GenerateDeckRequest(BaseModel):
     owned_cards: CardNameList = Field(default_factory=list)
     # Build from a specific retrieved shell (e.g. a listed alternative).
     archetype_name: Annotated[str, Field(max_length=200)] | None = None
+    # Set by refine: the land seeds are the deck's existing mana base and are
+    # kept as-is (generation from a prompt seeds archetype anchors instead,
+    # whose lands go through the normal, budget-checked land build).
+    preserve_mana_base: bool = False
 
 
 class RefineDeckRequest(BaseModel):
@@ -431,7 +435,7 @@ class BudgetSubstitution(BaseModel):
 
 class DroppedInclude(BaseModel):
     name: str
-    reason: Literal["unknown", "not_legal", "off_color", "over_budget", "bracket", "excluded"]
+    reason: Literal["unknown", "not_legal", "off_color", "over_budget", "bracket", "excluded", "no_room"]
 
 
 class DeckConstraints(BaseModel):

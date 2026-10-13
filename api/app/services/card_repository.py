@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import unicodedata
 from datetime import date
 from functools import cached_property
 from urllib.parse import quote_plus
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATA_STALE_DAYS, DATABASE_URL
 from app.db import session_scope
-from app.rules import can_be_commander
+from app.rules import can_be_commander, is_land_card
 from app.services.affiliate import ensure_tcgplayer_link
 from app.db_models import Archetype, Card
 from app.models import (
@@ -164,6 +165,33 @@ class CardRepository:
     @cached_property
     def _cards_by_name(self) -> dict[str, CardRecord]:
         return {self._normalize_name(card.name): card for card in self._all_cards_cache}
+
+    @staticmethod
+    def _fold_name(name: str) -> str:
+        """Spelling-insensitive key: accents stripped (Lim-Dûl → lim-dul),
+        Æ → ae, curly quotes straightened, whitespace collapsed. MTGO and many
+        list sites export the ASCII spellings."""
+        text = name.replace("Æ", "Ae").replace("æ", "ae").replace("’", "'").replace("‘", "'")
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return " ".join(text.lower().split())
+
+    @cached_property
+    def _cards_by_folded_name(self) -> dict[str, CardRecord]:
+        """Fallback lookup: folded full names plus each face of a multi-face
+        card ("Fable of the Mirror-Breaker" → the DFC). Full names win over
+        face names when they collide."""
+        index: dict[str, CardRecord] = {}
+        for card in self._all_cards_cache:
+            for face in card.faces:
+                if face.name:
+                    index.setdefault(self._fold_name(face.name), card)
+            if " // " in card.name:
+                for part in card.name.split(" // "):
+                    index.setdefault(self._fold_name(part), card)
+        for card in self._all_cards_cache:
+            index[self._fold_name(card.name)] = card
+        return index
 
     def all_archetypes(self) -> list[ArchetypeRecord]:
         return self._all_archetypes_cache
@@ -538,6 +566,8 @@ class CardRepository:
     def get_card(self, name: str) -> CardRecord | None:
         normalized = self._normalize_name(name)
         card = self._cards_by_name.get(normalized)
+        if card is None and name:
+            card = self._cards_by_folded_name.get(self._fold_name(name))
         if card is not None:
             self._maybe_enqueue_refresh(card)
         return card
@@ -710,7 +740,7 @@ class CardRepository:
             normalized_name = self._normalize_name(card.name)
             if normalized_name in excluded:
                 continue
-            if "Land" in card.type_line:
+            if is_land_card(card):
                 continue
             legality = card.legalities.get(format_name, "not_legal")
             if legality not in {"legal", "restricted"}:

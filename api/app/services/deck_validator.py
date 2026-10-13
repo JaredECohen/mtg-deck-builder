@@ -12,7 +12,7 @@ from app.constants import (
     SIDEBOARD_SIZE,
 )
 from app.models import CardRecord, CardRef, ScoreBreakdown, ValidateDeckRequest, ValidationResult
-from app.rules import can_be_commander, copy_limit, is_basic_land
+from app.rules import can_be_commander, copy_limit, is_basic_land, is_land_card
 from app.services.card_repository import CardRepository
 
 
@@ -47,7 +47,7 @@ class DeckValidator:
             if legality not in {"legal", "restricted"}:
                 errors.append(f"{ref.name} is not legal in {request.format}.")
 
-            if count_mainboard_lands and "Land" in card.type_line:
+            if count_mainboard_lands and is_land_card(card):
                 mainboard_land_count += ref.quantity
                 if is_basic_land(card):
                     basic_color = self._basic_land_color(card.name)
@@ -63,7 +63,7 @@ class DeckValidator:
                 copy_limits[card.name] = limit
 
             if count_mainboard_lands:
-                if "Land" not in card.type_line:
+                if not is_land_card(card):
                     mana_value_buckets[min(6, int(card.mana_value or 0))] += ref.quantity
                 for role in self._card_roles(card):
                     role_counts[role] += ref.quantity
@@ -237,7 +237,7 @@ class DeckValidator:
     @staticmethod
     def _card_roles(card: CardRecord) -> set[str]:
         roles: set[str] = set()
-        if "Land" in card.type_line:
+        if is_land_card(card):
             return {"mana"}
         for tag in card.tags:
             role = ROLE_TAGS.get(tag)

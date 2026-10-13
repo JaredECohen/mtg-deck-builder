@@ -1,0 +1,44 @@
+{
+  "_about": "Well-known sideboard cards per class, best-first. Used only to rank the sideboard fill (legality, color, budget and copy limits still apply). Format-agnostic: a card that isn't legal in the format is skipped. Edit freely; order within a class is the preference.",
+  "graveyard_hate": [
+    "Rest in Peace", "Leyline of the Void", "Relic of Progenitus", "Nihil Spellbomb", "Tormod's Crypt",
+    "Unlicensed Hearse", "Soul-Guide Lantern", "Bojuka Bog", "Grafdigger's Cage", "Scavenging Ooze",
+    "Endurance", "Surgical Extraction", "Cling to Dust", "Kaya's Guile", "Faerie Macabre",
+    "Graveyard Trespasser", "Ghost Vacuum", "Weathered Runestone", "Stone of Erech", "Rakdos Charm"
+  ],
+  "artifact_enchantment_removal": [
+    "Wear // Tear", "Kolaghan's Command", "Abrade", "Pick Your Poison", "Force of Vigor",
+    "Nature's Claim", "Haywire Mite", "Boseiju, Who Endures", "Cindervines", "Thrashing Brontodon",
+    "Fragmentize", "Shatter the Source", "Destructive Revelry", "Disenchant", "Revoke Existence",
+    "Wilt", "Natural State", "Shattering Spree", "Smash to Smithereens", "Abrupt Decay",
+    "Assassin's Trophy", "Prismatic Ending", "Meltdown", "Collector Ouphe", "Stony Silence"
+  ],
+  "counterspell": [
+    "Force of Negation", "Mystical Dispute", "Spell Pierce", "Negate", "Dovin's Veto",
+    "Flusterstorm", "Pyroblast", "Red Elemental Blast", "Hydroblast", "Blue Elemental Blast",
+    "Spell Snare", "Disdainful Stroke", "Essence Scatter", "Make Disappear", "Annul",
+    "Stern Scolding", "Daze", "Counterspell", "Mana Leak", "Jace's Defeat"
+  ],
+  "sweeper": [
+    "Anger of the Gods", "Brotherhood's End", "Pyroclasm", "Kozilek's Return", "Supreme Verdict",
+    "Wrath of God", "Damnation", "Toxic Deluge", "Sunfall", "Farewell", "Temporary Lockdown",
+    "Path of Peril", "Engineered Explosives", "Massacre Girl", "Fiery Cannonade", "Sweltering Suns",
+    "Shadows' Verdict", "Depopulate", "Deadly Dispute", "Pestilence"
+  ],
+  "hand_disruption": [
+    "Duress", "Thoughtseize", "Inquisition of Kozilek", "Kitesail Freebooter", "Collective Brutality",
+    "Mind Rot", "Cling to Dust", "Thought-Knot Seer", "Grief", "Unmask", "Divest", "Tear Asunder",
+    "Distorted Curiosity"
+  ],
+  "lifegain": [
+    "Weather the Storm", "Timely Reinforcements", "Kor Firewalker", "Obstinate Baloth", "Aether Gust",
+    "Collective Brutality", "Sheltered by Ghosts", "Leyline Binding", "Lifelink", "Feed the Swarm",
+    "Absorb", "Thragtusk", "Courser of Kruphix", "Healing Salve", "Revitalize"
+  ],
+  "creature_removal": [
+    "Fatal Push", "Path to Exile", "Unholy Heat", "Lightning Bolt", "Solitude", "Swords to Plowshares",
+    "Fire // Ice", "Celestial Purge", "Cut Down", "Go for the Throat", "Bloodchief's Thirst",
+    "Lay Down Arms", "Fateful Absence", "Sheoldred's Edict", "Power Word Kill", "Infernal Grasp",
+    "Burst Lightning", "Dismember", "Searing Blood", "Strangle", "Play with Fire", "Galvanic Discharge"
+  ]
+}

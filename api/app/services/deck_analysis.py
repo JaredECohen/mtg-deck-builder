@@ -3,6 +3,7 @@ from __future__ import annotations
 import unicodedata
 from collections import Counter, defaultdict
 
+from app.rules import is_land_card
 from app.models import (
     AnalyzeDeckRequest,
     DeckAdviceGroup,
@@ -224,7 +225,7 @@ class DeckAnalysisService:
         tag_counts = Counter[str]()
         for ref in request.mainboard:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             tag_counts.update(card.tags)
         if tag_counts:
@@ -398,7 +399,7 @@ class DeckAnalysisService:
                 continue
             role = self._primary_role(card)
             counts[role] += ref.quantity
-            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and "Land" not in card.type_line:
+            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and not is_land_card(card):
                 key_cards[role].append(card.name)
         ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
         return [DeckRoleSummary(role=role, total_cards=total, key_cards=key_cards[role]) for role, total in ordered]
@@ -407,7 +408,7 @@ class DeckAnalysisService:
         buckets = Counter[int]()
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             buckets[min(6, int(card.mana_value or 0))] += ref.quantity
         return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
@@ -416,7 +417,7 @@ class DeckAnalysisService:
         notes: list[DeckCardExplanation] = []
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             role = self._primary_role(card)
             notes.append(
@@ -434,7 +435,7 @@ class DeckAnalysisService:
         for tag in card.tags:
             if tag in ROLE_MAP:
                 return ROLE_MAP[tag]
-        if "Land" in card.type_line:
+        if is_land_card(card):
             return "mana base"
         if "Creature" in card.type_line:
             return "threat"
@@ -451,7 +452,7 @@ class DeckAnalysisService:
         tag_counts = Counter[str]()
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             tag_counts.update(tag for tag in card.tags if tag not in {"land", "mana"})
         threshold = max(2, len(refs) // 15)
@@ -546,7 +547,7 @@ class DeckAnalysisService:
         candidates: list[dict[str, str | float]] = []
         for ref in request.mainboard:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             role = self._primary_role(card)
             score = 0.0

@@ -7,6 +7,7 @@ import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from functools import cached_property, lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ from app.models import (
     ArchetypeRecord,
     CardRecord,
     CardRef,
+    BudgetSubstitution,
     ColorSourcePoint,
     CommanderPackageSummary,
     DeckAlternative,
@@ -24,6 +26,7 @@ from app.models import (
     DeckMechanic,
     DeckProvenance,
     DeckResponse,
+    DroppedInclude,
     DeckRoleSummary,
     DeckSectionSummary,
     GenerateDeckRequest,
@@ -44,7 +47,9 @@ from app.constants import (
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
+from app.config import DATA_DIR
 from app.rules import copy_limit, is_basic_land, is_land_card
+from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
 from app.services.deck_diff import diff_decks
 from app.services.builtin_archetypes import (
     BuiltinArchetype,
@@ -62,6 +67,16 @@ from app.services.llm_service import (
     refine_blend,
     refine_compose,
 )
+
+
+@dataclass
+class _BuildTrace:
+    """Per-request notes collected while building (the generator is a shared
+    singleton serving concurrent requests, so this is passed, not stored)."""
+
+    budget_substitutions: list[BudgetSubstitution] = field(default_factory=list)
+    # Anchor cards an LLM (blend curation or compose) chose — spec §24.
+    llm_anchor_names: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -83,6 +98,28 @@ class _RetrievalOutcome:
     notes: list[str] = field(default_factory=list)
 
 
+# Cosine similarity floor for a budget stand-in. Below it the "similar" card
+# is a different card that happens to share a few features.
+_MIN_SUBSTITUTE_SIMILARITY = 0.55
+
+_DROP_REASON_TEXT = {
+    "unknown": "no card by that name",
+    "not_legal": "not legal in this format",
+    "off_color": "outside the deck's colors",
+    "over_budget": "over the budget",
+    "bracket": "above the requested Commander bracket",
+    "excluded": "it is also on the exclude list",
+    "no_room": "cut to fit the deck size",
+}
+
+
+@lru_cache(maxsize=1)
+def _sideboard_staples() -> dict[str, list[str]]:
+    path = DATA_DIR / "sideboard_staples.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {key: list(names) for key, names in data.items() if not key.startswith("_")}
+
+
 class DeckGenerator:
     def __init__(self, repository: CardRepository, validator: DeckValidator) -> None:
         self.repository = repository
@@ -93,6 +130,7 @@ class DeckGenerator:
         # anchors are merged in. Persisted on the response so a refine keeps
         # them (budget, excludes, ...).
         user_request = request
+        trace = _BuildTrace()
         if request.prompt:
             intent = interpret_generate_prompt(request.prompt)
             request = request.model_copy(update={
@@ -144,6 +182,7 @@ class DeckGenerator:
                     user_brief=request.prompt,
                 )
                 final_composed = refined if refined is not None else composed
+                trace.llm_anchor_names = {name for name, _ in final_composed["anchor_cards"]}
                 colors_tuple = tuple(request.colors) if request.colors else ()
                 builtin = BuiltinArchetype(
                     # Stable across processes (hash() is salted per process).
@@ -173,6 +212,7 @@ class DeckGenerator:
                 user_brief=request.prompt,
             )
             if llm_blend is not None and llm_blend.get("anchor_cards"):
+                trace.llm_anchor_names = {name for name, _ in llm_blend["anchor_cards"]}
                 builtin = BuiltinArchetype(
                     id=builtin.id + "-llm",
                     display_name=builtin.display_name,
@@ -186,25 +226,24 @@ class DeckGenerator:
                 )
 
         if builtin is not None:
-            # Push anchors through seed_cards (preserves quantity) and into
-            # include_cards (forces presence). Without seed_cards the include
-            # path clamps to ~2 copies, so 4x anchors never reach 4x.
+            # Anchors go in as seed cards (quantity preserved, protected from
+            # trimming, budget-checked with substitution). They are NOT user
+            # includes: include_cards stays what the user asked for, so the
+            # "forced card over budget" / "dropped include" reports name only
+            # cards the user actually requested.
             anchor_seeds: list[CardRef] = []
-            anchor_names: list[str] = []
             existing_seed_names = {ref.name.lower() for ref in request.seed_cards}
             for name, qty in builtin.anchor_cards:
                 if qty <= 0:
                     continue
                 if not self.repository.get_card(name):
                     continue
-                anchor_names.append(name)
                 if name.lower() not in existing_seed_names:
                     anchor_seeds.append(CardRef(name=name, quantity=qty))
             request = request.model_copy(update={
                 "colors": request.colors or list(builtin.colors),
                 "playstyle_tags": list(dict.fromkeys(list(request.playstyle_tags) + list(builtin.playstyle_tags))),
                 "theme_tags": list(dict.fromkeys(list(request.theme_tags) + list(builtin.theme_tags))),
-                "include_cards": list(dict.fromkeys(list(request.include_cards) + anchor_names)),
                 "seed_cards": list(request.seed_cards) + anchor_seeds,
             })
         requested_tags = [self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags]
@@ -216,7 +255,7 @@ class DeckGenerator:
             outcome, commander, commander_reason, commander_identity = self._build_commander_context(request, requested_tags)
             base = outcome.base
             colors = self._ordered_commander_identity(commander, list(commander_identity))
-            mainboard = self._build_commander_mainboard(base, request, list(commander_identity), requested_tags, commander)
+            mainboard = self._build_commander_mainboard(base, request, list(commander_identity), requested_tags, commander, trace=trace)
             mainboard, legality_actions = self._enforce_commander_color_identity(mainboard, commander_identity)
             sideboard: list[CardRef] = []
         else:
@@ -224,8 +263,8 @@ class DeckGenerator:
             base = outcome.base
             colors = request.colors or base.colors
             commander = None
-            mainboard = self._build_constructed_mainboard(base, request, colors, requested_tags)
-            sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard)
+            mainboard = self._build_constructed_mainboard(base, request, colors, requested_tags, trace=trace)
+            sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard, trace=trace)
             commander_identity = set(colors)
 
         validation = self.validator.validate(
@@ -299,7 +338,19 @@ class DeckGenerator:
             fallback_used=outcome.fallback_used,
             notes=outcome.notes,
             sim_validation_job_id=sim_job_id,
+            llm_added_cards=sorted(
+                card.name for name in trace.llm_anchor_names
+                if (card := self.repository.get_card(name)) is not None
+                and any(ref.name == card.name for ref in mainboard + sideboard)
+            ),
+            budget_substitutions=trace.budget_substitutions,
+            dropped_includes=self._dropped_includes(request, mainboard, sideboard, commander, commander_identity),
         )
+        for dropped in provenance.dropped_includes:
+            warnings.append(f"Requested card {dropped.name} was not included ({_DROP_REASON_TEXT[dropped.reason]}).")
+        for swap in trace.budget_substitutions:
+            saved = f", saves about ${swap.saved_usd:.2f} a copy" if swap.saved_usd else ""
+            warnings.append(f"Budget: swapped {swap.original} for {swap.replacement}{saved}.")
 
         # Final hard legality gate for commander format. The validator already
         # ran but if it surfaced color-identity errors we treat those as a
@@ -630,7 +681,7 @@ class DeckGenerator:
         # later in _materialize_mana_base via outcome.notes plumbing.
         def _is_land(name: str) -> bool:
             card = self.repository.get_card(name)
-            return bool(card and "Land" in card.type_line)
+            return bool(card and is_land_card(card))
 
         mainboard_anchors = list(builtin.anchor_cards)
         if builtin.mana_base is not None:
@@ -994,6 +1045,7 @@ class DeckGenerator:
             include_cards=merged_includes,
             exclude_cards=merged_excludes,
             seed_cards=seed_cards,
+            preserve_mana_base=deck.format != "commander",
             mode=previous.mode,
             experience_level=previous.experience_level,
             match_type=previous.match_type,
@@ -1044,7 +1096,7 @@ class DeckGenerator:
         """
         def is_land(name: str) -> bool:
             card = self.repository.get_card(name)
-            return bool(card and "Land" in card.type_line)
+            return bool(card and is_land_card(card))
 
         if not keep_lands:
             return [ref for ref in seed_cards if not is_land(ref.name)]
@@ -1097,6 +1149,7 @@ class DeckGenerator:
         request: GenerateDeckRequest,
         colors: list[str],
         requested_tags: list[str],
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
         excluded = {name.lower() for name in request.exclude_cards}
         counts = Counter[str]()
@@ -1113,7 +1166,7 @@ class DeckGenerator:
             # any shortfall with basics.
             if not self._fits_budget_request(card, request.budget, exempt_lands=False):
                 continue
-            desired_qty = max(ref.quantity, 2 if ref.name in core_names and "Land" not in card.type_line else ref.quantity)
+            desired_qty = max(ref.quantity, 2 if ref.name in core_names and not is_land_card(card) else ref.quantity)
             counts[card.name] = min(desired_qty, self._copy_limit(card, request.format) or desired_qty)
 
         for include_name in request.include_cards:
@@ -1128,7 +1181,9 @@ class DeckGenerator:
             card = self.repository.get_card(ref.name)
             if not card or ref.name.lower() in excluded:
                 continue
-            if "Land" in card.type_line:
+            if is_land_card(card):
+                if not request.preserve_mana_base:
+                    continue
                 # A refine seeds the previous mana base (see
                 # _preserve_land_count). Keep it as-is: it is the land target.
                 if self._is_card_legal_record(card, request.format) and (
@@ -1141,8 +1196,15 @@ class DeckGenerator:
             if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
                 continue
             if not self._fits_budget_request(card, request.budget):
-                continue
+                card = self._budget_substitute(
+                    card, format_name=request.format, budget=request.budget, excluded=excluded,
+                    taken=set(counts), fits=lambda c: self._matches_color_request(c, colors), trace=trace,
+                )
+                if card is None:
+                    continue
             limit = self._copy_limit(card, request.format)
+            # A seed's quantity is the target (it overrides the include
+            # path's default of two copies).
             counts[card.name] = min(ref.quantity, limit or ref.quantity)
             protected.add(card.name)
         # Cards the user explicitly asked for are cut last of all.
@@ -1155,11 +1217,11 @@ class DeckGenerator:
             seeded_land_names = {
                 card.name
                 for ref in request.seed_cards
-                if (card := self.repository.get_card(ref.name)) is not None and "Land" in card.type_line
+                if (card := self.repository.get_card(ref.name)) is not None and is_land_card(card)
             }
             for name in list(counts):
                 card = self.repository.get_card(name)
-                if card and "Land" in card.type_line and name not in seeded_land_names:
+                if card and is_land_card(card) and name not in seeded_land_names:
                     del counts[name]
 
         target_lands = seeded_land_total or self._target_land_count(archetype, requested_tags)
@@ -1204,61 +1266,110 @@ class DeckGenerator:
         colors: list[str],
         requested_tags: list[str],
         mainboard: list[CardRef],
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
+        """A full 15-card sideboard for best-of-three (none for best-of-one).
+
+        Curated archetype sideboards and corpus packages go first; the rest is
+        filled round-robin across the matchup classes in
+        ``sideboard_classes`` from the whole legal, on-color, in-budget pool,
+        so a shell without a corpus sideboard still gets real answers instead
+        of 0-6 cards (Standard and Pioneer used to ship empty sideboards).
+        """
+        if request.match_type == "bo1":
+            return []
+        excluded = {name.lower() for name in request.exclude_cards}
         counts = Counter[str]()
         main_counts: Counter[str] = Counter()
         for ref in mainboard:
             resolved = self.repository.get_card(ref.name)
             main_counts[resolved.name if resolved else ref.name] += ref.quantity
-        # Builtin sideboard anchors: when the synthesized base carries a
-        # curated sideboard (Burn → Smash to Smithereens, Roiling Vortex,
-        # etc.), seed those first at their declared quantities. Eliminates
-        # the "15 Mountains" / random role-pool grab bag for top archetypes.
+
+        def room_for(card: CardRecord) -> int:
+            limit = self._copy_limit(card, request.format)
+            if limit is None:
+                return SIDEBOARD_SIZE
+            return max(0, limit - main_counts[card.name] - counts[card.name])
+
+        def eligible(card: CardRecord | None) -> bool:
+            return (
+                card is not None
+                and card.name.lower() not in excluded
+                and not is_land_card(card)
+                and self._is_card_legal_record(card, request.format)
+                and self._matches_color_request(card, colors)
+                and self._fits_budget_request(card, request.budget, exempt_lands=False)
+            )
+
+        def add(card: CardRecord, quantity: int) -> None:
+            take = min(quantity, room_for(card), SIDEBOARD_SIZE - self._total_cards(counts))
+            if take > 0:
+                counts[card.name] += take
+
+        # Curated sideboard (builtin seeds: Burn → Smash to Smithereens, ...).
         for ref in archetype.sideboard:
             card = self.repository.get_card(ref.name)
-            if not card or not self._is_card_legal_record(card, request.format):
-                continue
-            if not self._matches_color_request(card, colors):
-                continue
-            # The copy limit spans mainboard + sideboard combined, so subtract
-            # copies the mainboard already runs.
-            limit = self._copy_limit(card, request.format)
-            remaining = (limit - main_counts[card.name]) if limit is not None else ref.quantity
-            if remaining <= 0:
-                continue
-            counts[card.name] = min(ref.quantity, remaining)
+            if eligible(card):
+                add(card, ref.quantity)
         preferred_packages = archetype.metadata.sideboard_packages or archetype.metadata.matchup_tech_packages
         for package in preferred_packages:
             card = self.repository.get_card(package.name)
-            if not card or not self._matches_color_request(card, colors):
-                continue
-            if not self._is_card_legal_record(card, request.format):
-                continue
-            remaining = max(0, (self._copy_limit(card, request.format) or 4) - main_counts[card.name])
-            if remaining:
-                counts[card.name] = min(int(round(package.average_quantity or 1)), remaining)
+            if eligible(card):
+                add(card, int(round(package.average_quantity or 1)))
 
-        # Walk multiple role pools before giving up. Basic lands in a
-        # sideboard are always wrong, so we never pad with them — better to
-        # return a short sideboard than 15 Mountains.
-        for role in ("interaction", "removal", "threat", "advantage", "ramp"):
-            if self._total_cards(counts) >= SIDEBOARD_SIZE:
-                break
-            role_names = [
-                item["name"]
-                for item in self.repository.card_packages_by_role_theme(
-                    format_name=request.format,
-                    role=role,
-                    theme_tags=requested_tags,
-                    limit=20,
-                )
+        if self._total_cards(counts) < SIDEBOARD_SIZE:
+            pools = self._sideboard_class_pools(request.format)
+            covered = {cls.key for name in counts if (c := self.repository.get_card(name)) and (cls := classify(c))}
+            # Classes the deck doesn't already answer come first.
+            order = [cls for cls in SIDEBOARD_CLASSES if cls.key not in covered] + [
+                cls for cls in SIDEBOARD_CLASSES if cls.key in covered
             ]
-            while self._total_cards(counts) < SIDEBOARD_SIZE:
-                if not self._add_ranked_candidate(
-                    counts, role_names, request.format, colors, request.budget, set(), main_counts
-                ):
-                    break
+            cursors = {cls.key: 0 for cls in order}
+            progressed = True
+            while self._total_cards(counts) < SIDEBOARD_SIZE and progressed:
+                progressed = False
+                for cls in order:
+                    pool = pools.get(cls.key, [])
+                    while cursors[cls.key] < len(pool):
+                        card = self.repository.get_card(pool[cursors[cls.key]])
+                        cursors[cls.key] += 1
+                        if eligible(card) and counts[card.name] == 0 and main_counts[card.name] == 0:
+                            add(card, 2)
+                            progressed = True
+                            break
+                    if self._total_cards(counts) >= SIDEBOARD_SIZE:
+                        break
         return self._counts_to_refs(counts)
+
+    def _sideboard_class_pools(self, format_name: str) -> dict[str, list[str]]:
+        """Legal cards per sideboard class, cheapest-to-cast first. Cached
+        per format (the card pool is fixed for the process lifetime)."""
+        cache = self.__dict__.setdefault("_sideboard_pool_cache", {})
+        if format_name in cache:
+            return cache[format_name]
+        # Ranking signals, strongest first: a curated staple for that class
+        # (data/sideboard_staples.json, best-first), how often the corpus
+        # plays the card in this format, then cheap-to-cast and priced.
+        staples = _sideboard_staples()
+        corpus_counts: Counter[str] = Counter()
+        for archetype in self.repository.archetypes_for_format(format_name):
+            for ref in archetype.mainboard + archetype.sideboard:
+                corpus_counts[ref.name] += 1
+            for package in archetype.metadata.sideboard_packages + archetype.metadata.matchup_tech_packages:
+                corpus_counts[package.name] += 1
+        pools: dict[str, list[tuple]] = {cls.key: [] for cls in SIDEBOARD_CLASSES}
+        for card in self.repository.all_cards():
+            if is_land_card(card) or not self._is_card_legal_record(card, format_name):
+                continue
+            staple_class = next((key for key, names in staples.items() if card.name in names), None)
+            cls_key = staple_class or (cls.key if (cls := classify(card)) else None)
+            if cls_key is None:
+                continue
+            staple_rank = staples[cls_key].index(card.name) if staple_class else len(staples.get(cls_key, ())) + 1
+            price = card.price_usd if card.price_usd is not None else 1e6
+            pools[cls_key].append((staple_rank, -corpus_counts[card.name], card.mana_value, price, card.name))
+        cache[format_name] = {key: [row[-1] for row in sorted(rows)] for key, rows in pools.items()}
+        return cache[format_name]
 
     def _select_commander(
         self,
@@ -1428,6 +1539,7 @@ class DeckGenerator:
         colors: list[str],
         requested_tags: list[str],
         commander: str | None,
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
@@ -1457,7 +1569,7 @@ class DeckGenerator:
         # around the legal anchors.
         for ref in request.seed_cards:
             card = self.repository.get_card(ref.name)
-            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+            if not card or ref.name.lower() in excluded or is_land_card(card):
                 continue
             if card.name == commander:
                 continue
@@ -1466,9 +1578,27 @@ class DeckGenerator:
             if not self.repository.fits_color_identity(card, commander_identity):
                 continue
             if not self._fits_budget_request(card, request.budget):
-                continue
+                card = self._budget_substitute(
+                    card, format_name=request.format, budget=request.budget, excluded=excluded,
+                    taken=set(counts) | {commander or ""},
+                    fits=lambda c: self.repository.fits_color_identity(c, commander_identity), trace=trace,
+                )
+                if card is None:
+                    continue
             if counts[card.name] == 0:
                 counts[card.name] = 1  # Commander is singleton.
+
+        # The user's own includes. A request like "Atraxa with Doubling
+        # Season" used to come back without it and without a word.
+        for name in request.include_cards:
+            card = self.repository.get_card(name)
+            if not card or card.name.lower() in excluded or card.name == commander:
+                continue
+            if not self._is_card_legal_record(card, request.format):
+                continue
+            if not self.repository.fits_color_identity(card, commander_identity):
+                continue
+            counts[card.name] = max(counts[card.name], 1)
 
         package = archetype.metadata.commander_package
         if package:
@@ -1536,7 +1666,7 @@ class DeckGenerator:
         commander_reason: str | None,
         outcome: _RetrievalOutcome,
     ) -> list[str]:
-        total_lands = sum(ref.quantity for ref in mainboard if (card := self.repository.get_card(ref.name)) and "Land" in card.type_line)
+        total_lands = sum(ref.quantity for ref in mainboard if (card := self.repository.get_card(ref.name)) and is_land_card(card))
         role_summary = self._build_role_summary(mainboard)
         provenance_blurb = {
             "corpus": f"Started from the {archetype.name} shell, backed by {outcome.evidence_count} corpus deck(s) of supporting evidence.",
@@ -1643,7 +1773,7 @@ class DeckGenerator:
         tag_to_cards: defaultdict[str, list[str]] = defaultdict(list)
         for ref in mainboard:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             primary = self._primary_mechanic_tag(card.tags)
             if primary is None:
@@ -1672,7 +1802,7 @@ class DeckGenerator:
                 continue
             role = self._primary_role(card)
             counts[role] += ref.quantity
-            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and "Land" not in card.type_line:
+            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and not is_land_card(card):
                 key_cards[role].append(card.name)
         ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
         return [DeckRoleSummary(role=role, total_cards=total, key_cards=key_cards[role]) for role, total in ordered]
@@ -1681,7 +1811,7 @@ class DeckGenerator:
         buckets = Counter[int]()
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             buckets[min(6, int(card.mana_value))] += ref.quantity
         return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
@@ -1732,7 +1862,7 @@ class DeckGenerator:
             if budget is not None and not self._fits_budget_request(card, budget):
                 continue
             score = len(expanded_tags & set(card.tags)) * 9
-            score += 2 if "Land" in card.type_line else max(0, 5 - card.mana_value)
+            score += 2 if is_land_card(card) else max(0, 5 - card.mana_value)
             if "interaction" in card.tags:
                 score += 3
             if "draw" in card.tags or "ramp" in card.tags:
@@ -1817,6 +1947,85 @@ class DeckGenerator:
             return False
         return card.legalities.get(format_name, "not_legal") in {"legal", "restricted"}
 
+    def _budget_substitute(
+        self,
+        card: CardRecord,
+        *,
+        format_name: str,
+        budget: float | None,
+        excluded: set[str],
+        taken: set[str],
+        fits,
+        trace: _BuildTrace | None,
+    ) -> CardRecord | None:
+        """Cheapest-fitting stand-in for an over-budget seed card: a similar
+        card (same primary role, land-ness) that is legal, inside the color
+        constraint, priced, and under the per-card budget cap. Recorded in
+        the trace so provenance can show the swap."""
+        role = self._primary_role(card)
+        card_type = self.repository.primary_type_for(card)
+        for hit in self._retriever.similar_to(card.name, k=80):
+            if hit.score < _MIN_SUBSTITUTE_SIMILARITY:
+                break  # hits are sorted; nothing closer follows
+            alt = self.repository.get_card(hit.name)
+            if alt is None or alt.name == card.name or alt.name in taken or alt.name.lower() in excluded:
+                continue
+            # A stand-in has to do the same job at about the same speed:
+            # same card type and role, mana value within one.
+            if is_land_card(alt) != is_land_card(card) or self._primary_role(alt) != role:
+                continue
+            if self.repository.primary_type_for(alt) != card_type or abs(alt.mana_value - card.mana_value) > 1:
+                continue
+            if not self._is_card_legal_record(alt, format_name) or not fits(alt):
+                continue
+            if alt.price_usd is None or not self._fits_budget_request(alt, budget, exempt_lands=False):
+                continue
+            if trace is not None:
+                saved = round(card.price_usd - alt.price_usd, 2) if card.price_usd is not None else None
+                trace.budget_substitutions.append(
+                    BudgetSubstitution(original=card.name, replacement=alt.name, saved_usd=saved)
+                )
+            return alt
+        return None
+
+    @cached_property
+    def _retriever(self):
+        from app.services.vector_retrieval import CardVectorRetriever
+
+        return CardVectorRetriever(self.repository)
+
+    def _dropped_includes(
+        self,
+        request: GenerateDeckRequest,
+        mainboard: list[CardRef],
+        sideboard: list[CardRef],
+        commander: str | None,
+        identity: set[str],
+    ) -> list[DroppedInclude]:
+        present = {ref.name for ref in mainboard + sideboard} | ({commander} if commander else set())
+        excluded = {name.lower() for name in request.exclude_cards}
+        dropped: list[DroppedInclude] = []
+        for name in request.include_cards:
+            card = self.repository.get_card(name)
+            if card is not None and card.name in present:
+                continue
+            if card is None:
+                reason = "unknown"
+            elif card.name.lower() in excluded:
+                reason = "excluded"
+            elif not self._is_card_legal_record(card, request.format):
+                reason = "not_legal"
+            elif request.format == "commander" and not self.repository.fits_color_identity(card, identity):
+                reason = "off_color"
+            elif request.format != "commander" and not self._matches_color_request(card, list(identity)):
+                reason = "off_color"
+            elif request.budget is not None and not self._fits_budget_request(card, request.budget):
+                reason = "over_budget"
+            else:
+                reason = "bracket" if request.bracket else "no_room"
+            dropped.append(DroppedInclude(name=card.name if card else name, reason=reason))
+        return dropped
+
     def _check_include_cards(self, request: GenerateDeckRequest) -> list[str]:
         warnings: list[str] = []
         unresolved: list[str] = []
@@ -1872,7 +2081,7 @@ class DeckGenerator:
         if budget is None or card.price_usd is None:
             return True
         per_card_cap = max(0.50, min(budget / 20.0, budget * 0.12))
-        if exempt_lands and "Land" in card.type_line:
+        if exempt_lands and is_land_card(card):
             return True
         return card.price_usd <= per_card_cap
 
@@ -1947,7 +2156,7 @@ class DeckGenerator:
             if self._land_total(counts) >= target_lands:
                 break
             card = self.repository.get_card(package.name)
-            if not card or "Land" not in card.type_line:
+            if not card or not is_land_card(card):
                 continue
             if not self._is_card_legal_record(card, format_name):
                 continue
@@ -1997,7 +2206,7 @@ class DeckGenerator:
             card = self.repository.get_card(name)
             if not card:
                 continue
-            if "Land" in card.type_line:
+            if is_land_card(card):
                 land_total += qty
                 if name in basic_names:
                     basics_total += qty
@@ -2113,7 +2322,7 @@ class DeckGenerator:
             card = self.repository.get_card(candidate_name)
             if not card or candidate_name.lower() in excluded_cards:
                 continue
-            if not allow_lands and "Land" in card.type_line:
+            if not allow_lands and is_land_card(card):
                 continue
             if commander_name and card.name == commander_name:
                 continue
@@ -2165,7 +2374,7 @@ class DeckGenerator:
             card = self.repository.get_card(name)
             if not card or is_basic_land(card):
                 continue
-            weight = 100.0 if "Land" in card.type_line else 10.0 + card.mana_value
+            weight = 100.0 if is_land_card(card) else 10.0 + card.mana_value
             if "interaction" in card.tags:
                 weight = 35.0
             elif "creature" in card.tags:
@@ -2209,7 +2418,7 @@ class DeckGenerator:
         candidates: list[tuple[float, str]] = []
         for name, quantity in counts.items():
             card = self.repository.get_card(name)
-            if quantity <= 0 or name in protected or not card or "Land" in card.type_line:
+            if quantity <= 0 or name in protected or not card or is_land_card(card):
                 continue
             candidates.append((card.mana_value, name))
         if not candidates:
@@ -2256,7 +2465,7 @@ class DeckGenerator:
         for tag in card.tags:
             if tag in ROLE_MAP:
                 return ROLE_MAP[tag]
-        if "Land" in card.type_line:
+        if is_land_card(card):
             return "mana base"
         if "Creature" in card.type_line:
             return "threat"
@@ -2274,7 +2483,7 @@ class DeckGenerator:
         total = 0
         for name, quantity in counts.items():
             card = self.repository.get_card(name)
-            if card and "Land" in card.type_line:
+            if card and is_land_card(card):
                 total += quantity
         return total
 
