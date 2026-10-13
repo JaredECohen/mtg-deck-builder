@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { DataStatusResponse, ScoreBreakdown } from "@/lib/types";
 
 type Legality = {
@@ -15,9 +17,11 @@ type Props = {
   price?: number | null;
   health?: { value: string; explanation: string };
   legality?: Legality;
+  /** Extra status shown under the data line (e.g. "built for another format"). */
+  badge?: ReactNode;
 };
 
-export function WorkflowSummary({ title, summary, dataStatus, error, score, price, health, legality }: Props) {
+export function WorkflowSummary({ title, summary, dataStatus, error, score, price, health, legality, badge }: Props) {
   return (
     <div className="panel results-card panel-strong">
       <div className="eyebrow">Deck Workshop</div>
@@ -25,11 +29,18 @@ export function WorkflowSummary({ title, summary, dataStatus, error, score, pric
       <p className="muted">{summary}</p>
       {dataStatus ? (
         <p className="muted workshop-data-status">
-          Card data: {dataStatus.card_source} ({dataStatus.card_count.toLocaleString()} cards)
+          Card data: {dataStatus.card_source} ({dataStatus.card_count.toLocaleString()} cards
+          {dataStatus.card_data_as_of ? `, through ${dataStatus.card_data_as_of}` : ""})
           {" • "}
           Archetypes: {dataStatus.archetype_source} ({dataStatus.archetype_count})
+          {dataStatus.stale ? (
+            <span className="data-stale" title="Newer sets, prices and ban-list changes may be missing until the card data is refreshed.">
+              {" • "}Card data may be out of date
+            </span>
+          ) : null}
         </p>
       ) : null}
+      {badge ? <div className="summary-badge">{badge}</div> : null}
       {error ? <p className="workflow-error" role="alert">{error}</p> : null}
       {score ? <ResultStats score={score} price={price} health={health} /> : null}
       {legality ? <LegalityBanner {...legality} /> : null}

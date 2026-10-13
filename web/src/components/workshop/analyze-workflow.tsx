@@ -1,21 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AnalysisResults } from "./analysis-results";
 import { AnalyzeForm, type ManualZone } from "./analyze-form";
-import { CardDetailModal } from "./card-detail-modal";
 import { FormatColorPicker } from "./format-color-picker";
 import { WorkflowSummary } from "./workflow-summary";
-import { useCardDetail } from "@/hooks/use-card-detail";
-import { useDataStatus } from "@/hooks/use-data-status";
+import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
+import { fetchSharedDeck } from "@/lib/api";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
-import type { CardRef, FormatName } from "@/lib/types";
+import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
 const DEFAULT_NOTES = "Tell me how this deck plays, what shell it resembles, and what I should improve.";
 
-export function AnalyzeWorkflow() {
+type Props = {
+  dataStatus: DataStatusResponse | null;
+  onOpenCard: (name: string, context?: CardContext) => void;
+  /** Share token from ?deck=: load that saved deck and analyze it. */
+  sharedToken: string | null;
+};
+
+type Snapshot = { format: FormatName; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
+
+function snapshotKey(snapshot: Snapshot): string {
+  const list = (cards: CardRef[]) =>
+    [...cards]
+      .map((card) => `${card.quantity}:${card.name}`)
+      .sort()
+      .join("|");
+  return [snapshot.format, snapshot.commander, list(snapshot.mainboard), list(snapshot.sideboard)].join("#");
+}
+
+export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) {
   const [format, setFormat] = useState<FormatName>("modern");
   const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
   const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
@@ -24,13 +41,22 @@ export function AnalyzeWorkflow() {
   const [manualImportText, setManualImportText] = useState("");
   const [deepAnalysis, setDeepAnalysis] = useState(true);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  // The list the current analysis was run on; edits after that mark it stale.
+  const [analyzedKey, setAnalyzedKey] = useState<string | null>(null);
+  const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
+  const [statusMessage, setStatusMessage] = useState("");
+  const loadedToken = useRef<string | null>(null);
 
-  const dataStatus = useDataStatus();
-  const cardDetail = useCardDetail();
   const analyzer = useDeckAnalyzer();
   const analysis = analyzer.analysis;
+  const { analyze, reset: resetAnalyzer } = analyzer;
 
   useEffect(() => {
+    // A shared link replaces the local draft instead of merging with it.
+    if (sharedToken) {
+      setDraftHydrated(true);
+      return;
+    }
     const draft = loadManualDraft();
     if (draft?.format) setFormat(draft.format);
     if (draft?.mainboard) setManualMainboard(draft.mainboard);
@@ -38,6 +64,8 @@ export function AnalyzeWorkflow() {
     if (draft?.commander) setManualCommander(draft.commander);
     if (draft?.notes) setManualNotes(draft.notes);
     setDraftHydrated(true);
+    // Only on mount: later token changes are handled by the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -50,6 +78,55 @@ export function AnalyzeWorkflow() {
       notes: manualNotes
     });
   }, [draftHydrated, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
+
+  // ?deck=<token>: fetch the shared list, load it into the editor and analyze it.
+  useEffect(() => {
+    if (!sharedToken || loadedToken.current === sharedToken) return;
+    // Marked loaded only on success: a cancelled run (e.g. React's dev-mode
+    // double effect) must not block the retry.
+    const controller = new AbortController();
+    setShared({ status: "loading" });
+    void fetchSharedDeck(sharedToken, controller.signal)
+      .then((saved) => {
+        if (controller.signal.aborted) return;
+        loadedToken.current = sharedToken;
+        const snapshot: Snapshot = {
+          format: saved.format,
+          mainboard: saved.mainboard,
+          sideboard: saved.format === "commander" ? [] : saved.sideboard,
+          commander: saved.commander ?? ""
+        };
+        setFormat(snapshot.format);
+        setManualMainboard(snapshot.mainboard);
+        setManualSideboard(snapshot.sideboard);
+        setManualCommander(snapshot.commander);
+        setManualImportText("");
+        setShared({ status: "loaded", name: saved.name });
+        resetAnalyzer();
+        setAnalyzedKey(snapshotKey(snapshot));
+        // Heuristic analysis only: opening a public link should not spend LLM tokens.
+        void analyze({
+          format: snapshot.format,
+          commander: snapshot.commander || undefined,
+          mainboard: snapshot.mainboard,
+          sideboard: snapshot.sideboard,
+          notes: DEFAULT_NOTES,
+          deep_analysis: false
+        });
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setShared({ status: "failed", error: err instanceof Error ? err.message : "Shared deck not found" });
+      });
+    return () => controller.abort();
+  }, [sharedToken, analyze, resetAnalyzer]);
+
+  useEffect(() => {
+    setStatusMessage(analysis ? `Analysis ready: ${analysis.inferred_archetype}, ${analysis.deck_health}.` : "");
+  }, [analysis]);
+
+  const currentKey = snapshotKey({ format, mainboard: manualMainboard, sideboard: manualSideboard, commander: manualCommander });
+  const analysisStale = Boolean(analysis && analyzedKey && analyzedKey !== currentKey);
 
   function updateZone(zone: ManualZone, updater: (cards: CardRef[]) => CardRef[]) {
     if (zone === "mainboard") setManualMainboard((current) => updater(current));
@@ -92,24 +169,46 @@ export function AnalyzeWorkflow() {
     setManualCommander("");
     setManualImportText("");
     setManualNotes(DEFAULT_NOTES);
+    setAnalyzedKey(null);
+    setShared(null);
     analyzer.reset();
     clearManualDraft();
   }
 
   function handleAnalyze() {
-    void analyzer.analyze({
+    const snapshot: Snapshot = {
       format,
-      commander: format === "commander" ? manualCommander || undefined : undefined,
       mainboard: manualMainboard,
       sideboard: format === "commander" ? [] : manualSideboard,
+      commander: format === "commander" ? manualCommander : ""
+    };
+    setAnalyzedKey(currentKey);
+    void analyze({
+      format,
+      commander: snapshot.commander || undefined,
+      mainboard: snapshot.mainboard,
+      sideboard: snapshot.sideboard,
       notes: manualNotes,
       deep_analysis: deepAnalysis
     });
   }
 
+  const openCard = (name: string) => onOpenCard(name, { format });
+
   return (
     <div className="builder workflow-layout">
       <section className="form-grid" aria-label="Analyze deck controls">
+        {shared ? (
+          <div className={`panel form-card shared-deck-note ${shared.status === "failed" ? "import-warning" : ""}`} role="status">
+            {shared.status === "loading" ? "Loading the shared deck…" : null}
+            {shared.status === "loaded" ? (
+              <>
+                Loaded shared deck <strong>&ldquo;{shared.name}&rdquo;</strong>. Edit it freely; your changes stay on this device.
+              </>
+            ) : null}
+            {shared.status === "failed" ? `Could not open the shared deck: ${shared.error}` : null}
+          </div>
+        ) : null}
         <FormatColorPicker
           format={format}
           colors={[]}
@@ -136,7 +235,7 @@ export function AnalyzeWorkflow() {
           onImport={() => void handleImport()}
           onClearDraft={handleClearDraft}
           onAnalyze={handleAnalyze}
-          onOpenCard={(name) => void cardDetail.open(name)}
+          onOpenCard={openCard}
         />
         {analyzer.warnings.length ? (
           <div className="panel form-card import-warning" role="status">
@@ -148,7 +247,8 @@ export function AnalyzeWorkflow() {
         ) : null}
       </section>
 
-      <section className="results-grid" aria-label="Deck analysis output" aria-live="polite">
+      <section className="results-grid" aria-label="Deck analysis output" aria-busy={analyzer.loading}>
+        <p className="sr-only" role="status">{statusMessage}</p>
         <WorkflowSummary
           title={analysis?.inferred_archetype ?? "Manual deck analysis appears here"}
           summary={analysis?.game_plan_summary ?? "Import or edit a list, then assess legality, quality, retrieval evidence, and concrete improvements."}
@@ -161,7 +261,18 @@ export function AnalyzeWorkflow() {
             errorCount: analysis.validation.errors.length,
             warningCount: analysis.validation.warnings.length
           } : undefined}
+          badge={
+            analysisStale ? (
+              <div className="stale-banner" role="note">
+                <span>The list changed since this analysis.</span>
+                <button type="button" className="chip" onClick={handleAnalyze} disabled={analyzer.loading}>
+                  Re-analyze
+                </button>
+              </div>
+            ) : null
+          }
         />
+        {analyzer.loading ? <p className="panel results-card muted">Analyzing the deck…</p> : null}
         {analysis ? (
           <AnalysisResults
             analysis={analysis}
@@ -169,14 +280,10 @@ export function AnalyzeWorkflow() {
             manualMainboard={manualMainboard}
             manualSideboard={manualSideboard}
             manualCommander={manualCommander}
-            onOpenCard={(name) => void cardDetail.open(name)}
+            onOpenCard={openCard}
           />
         ) : null}
       </section>
-
-      {cardDetail.card ? (
-        <CardDetailModal card={cardDetail.card} loading={cardDetail.loading} error={cardDetail.error} onClose={cardDetail.close} />
-      ) : null}
     </div>
   );
 }

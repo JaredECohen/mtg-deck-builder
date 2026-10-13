@@ -22,8 +22,15 @@ export function useCommanderSearch(input: CommanderSearchInput) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Join the arrays so the effect re-runs on content changes, not on every
+  // new array identity from the parent's render.
+  const colorsKey = input.colors.join(",");
+  const playstyleKey = input.playstyleTags.join(",");
+  const themeKey = input.themeTags.join(",");
+  const { search, sort, format, enabled } = input;
+
   useEffect(() => {
-    if (!input.enabled) {
+    if (!enabled) {
       setCommanders([]);
       return;
     }
@@ -32,11 +39,11 @@ export function useCommanderSearch(input: CommanderSearchInput) {
     setError(null);
     void searchCommanders(
       {
-        colors: input.colors,
-        playstyle_tags: input.playstyleTags,
-        theme_tags: input.themeTags,
-        search: input.search,
-        sort: input.sort,
+        colors: colorsKey ? colorsKey.split(",") : [],
+        playstyle_tags: playstyleKey ? playstyleKey.split(",") : [],
+        theme_tags: themeKey ? themeKey.split(",") : [],
+        search,
+        sort,
         limit: 18
       },
       controller.signal
@@ -52,7 +59,7 @@ export function useCommanderSearch(input: CommanderSearchInput) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [input.colors.join(","), input.search, input.sort, input.format, input.playstyleTags.join(","), input.themeTags.join(","), input.enabled]);
+  }, [colorsKey, search, sort, format, playstyleKey, themeKey, enabled]);
 
   return { commanders, loading, error };
 }

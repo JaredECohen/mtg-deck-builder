@@ -1,7 +1,7 @@
 "use client";
 
 import { useSimValidation } from "@/hooks/use-sim-validation";
-import type { DeckProvenance, DeckResponse } from "@/lib/types";
+import type { DeckProvenance, DeckResponse, DroppedIncludeReason } from "@/lib/types";
 
 type Props = {
   provenance: DeckProvenance;
@@ -12,7 +12,7 @@ type Props = {
   onApplyOptimized?: (next: DeckResponse) => void;
 };
 
-const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; description: string; tone: "good" | "warn" | "neutral" }> = {
+export const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; description: string; tone: "good" | "warn" | "neutral" }> = {
   corpus: {
     label: "Corpus-backed",
     description: "Built from real archetype shells in the corpus.",
@@ -32,8 +32,26 @@ const SOURCE_LABEL: Record<DeckProvenance["source_type"], { label: string; descr
     label: "Built-in seed",
     description: "Built from a curated archetype template that matched your brief.",
     tone: "neutral"
+  },
+  template: {
+    label: "Template-based",
+    description: "Built from a curated archetype template, not from observed tournament results.",
+    tone: "neutral"
   }
 };
+
+const DROPPED_REASON: Record<DroppedIncludeReason, string> = {
+  unknown: "not found in the card database",
+  not_legal: "not legal in this format",
+  off_color: "outside the deck's colors",
+  over_budget: "over the budget",
+  bracket: "above the target power bracket",
+  excluded: "also on the never-include list"
+};
+
+function formatUsd(value: number): string {
+  return value >= 100 ? `$${value.toFixed(0)}` : `$${value.toFixed(2)}`;
+}
 
 function confidenceTone(confidence: number): "good" | "warn" | "neutral" {
   if (confidence >= 0.7) return "good";
@@ -52,6 +70,12 @@ function optimizerToMainboard(cards: { name: string }[]): { name: string; quanti
 }
 
 export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, onApplyOptimized }: Props) {
+  const llmAdded = provenance.llm_added_cards ?? [];
+  const substitutions = provenance.budget_substitutions ?? [];
+  const dropped = provenance.dropped_includes ?? [];
+  const unpriced = currentDeck?.unpriced_cards ?? [];
+  const ownedCount = currentDeck?.constraints?.owned_cards?.length ?? 0;
+  const costToComplete = currentDeck?.cost_to_complete_usd;
   const meta = SOURCE_LABEL[provenance.source_type];
   const tone = confidenceTone(provenance.confidence);
   const sim = useSimValidation(provenance.sim_validation_job_id ?? null);
@@ -77,6 +101,9 @@ export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, 
     onApplyOptimized({
       ...currentDeck,
       mainboard: newMain,
+      // The refine diff and list id described the previous mainboard.
+      changes: null,
+      deck_id: "",
       // Mark this deck as sim-optimized in the provenance notes so the
       // user sees what changed; clear the job id to avoid re-polling.
       provenance: {
@@ -139,6 +166,48 @@ export function ProvenanceBanner({ provenance, commanderRequested, currentDeck, 
         <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
           Simulator validated this deck. Improvement was only{" "}
           {Math.round(sim.improvement * 100)}% — below the {Math.round(IMPROVEMENT_THRESHOLD * 100)}% threshold to suggest a swap.
+        </p>
+      ) : null}
+      {dropped.length ? (
+        <div className="provenance-detail">
+          <span className="provenance-detail-title">Requested cards left out</span>
+          <ul>
+            {dropped.map((item) => (
+              <li key={item.name}>
+                <strong>{item.name}</strong>: {DROPPED_REASON[item.reason] ?? item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {substitutions.length ? (
+        <div className="provenance-detail">
+          <span className="provenance-detail-title">Budget swaps</span>
+          <ul>
+            {substitutions.map((item) => (
+              <li key={`${item.original}-${item.replacement}`}>
+                {item.original} → <strong>{item.replacement}</strong>
+                {item.saved_usd != null ? <span className="muted"> (saves {formatUsd(item.saved_usd)} each)</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {llmAdded.length ? (
+        <div className="provenance-detail">
+          <span className="provenance-detail-title">Added by AI reasoning</span>
+          <p className="muted">{llmAdded.join(", ")}</p>
+        </div>
+      ) : null}
+      {ownedCount > 0 && costToComplete != null ? (
+        <p className="muted provenance-cost">
+          Cost to complete (cards you don&apos;t own): <strong>{formatUsd(costToComplete)}</strong>
+        </p>
+      ) : null}
+      {unpriced.length ? (
+        <p className="muted provenance-cost">
+          No price data for {unpriced.length} card{unpriced.length === 1 ? "" : "s"} ({unpriced.slice(0, 6).join(", ")}
+          {unpriced.length > 6 ? ", …" : ""}); price totals leave them out.
         </p>
       ) : null}
       {provenance.notes.length ? (

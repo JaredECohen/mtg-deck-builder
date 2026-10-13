@@ -23,10 +23,12 @@ export function useDeckAnalyzer() {
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const importAbort = useRef<AbortController | null>(null);
+  const analyzeAbort = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
       importAbort.current?.abort();
+      analyzeAbort.current?.abort();
     };
   }, []);
 
@@ -35,18 +37,24 @@ export function useDeckAnalyzer() {
       setError("Add at least one card to your deck before analyzing.");
       return null;
     }
+    // A newer analysis supersedes an older one still in flight.
+    analyzeAbort.current?.abort();
+    const controller = new AbortController();
+    analyzeAbort.current = controller;
     setLoading(true);
     setError(null);
     setWarnings([]);
     try {
-      const result = await analyzeDeck(payload);
+      const result = await analyzeDeck(payload, controller.signal);
+      if (controller.signal.aborted) return null;
       setAnalysis(result);
       return result;
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return null;
       setError(err instanceof Error ? err.message : "Unknown error");
       return null;
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -76,6 +84,8 @@ export function useDeckAnalyzer() {
   }, []);
 
   const reset = useCallback(() => {
+    analyzeAbort.current?.abort();
+    setLoading(false);
     setAnalysis(null);
     setError(null);
     setWarnings([]);

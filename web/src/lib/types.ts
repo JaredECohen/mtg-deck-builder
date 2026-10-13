@@ -1,5 +1,10 @@
 export type FormatName = "standard" | "modern" | "pioneer" | "legacy" | "commander";
 
+export type GenerationMode = "fast-competitive" | "constraint-aware" | "creative-but-viable";
+export type MatchType = "bo1" | "bo3";
+export type ExperienceLevel = "beginner" | "expert";
+export type EvidenceType = "observed" | "template";
+
 export type CardRef = {
   name: string;
   quantity: number;
@@ -84,6 +89,10 @@ export type ArchetypeMetadata = {
   similarity_threshold?: number | null;
   archetype_type?: "constructed" | "commander";
   color_profile: string[];
+  /** Most recent event date among the archetype's source decks (ISO date). */
+  last_seen?: string | null;
+  /** "observed" = real tournament results; "template" = curated/synthesized shape. */
+  evidence?: EvidenceType;
   commander_package?: {
     commander_name: string;
     popularity: number;
@@ -126,7 +135,7 @@ export type ScoreBreakdown = {
   total: number;
 };
 
-export type SourceType = "corpus" | "fallback" | "hybrid" | "builtin";
+export type SourceType = "corpus" | "fallback" | "hybrid" | "builtin" | "template";
 
 export type SimValidationStatus = "pending" | "running" | "succeeded" | "failed" | "unknown";
 
@@ -138,6 +147,109 @@ export type DeckProvenance = {
   fallback_used: boolean;
   notes: string[];
   sim_validation_job_id?: string | null;
+  /** Cards the LLM reasoning step added (spec §24 provenance). */
+  llm_added_cards?: string[];
+  budget_substitutions?: BudgetSubstitution[];
+  /** Requested includes that could not be honored, and why. */
+  dropped_includes?: DroppedInclude[];
+};
+
+export type BudgetSubstitution = {
+  original: string;
+  replacement: string;
+  saved_usd?: number | null;
+};
+
+export type DroppedIncludeReason = "unknown" | "not_legal" | "off_color" | "over_budget" | "bracket" | "excluded";
+
+export type DroppedInclude = {
+  name: string;
+  reason: DroppedIncludeReason;
+};
+
+/** The request constraints a deck was built under (kept across refines). */
+export type DeckConstraints = {
+  budget?: number | null;
+  include_cards: string[];
+  exclude_cards: string[];
+  owned_cards: string[];
+  mode: GenerationMode;
+  match_type: MatchType;
+  bracket?: number | null;
+  experience_level: ExperienceLevel;
+  prompt: string;
+};
+
+/** A runner-up shell the user can build instead (spec §11F). */
+export type DeckAlternative = {
+  name: string;
+  source_type: SourceType;
+  colors: string[];
+  tags: string[];
+  key_cards: string[];
+  summary: string;
+  commander?: string | null;
+};
+
+export type SideboardGuideEntry = {
+  card: string;
+  quantity: number;
+  purpose: string;
+  bring_in_against: string[];
+  take_out: string[];
+};
+
+export type MatchupOutlook = "favored" | "even" | "unfavored" | "unknown";
+
+export type MatchupNote = {
+  opponent: string;
+  outlook: MatchupOutlook;
+  note: string;
+};
+
+/** Deterministic how-to-play guidance (spec §11G). */
+export type GamePlan = {
+  summary: string;
+  win_conditions: string[];
+  opening_hand: string[];
+  mulligan: string[];
+  sideboard_guide: SideboardGuideEntry[];
+  matchups: MatchupNote[];
+  commander_packages: Record<string, string[]>;
+};
+
+/** Commander power bracket (WotC brackets 1-5) with the evidence. */
+export type BracketAssessment = {
+  estimated: number;
+  target?: number | null;
+  game_changers: string[];
+  mass_land_denial: string[];
+  extra_turns: string[];
+  tutors: string[];
+  two_card_combos: string[][];
+  notes: string[];
+  game_changers_as_of?: string | null;
+};
+
+export type ColorSourcePoint = {
+  color: string;
+  sources: number;
+  pips: number;
+};
+
+/** Card-level diff (POST /v1/decks/diff, and `changes` on a refined deck). */
+export type DeckDiffResult = {
+  added: { name: string; quantity: number }[];
+  removed: { name: string; quantity: number }[];
+  increased: { name: string; from: number; to: number; delta: number }[];
+  decreased: { name: string; from: number; to: number; delta: number }[];
+  unchanged: { name: string; quantity: number }[];
+  summary: { cards_added: number; cards_removed: number; total_changes: number; identical: boolean };
+};
+
+/** Refine's `changes`: the mainboard diff plus a sideboard summary. */
+export type DeckChanges = DeckDiffResult & {
+  sideboard?: DeckDiffResult["summary"];
 };
 
 export type PrimaryCardType =
@@ -207,11 +319,25 @@ export type DeckResponse = {
   playstyle_tags: string[];
   theme_tags: string[];
   card_types: CardTypeMap;
+  /** Stable id of the exact list (format, commander, main, side). */
+  deck_id?: string;
+  constraints?: DeckConstraints;
+  alternatives?: DeckAlternative[];
+  game_plan?: GamePlan;
+  bracket?: BracketAssessment | null;
+  color_sources?: ColorSourcePoint[];
+  /** Set by refine: the diff against the previous version. */
+  changes?: DeckChanges | null;
+  unpriced_cards?: string[];
+  /** Price of the cards not in constraints.owned_cards. */
+  cost_to_complete_usd?: number | null;
 };
 
 export type MetaSummaryResponse = {
   format: FormatName;
   archetypes: ArchetypeRecord[];
+  /** Most recent event date across the format's corpus. */
+  as_of?: string | null;
 };
 
 export type DataStatusResponse = {
@@ -221,6 +347,9 @@ export type DataStatusResponse = {
   archetype_count: number;
   database_backend: string;
   scryfall_ingested: boolean;
+  /** Newest card release date in the DB (proxy for data freshness). */
+  card_data_as_of?: string | null;
+  stale?: boolean;
 };
 
 export type DeckAdviceGroup = {
