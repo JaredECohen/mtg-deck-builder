@@ -73,6 +73,12 @@ so local runs and CI see the same data and never write to `var/`.
 to `main` and every PR: the backend `pytest` suite and the frontend
 `tsc --noEmit` + `next build`.
 
+## Deploy
+
+The web app deploys to Vercel and the API to one Fly.io machine, with SQLite
+on a volume (about $6/month). [docs/DEPLOY.md](docs/DEPLOY.md) has the
+setup steps, secrets, the weekly card-refresh workflow and spend caps.
+
 ## Capabilities
 
 ### Legacy heuristic path (default)

@@ -27,6 +27,12 @@ def auth_enabled() -> bool:
     return bool(_valid_keys())
 
 
+def is_valid_key(x_api_key: str | None) -> bool:
+    """True when auth is enabled and ``x_api_key`` matches a configured key."""
+    keys = _valid_keys()
+    return bool(keys and x_api_key and any(hmac.compare_digest(x_api_key, k) for k in keys))
+
+
 def require_api_key(x_api_key: str | None = Header(default=None)) -> str | None:
     """FastAPI dependency. Returns the caller's key (or None when auth is
     disabled). Raises 401 when auth is enabled and the key is missing or

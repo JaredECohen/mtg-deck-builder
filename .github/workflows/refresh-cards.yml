@@ -1,0 +1,41 @@
+name: Refresh card data
+
+# Weekly Scryfall re-ingest on the Fly API (docs/DEPLOY.md). Flags a refresh
+# on the volume and restarts the app; deploy/start.sh re-ingests at boot
+# (~40 s of downtime). Does nothing until the FLY_API_TOKEN secret is set.
+on:
+  schedule:
+    - cron: "17 9 * * 1" # Mondays 09:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-cards
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_APP: ${{ vars.FLY_APP || 'mtg-deck-lab-api' }}
+    steps:
+      - name: Skip when Fly is not configured
+        if: env.FLY_API_TOKEN == ''
+        run: echo "FLY_API_TOKEN is not set; nothing to refresh."
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: env.FLY_API_TOKEN != ''
+      - name: Flag the refresh and restart
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          flyctl ssh console --app "$FLY_APP" -C "touch /data/.refresh-cards"
+          flyctl apps restart "$FLY_APP"
+      - name: Wait for the API to come back
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS "https://$FLY_APP.fly.dev/api/data-status" -o status.json; then
+              cat status.json; exit 0
+            fi
+            sleep 15
+          done
+          echo "API did not come back within 10 minutes" >&2; exit 1
