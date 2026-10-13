@@ -248,3 +248,20 @@ def test_optimizer_default_path_is_legal_and_on_budget(monkeypatch):
     assert deck["estimated_price_usd"] is None or deck["estimated_price_usd"] <= 60
     assert any("imulator" in note for note in deck["provenance"]["notes"])
     assert sum(ref["quantity"] for ref in deck["sideboard"]) == 15
+
+
+# ── A16 land ranges, A17 collection ──────────────────────────────────────
+
+
+def test_low_curve_aggro_is_not_told_it_needs_more_lands():
+    deck = _generate(format="modern", prompt="modern burn")
+    assert not any("Land count looks low" in w for w in deck["warnings"]), deck["warnings"]
+
+
+def test_owned_cards_are_preferred_and_free_against_the_budget():
+    owned = ["Lightning Bolt", "Goblin Guide", "Monastery Swiftspear", "Eidolon of the Great Revel"]
+    deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"], owned_cards=owned, budget=40)
+    assert set(owned) & _names(deck)
+    assert deck["cost_to_complete_usd"] is not None
+    assert deck["cost_to_complete_usd"] <= 40
+    assert deck["constraints"]["owned_cards"] == owned

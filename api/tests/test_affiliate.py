@@ -87,3 +87,65 @@ def test_mass_entry_skips_zero_qty(monkeypatch):
     url = affiliate.tcgplayer_mass_entry_url([("Real Card", 2), ("Ghost", 0)])
     assert "Real+Card" in url
     assert "Ghost" not in url
+
+
+# ── Edge cases (RP-006 / review S-7) ─────────────────────────────────────
+
+import pytest  # noqa: E402
+
+from app.services import affiliate as affiliate_module  # noqa: E402
+
+_PRODUCT = "https://www.tcgplayer.com/product/12345/magic-lightning-bolt"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (_PRODUCT, _PRODUCT),
+        (f"https://tcgplayer.pxf.io/c/1/2/3?u={affiliate_module.quote_plus(_PRODUCT)}", _PRODUCT),
+        # Double-wrapped: Impact redirector around another redirector.
+        (
+            "https://partner.tcgplayer.com/c/9/9/9?u="
+            + affiliate_module.quote_plus(f"https://tcgplayer.pxf.io/c/1/2/3?u={affiliate_module.quote_plus(_PRODUCT)}"),
+            _PRODUCT,
+        ),
+        # An encoded % in the destination survives (single decode).
+        (
+            "https://tcgplayer.pxf.io/c/1/2/3?u=" + affiliate_module.quote_plus("https://www.tcgplayer.com/search?q=100%25"),
+            "https://www.tcgplayer.com/search?q=100%25",
+        ),
+    ],
+)
+def test_unwraps_to_the_canonical_destination(monkeypatch, raw, expected):
+    monkeypatch.setattr(affiliate_module, "TCGPLAYER_AFFILIATE_URL", "")
+    assert affiliate_module.tcgplayer_affiliate(raw) == expected
+
+
+def test_lookalike_host_is_not_treated_as_a_redirector(monkeypatch):
+    monkeypatch.setattr(affiliate_module, "TCGPLAYER_AFFILIATE_URL", "")
+    spoof = "https://evilpxf.io.example.com/?u=" + affiliate_module.quote_plus(_PRODUCT)
+    assert affiliate_module.tcgplayer_affiliate(spoof) is None
+
+
+def test_non_tcgplayer_destinations_are_never_wrapped(monkeypatch):
+    monkeypatch.setattr(affiliate_module, "TCGPLAYER_AFFILIATE_URL", "https://tcgplayer.pxf.io/c/1/2/3")
+    hostile = "https://tcgplayer.pxf.io/c/1/2/3?u=" + affiliate_module.quote_plus("https://evil.example.com/phish")
+    assert affiliate_module.tcgplayer_affiliate(hostile) is None
+    link = affiliate_module.ensure_tcgplayer_link(hostile, "Lightning Bolt")
+    assert link.startswith("https://tcgplayer.pxf.io/c/1/2/3?u=")
+    assert "evil.example.com" not in link and "tcgplayer.com%2Fsearch" in link
+
+
+def test_unwrap_is_bounded():
+    url = _PRODUCT
+    for _ in range(12):
+        url = "https://tcgplayer.pxf.io/c/1/2/3?u=" + affiliate_module.quote_plus(url)
+    # Still a redirector after five layers: returned as-is, never loops.
+    assert affiliate_module._canonical_destination(url).startswith("https://tcgplayer.pxf.io/")
+
+
+def test_wrapping_our_own_link_is_idempotent(monkeypatch):
+    prefix = "https://tcgplayer.pxf.io/c/1/2/3"
+    monkeypatch.setattr(affiliate_module, "TCGPLAYER_AFFILIATE_URL", prefix)
+    once = affiliate_module.tcgplayer_affiliate(_PRODUCT)
+    assert affiliate_module.tcgplayer_affiliate(once) == once

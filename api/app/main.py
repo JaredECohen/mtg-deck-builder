@@ -1,10 +1,13 @@
 import logging
+import os
+import threading
 import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from app.auth import require_api_key
 from app.config import CORS_ORIGINS
@@ -37,6 +40,7 @@ from app.rate_limiter import (
     deck_rate_limiter,
     evaluate_rate_limiter,
     prose_rate_limiter,
+    public_rate_limiter,
 )
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
@@ -65,8 +69,57 @@ parser_service = DeckParserService(repository)
 card_refresh_service = CardRefreshService(repository)
 repository.refresh_service = card_refresh_service
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger(__name__)
+
+# Behind a reverse proxy (the Next.js /api/backend proxy, a load balancer)
+# every request arrives from the proxy's address, so per-client rate limits
+# collapse into one bucket. Set MTG_TRUST_FORWARDED=1 only when the API is
+# reachable solely through a proxy that sets X-Forwarded-For.
+TRUST_FORWARDED = os.getenv("MTG_TRUST_FORWARDED", "").lower() in {"1", "true", "yes"}
+
+
+def client_key(req: Request) -> str:
+    if TRUST_FORWARDED:
+        forwarded = req.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first
+    return req.client.host if req.client else "unknown"
+
+
+# Whole-response cache for identical generate requests (spec §25 "cache
+# repeated generations"). Generation is deterministic for a given request
+# without an LLM, and LLM sub-results are cached anyway; this skips the
+# rebuild entirely. Small and short-lived: it's a burst/refresh absorber.
+_GENERATE_CACHE_TTL = float(os.getenv("MTG_GENERATE_CACHE_TTL", "600"))
+_GENERATE_CACHE_MAX = 256
+_generate_cache: "OrderedDict[str, tuple[float, DeckResponse]]" = OrderedDict()
+_generate_cache_lock = threading.Lock()
+
+
+def _cache_get(key: str) -> DeckResponse | None:
+    with _generate_cache_lock:
+        hit = _generate_cache.get(key)
+        if hit is None:
+            return None
+        stored_at, deck = hit
+        if time.monotonic() - stored_at > _GENERATE_CACHE_TTL:
+            del _generate_cache[key]
+            return None
+        _generate_cache.move_to_end(key)
+        return deck.model_copy(deep=True)
+
+
+def _cache_put(key: str, deck: DeckResponse) -> None:
+    with _generate_cache_lock:
+        _generate_cache[key] = (time.monotonic(), deck.model_copy(deep=True))
+        _generate_cache.move_to_end(key)
+        while len(_generate_cache) > _GENERATE_CACHE_MAX:
+            _generate_cache.popitem(last=False)
 
 def _card_profile_coverage() -> dict[str, int | float | str]:
     """Compare card count vs card_profiles count. Surfaces the stale-profile
@@ -132,12 +185,31 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(title="MTG Deck Builder API", version="0.1.0", lifespan=_lifespan)
 
 
+_LIMITED_ELSEWHERE = ("/v1/decks/generate", "/v1/decks/refine", "/v1/decks/chat", "/v1/decks/evaluate", "/v1/jobs/")
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next: object) -> Response:
     start = time.monotonic()
-    response: Response = await call_next(request)  # type: ignore[operator]
+    path = request.url.path
+    if (path.startswith("/v1/") or path.startswith("/api/")) and not path.startswith(_LIMITED_ELSEWHERE):
+        if not public_rate_limiter.is_allowed(f"public:{client_key(request)}"):
+            return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+    try:
+        response: Response = await call_next(request)  # type: ignore[operator]
+    except Exception:
+        # Failure category for observability; never leak the traceback.
+        logger.exception("request failed category=internal method=%s path=%s", request.method, path)
+        return JSONResponse(status_code=500, content={"detail": "Internal error. It has been logged."})
     elapsed_ms = (time.monotonic() - start) * 1000
-    logger.info("%s %s → %d (%.0fms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    category = (
+        "ok" if response.status_code < 400
+        else "rate_limited" if response.status_code == 429
+        else "auth" if response.status_code in (401, 403)
+        else "client_error" if response.status_code < 500
+        else "server_error"
+    )
+    logger.info("%s %s → %d (%.0fms) category=%s", request.method, path, response.status_code, elapsed_ms, category)
     return response
 app.add_middleware(
     CORSMiddleware,
@@ -166,7 +238,11 @@ def data_status() -> DataStatusResponse:
 
 
 @app.post("/v1/decks/generate", response_model=DeckResponse)
-def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
+def generate_deck(
+    request: GenerateDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> DeckResponse:
     """Generate a deck.
 
     By default routes to the legacy heuristic generator. When
@@ -175,12 +251,21 @@ def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
     the same ``DeckResponse`` shape. Falls back to legacy on optimizer
     errors so users never see a stack trace.
     """
-    import os
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"generate:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait before trying again.")
 
     use_optimizer = os.getenv("MTG_USE_OPTIMIZER_DEFAULT", "").lower() in {"1", "true", "yes"}
+    cache_key = f"{int(use_optimizer)}:{request.model_dump_json()}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    deck = _generate_uncached(request, use_optimizer)
+    _cache_put(cache_key, deck)
+    return deck
+
+
+def _generate_uncached(request: GenerateDeckRequest, use_optimizer: bool) -> DeckResponse:
     if use_optimizer and request.format != "commander":
         try:
             from app.services.optimizer_default_path import generate_via_optimizer
@@ -197,8 +282,12 @@ def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
 
 
 @app.post("/v1/decks/refine", response_model=DeckResponse)
-def refine_deck(request: RefineDeckRequest, req: Request) -> DeckResponse:
-    client_ip = req.client.host if req.client else "unknown"
+def refine_deck(
+    request: RefineDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> DeckResponse:
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"refine:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many refinement requests. Please wait before trying again.")
     try:
@@ -215,7 +304,7 @@ def chat_deck(
     # A no-op while MTG_API_KEY is unset (auth disabled).
     _key: str | None = Depends(require_api_key),
 ) -> ChatDeckResponse:
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"chat:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many chat requests. Please wait before trying again.")
 
@@ -258,7 +347,10 @@ def validate_deck(request: ValidateDeckRequest) -> ValidationResult:
 
 
 @app.post("/v1/decks/analyze", response_model=DeckAnalysisResponse)
-def analyze_deck(request: AnalyzeDeckRequest) -> DeckAnalysisResponse:
+def analyze_deck(
+    request: AnalyzeDeckRequest,
+    _key: str | None = Depends(require_api_key),
+) -> DeckAnalysisResponse:
     try:
         return analysis_service.analyze(request)
     except ValueError as exc:
@@ -277,7 +369,7 @@ def evaluate_deck(
     consistency, card-advantage density, and a Wilson-interval win rate —
     the same battery the optimizer's deep-eval uses, exposed directly.
     """
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not evaluate_rate_limiter.is_allowed(f"evaluate:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many evaluation requests. Please wait before trying again.")
     from app.services.deck_evaluation_service import evaluate_decklist
@@ -379,7 +471,7 @@ def submit_optimize(
     req: Request,
     _key: str | None = Depends(require_api_key),
 ) -> OptimizerJobResponse:
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"optimize:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many optimizer submissions. Wait before retrying.")
     try:
@@ -418,7 +510,7 @@ def get_job_prose(
     """
     from fastapi.responses import JSONResponse
     from app.services.deck_rationale import prose_for_rationale_dict
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not prose_rate_limiter.is_allowed(f"prose:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many prose requests. Please wait before trying again.")
     try:

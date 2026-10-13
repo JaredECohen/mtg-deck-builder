@@ -72,3 +72,60 @@ def test_llm_client_has_a_short_timeout(monkeypatch) -> None:
         assert llm_client.timeout <= 60
     finally:
         monkeypatch.setattr(llm_service, "_client", None)
+
+
+# ── Gating, proxies, caching (A20-A22) ───────────────────────────────────
+
+import app.main as main_module  # noqa: E402
+
+_BODY = {"format": "modern", "colors": ["R"], "playstyle_tags": ["aggro"]}
+
+
+def test_llm_spending_routes_need_the_key_when_auth_is_on(monkeypatch):
+    monkeypatch.setenv("MTG_API_KEY", "k-123")
+    assert client.post("/v1/decks/generate", json=_BODY).status_code == 401
+    deck = client.post("/v1/decks/generate", json=_BODY, headers={"X-API-Key": "k-123"})
+    assert deck.status_code == 200
+    refine = {"deck": deck.json(), "refinement_prompt": "make it cheaper"}
+    assert client.post("/v1/decks/refine", json=refine).status_code == 401
+    analyze = {"format": "modern", "mainboard": [{"name": "Mountain", "quantity": 60}], "deep_analysis": False}
+    assert client.post("/v1/decks/analyze", json=analyze).status_code == 401
+    # Public reads stay open.
+    assert client.post("/v1/decks/validate", json={"format": "modern", "mainboard": [{"name": "Mountain", "quantity": 60}]}).status_code == 200
+
+
+def test_forwarded_for_is_trusted_only_when_configured(monkeypatch):
+    class _Req:
+        headers = {"x-forwarded-for": "203.0.113.7, 10.0.0.1"}
+
+        class client:  # noqa: N801
+            host = "10.0.0.1"
+
+    monkeypatch.setattr(main_module, "TRUST_FORWARDED", False)
+    assert main_module.client_key(_Req()) == "10.0.0.1"
+    monkeypatch.setattr(main_module, "TRUST_FORWARDED", True)
+    assert main_module.client_key(_Req()) == "203.0.113.7"
+
+
+def test_identical_generate_requests_are_served_from_cache(monkeypatch):
+    first = client.post("/v1/decks/generate", json=_BODY).json()
+    calls = []
+    monkeypatch.setattr(main_module.generator, "generate", lambda request: calls.append(request))
+    second = client.post("/v1/decks/generate", json=_BODY).json()
+    assert calls == []  # never reached the generator
+    assert second["deck_id"] == first["deck_id"]
+
+
+def test_public_routes_are_rate_limited(monkeypatch):
+    from app import rate_limiter
+
+    monkeypatch.setattr(rate_limiter.public_rate_limiter, "limit", 3)
+    statuses = [client.get("/v1/meta/summary", params={"format": "modern"}).status_code for _ in range(5)]
+    assert statuses[:3] == [200, 200, 200]
+    assert statuses[-1] == 429
+
+
+def test_stale_card_data_is_noted(monkeypatch):
+    monkeypatch.setattr(main_module.repository, "card_data_is_stale", lambda today=None: True)
+    deck = client.post("/v1/decks/generate", json={**_BODY, "playstyle_tags": ["burn"]}).json()
+    assert any("Card data is as of" in note for note in deck["provenance"]["notes"])

@@ -298,9 +298,19 @@ class DeckGenerator:
             )
         estimated_price = self._estimate_price(mainboard, sideboard, commander)
         warnings = validation.warnings[:] + include_warnings + legality_actions
-        if request.budget is not None and estimated_price is not None and estimated_price > request.budget:
+        owned = self._owned_names(request)
+        budget_price = estimated_price
+        if owned and estimated_price is not None:
+            # With a collection, the budget covers only the cards to buy.
+            budget_price = round(sum(
+                (card.price_usd or 0.0) * ref.quantity
+                for ref in mainboard + sideboard
+                if (card := self.repository.get_card(ref.name)) is not None and card.name not in owned
+            ), 2)
+        if request.budget is not None and budget_price is not None and budget_price > request.budget:
+            label = "Cost to complete" if owned else "Estimated deck price"
             warnings.append(
-                f"Estimated deck price is about ${estimated_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
+                f"{label} is about ${budget_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
             )
 
         # Honest confidence: replace the old "did we find a shell" signal with
@@ -544,6 +554,11 @@ class DeckGenerator:
                 + ("…" if len(deck.unpriced_cards) > 5 else "")
             )
         deck.alternatives = self._alternatives(outcome, deck)
+        if self.repository.card_data_is_stale():
+            deck.provenance.notes.append(
+                f"Card data is as of {self.repository.card_data_as_of()}; sets and ban-list changes since then "
+                "aren't reflected (re-run ingest_scryfall)."
+            )
         deck.game_plan = build_game_plan(
             format_name=deck.format,
             mainboard=deck.mainboard,
@@ -1345,6 +1360,7 @@ class DeckGenerator:
         trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
         excluded = self._excluded_names(request.exclude_cards)
+        owned = self._owned_names(request)
         counts = Counter[str]()
         core_names = {package.name for package in archetype.metadata.core_cards[:18]}
 
@@ -1432,7 +1448,7 @@ class DeckGenerator:
         # everything else is filled from the format card pool ranked by
         # color and theme match.
         from_builtin = archetype.source_count == 0 and not archetype.metadata.core_cards
-        pool_ranked = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        pool_ranked = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded, owned=owned)
         if request.mode == "creative-but-viable":
             # Flex slots from a rotated slice of the themed pool instead of
             # the corpus packages: same quality band, different picks.
@@ -1443,7 +1459,7 @@ class DeckGenerator:
             ranked_candidates = [item["name"] for item in package_candidates] + pool_ranked
         nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
         while self._nonland_total(counts) < nonland_target:
-            if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
+            if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded, owned=owned):
                 break
         protected |= self._ensure_color_presence(
             counts, colors, ranked_candidates, request.format, excluded, protected,
@@ -1462,7 +1478,7 @@ class DeckGenerator:
             self._add_best_remaining(counts, ranked_candidates, request.format, colors, excluded)
         self._enforce_total_budget(
             counts, request.budget, request.format, colors, ranked_candidates, excluded, requested, trace,
-            fits=lambda c: self._matches_color_request(c, colors),
+            fits=lambda c: self._matches_color_request(c, colors), owned=owned,
         )
         return self._counts_to_refs(counts)
 
@@ -1780,6 +1796,7 @@ class DeckGenerator:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
         excluded = self._excluded_names(request.exclude_cards) | self._bracket_exclusions(request)
+        owned = self._owned_names(request)
         # The commander is the 100th card, never one of the 99. Corpus
         # signature packages list it, so exclude it from every fill path.
         if commander:
@@ -1845,7 +1862,7 @@ class DeckGenerator:
             self._add_package_cards(counts, package.signature_cards, target=COMMANDER_ROLE_TARGETS["payoff"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
 
         themed_candidates = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="engine", theme_tags=requested_tags, limit=30)]
-        fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded)
+        fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded, owned=owned)
         if request.mode == "creative-but-viable":
             themed_candidates = []
             fallback_ranked = self._novelty_order(fallback_ranked, request, window=150)
@@ -1857,7 +1874,7 @@ class DeckGenerator:
             seen.add(name)
             ranked_nonlands.append(name)
         while self._nonland_total(counts) < 62:
-            if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
+            if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander, owned=owned):
                 break
 
         requested = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
@@ -1882,12 +1899,12 @@ class DeckGenerator:
         for victim in bracket_rules.combo_pieces_to_cut(set(counts) | {commander or ""}, request.bracket, requested | {commander or ""}):
             if counts.pop(victim, 0):
                 excluded.add(victim.lower())
-                if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
+                if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander, owned=owned):
                     self._add_basic_land(counts, list(commander_identity))
         self._enforce_total_budget(
             counts, request.budget, request.format, list(commander_identity), ranked_nonlands, excluded,
             requested | ({commander} if commander else set()), trace, fits=fits_identity,
-            fixed_cost=price_of(commander),
+            fixed_cost=price_of(commander), owned=owned,
         )
         return self._counts_to_refs(counts)
 
@@ -2132,6 +2149,7 @@ class DeckGenerator:
         requested_tags: list[str],
         budget: float | None,
         excluded_cards: set[str],
+        owned: frozenset[str] = frozenset(),
     ) -> list[str]:
         preferred_tags = set(requested_tags)
         expanded_tags: set[str] = set(preferred_tags)
@@ -2145,9 +2163,14 @@ class DeckGenerator:
                 continue
             if not self._matches_color_request(card, colors):
                 continue
-            if budget is not None and not self._fits_budget_request(card, budget):
+            is_owned = card.name in owned
+            if budget is not None and not is_owned and not self._fits_budget_request(card, budget):
                 continue
             score = len(expanded_tags & set(card.tags)) * 9
+            if is_owned:
+                score += 6  # collection-aware: prefer cards the player has
+            elif budget is not None and card.price_usd is None:
+                score -= 3  # unknown price: prefer priced cards under a budget
             score += 2 if is_land_card(card) else max(0, 5 - card.mana_value)
             if "interaction" in card.tags:
                 score += 3
@@ -2606,6 +2629,7 @@ class DeckGenerator:
         main_counts: Counter[str] | None = None,
         commander_name: str | None = None,
         allow_lands: bool = False,
+        owned: frozenset[str] = frozenset(),
     ) -> bool:
         main_counts = main_counts or Counter()
         for candidate_name in ranked_candidates:
@@ -2618,7 +2642,7 @@ class DeckGenerator:
                 continue
             if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
                 continue
-            if budget is not None and not self._fits_budget_request(card, budget):
+            if budget is not None and card.name not in owned and not self._fits_budget_request(card, budget):
                 continue
             if format_name == "commander" and not self.repository.fits_color_identity(card, set(colors)):
                 continue
@@ -2774,6 +2798,7 @@ class DeckGenerator:
         *,
         fits,
         fixed_cost: float = 0.0,
+        owned: frozenset[str] = frozenset(),
     ) -> None:
         """Bring the list's total price (plus ``fixed_cost``, e.g. the
         commander) under ``budget``.
@@ -2787,6 +2812,8 @@ class DeckGenerator:
             return
 
         def price(name: str) -> float:
+            if name in owned:
+                return 0.0  # already in the player's collection
             card = self.repository.get_card(name)
             return (card.price_usd or 0.0) if card is not None else 0.0
 
@@ -2943,6 +2970,9 @@ class DeckGenerator:
         shift = int(hashlib.sha1(key.encode("utf-8")).hexdigest(), 16) % len(head)
         shift = max(shift, len(head) // 3)
         return head[shift:] + head[:shift] + tail
+
+    def _owned_names(self, request: GenerateDeckRequest) -> frozenset[str]:
+        return frozenset(card.name for name in request.owned_cards if (card := self.repository.get_card(name)))
 
     def _excluded_names(self, names: list[str]) -> set[str]:
         """Lower-cased exclusions, plus each one's canonical card name, so

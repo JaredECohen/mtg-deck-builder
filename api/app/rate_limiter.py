@@ -54,3 +54,9 @@ prose_rate_limiter = InMemoryRateLimiter(requests_per_minute=10)
 
 # Deck evaluation runs several hundred simulated games; keep it bounded.
 evaluate_rate_limiter = InMemoryRateLimiter(requests_per_minute=20)
+
+
+# Every other public route (validate, analyze, parse, export, diff, card and
+# commander search, meta, saved/shared reads): a generous per-client ceiling
+# that still stops scraping and request floods.
+public_rate_limiter = InMemoryRateLimiter(requests_per_minute=240)

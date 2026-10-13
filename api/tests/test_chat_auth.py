@@ -15,10 +15,12 @@ client = TestClient(app)
 
 @lru_cache(maxsize=1)
 def _generated_deck() -> dict:
-    # A real DeckResponse from the (ungated, offline) generator on the sample
-    # dataset — hand-writing one drifts from the schema.
+    # A real DeckResponse from the offline generator — hand-writing one drifts
+    # from the schema. Generate is key-gated too (when auth is enabled), so
+    # send the key the auth tests use; it's ignored when auth is off.
     resp = client.post(
         "/v1/decks/generate",
+        headers={"X-API-Key": "secret-key-123"},
         json={
             "format": "modern",
             "colors": ["U", "R"],

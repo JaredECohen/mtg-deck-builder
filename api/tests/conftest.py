@@ -64,4 +64,9 @@ def _fresh_rate_limits():
     for limiter in vars(rate_limiter).values():
         if isinstance(limiter, rate_limiter.InMemoryRateLimiter):
             limiter.reset()
+    # Same for the whole-response generate cache: a test that patches the
+    # generator or validator must not get another test's cached deck.
+    import app.main as main_module
+
+    main_module._generate_cache.clear()
     yield

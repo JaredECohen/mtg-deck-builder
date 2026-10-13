@@ -135,10 +135,15 @@ class DeckValidator:
         competitiveness = 85
         curve_score = 100
 
-        min_lands, max_lands = self._recommended_land_range(request.format)
+        nonland_cards = sum(mana_value_buckets.values())
+        avg_mana_value = (
+            sum(value * count for value, count in mana_value_buckets.items()) / nonland_cards if nonland_cards else 0.0
+        )
+        min_lands, max_lands = self._recommended_land_range(request.format, avg_mana_value, main_count)
         if mainboard_land_count < min_lands:
+            curve = f" for a curve averaging {avg_mana_value:.1f}" if request.format != "commander" else ""
             warnings.append(
-                f"Land count looks low: selected {mainboard_land_count} lands, and {request.format} decks usually want at least {min_lands}."
+                f"Land count looks low: selected {mainboard_land_count} lands, and {request.format} decks usually want at least {min_lands}{curve}."
             )
             mana_score -= 25 if request.format != "commander" else 15
         if mainboard_land_count > max_lands:
@@ -220,9 +225,22 @@ class DeckValidator:
             ),
         )
 
-    @staticmethod
-    def _recommended_land_range(format_name: str) -> tuple[int, int]:
-        return COMMANDER_LAND_RANGE if format_name == "commander" else CONSTRUCTED_LAND_RANGE
+    # Land share of the main deck by average nonland mana value: Burn
+    # (avg ~1.5) runs 18-20 lands, control (avg 3+) 24-27. A single range
+    # flagged every 19-land aggro deck as "low".
+    _LAND_SHARE_BY_CURVE = ((1.8, 0.27, 0.35), (2.4, 0.30, 0.38), (3.0, 0.35, 0.43), (99.0, 0.38, 0.47))
+
+    @classmethod
+    def _recommended_land_range(cls, format_name: str, avg_mana_value: float = 0.0, deck_size: int = 60) -> tuple[int, int]:
+        if format_name == "commander":
+            return COMMANDER_LAND_RANGE
+        if avg_mana_value <= 0:
+            return CONSTRUCTED_LAND_RANGE
+        size = max(deck_size, 60)
+        for ceiling, low, high in cls._LAND_SHARE_BY_CURVE:
+            if avg_mana_value <= ceiling:
+                return round(size * low), round(size * high)
+        return CONSTRUCTED_LAND_RANGE
 
     @staticmethod
     def _basic_land_color(name: str) -> str | None:
