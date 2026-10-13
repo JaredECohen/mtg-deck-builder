@@ -47,12 +47,19 @@ npm run dev
 
 ```bash
 cd api
-python -m pytest -q     # 291 passing, 13 skipped (need full dataset / Celery without Redis)
+python -m pytest -q     # ~390 tests, ~40 s, no skips
 ```
 
-A handful of integration tests need the full Scryfall dataset and are
-skipped by default; after `ingest_scryfall`, run them with
-`MTG_FULL_DATASET=1 python -m pytest`.
+Tests always run against `api/tests/fixtures/cards.db.gz`: a deterministic
+cut of about 2k cards from the full Scryfall ingest, plus the full archetype
+and tournament corpus. `conftest.py` decompresses it into a temp dir per run,
+so local runs and CI see the same data and never write to `var/`.
+
+- Rebuild it after re-ingesting, or when a test needs a card the fixture
+  lacks. Naming the card in the test is enough:
+  `python -m app.scripts.build_test_fixture`.
+- Run against the full local DB instead with
+  `MTG_TEST_DATABASE_URL=sqlite:///../var/mtg_deck_builder.db python -m pytest`.
 
 ## CI
 
