@@ -29,13 +29,13 @@ class OptimizerJobRequest(BaseModel):
     colors: list[str] = Field(default_factory=list)
     deck_size: int | None = None  # None = pull from format config
     budget_usd: float | None = None
-    include_cards: list[str] = Field(default_factory=list)
-    exclude_cards: list[str] = Field(default_factory=list)
+    include_cards: list[str] = Field(default_factory=list, max_length=100)
+    exclude_cards: list[str] = Field(default_factory=list, max_length=100)
     commander_name: str | None = None
-    archetype_recipes: list[dict] = Field(default_factory=list)
-    rounds: int = 12
-    proposals_per_round: int = 4
-    sim_runs_per_eval: int = 200
+    archetype_recipes: list[dict] = Field(default_factory=list, max_length=20)
+    rounds: int = Field(default=12, ge=1, le=50)
+    proposals_per_round: int = Field(default=4, ge=1, le=16)
+    sim_runs_per_eval: int = Field(default=200, ge=20, le=2000)
     seed: int = 1729
 
 
@@ -117,11 +117,7 @@ def _build_pool(
     workable when the cache hasn't been built yet.
     """
     from app.oracle.profile import (
-        ComboPrimitives,
-        CostVector,
-        EffectVector,
         PROFILE_VERSION,
-        RoleWeights,
     )
 
     cards = repository.list_cards_for_format(fmt) if hasattr(repository, "list_cards_for_format") else []

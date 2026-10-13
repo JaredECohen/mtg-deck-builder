@@ -13,20 +13,17 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Callable
 
 from app.oracle.profile import CardProfile
-from app.optimizer.constraints import OptimizerConstraints, is_legal, validate_constraints
+from app.optimizer.constraints import OptimizerConstraints, validate_constraints
 from app.optimizer.fitness import (
-    FitnessVector,
     OptimizerCandidate,
     compute_fitness,
     fitness_score,
     _aggregate_role_profile,
 )
-from app.optimizer.seeder import Seed, seed_candidates
+from app.optimizer.seeder import seed_candidates
 from app.optimizer.swap_proposals import (
-    Swap,
     apply_swap,
     propose_constraint_repair_swaps,
     propose_swaps,

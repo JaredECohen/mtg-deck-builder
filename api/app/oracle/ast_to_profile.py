@@ -15,7 +15,6 @@ from app.oracle.cost_parser import parse_mana_cost
 from app.oracle.parser import detect_alt_costs, iter_actions, parse_oracle_text
 from app.oracle.profile import (
     PROFILE_VERSION,
-    Action,
     CardProfile,
     ComboPrimitives,
     Effect,

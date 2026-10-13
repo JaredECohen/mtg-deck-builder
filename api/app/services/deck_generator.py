@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import json
 import logging
 import re
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from functools import cached_property, lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -13,11 +18,16 @@ from app.models import (
     ArchetypeRecord,
     CardRecord,
     CardRef,
+    BudgetSubstitution,
+    ColorSourcePoint,
     CommanderPackageSummary,
+    DeckAlternative,
     DeckCardExplanation,
+    DeckConstraints,
     DeckMechanic,
     DeckProvenance,
     DeckResponse,
+    DroppedInclude,
     DeckRoleSummary,
     DeckSectionSummary,
     GenerateDeckRequest,
@@ -27,7 +37,6 @@ from app.models import (
 from app.constants import (
     CANONICAL_TAGS,
     COMMANDER_DECK_SIZE,
-    COMMANDER_LAND_FLOOR,
     COMMANDER_ROLE_TARGETS,
     CONSTRUCTED_DECK_SIZE,
     LAND_TARGET_AGGRO,
@@ -38,7 +47,16 @@ from app.constants import (
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
+from app.config import DATA_DIR
+from app.rules import copy_limit, is_basic_land, is_land_card
+from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
+from app.services import brackets as bracket_rules
+from app.services.deck_diff import diff_decks
+from app.services.game_plan import build_game_plan
+from app.services.grounding import card_mentions, ground_text
 from app.services.builtin_archetypes import (
+    BUILTIN_ARCHETYPES,
+    ManaBaseTemplate,
     BuiltinArchetype,
     blend_archetypes,
     detect_builtin_archetypes,
@@ -47,13 +65,22 @@ from app.services.builtin_archetypes import (
 from app.services.card_repository import CardRepository
 from app.services.deck_validator import DeckValidator
 from app.services.llm_service import (
-    RefinementIntent,
     compose_from_scratch,
     interpret_generate_prompt,
     interpret_refinement,
     refine_blend,
     refine_compose,
 )
+
+
+@dataclass
+class _BuildTrace:
+    """Per-request notes collected while building (the generator is a shared
+    singleton serving concurrent requests, so this is passed, not stored)."""
+
+    budget_substitutions: list[BudgetSubstitution] = field(default_factory=list)
+    # Anchor cards an LLM (blend curation or compose) chose — spec §24.
+    llm_anchor_names: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -75,12 +102,36 @@ class _RetrievalOutcome:
     notes: list[str] = field(default_factory=list)
 
 
+# Cosine similarity floor for a budget stand-in. Below it the "similar" card
+# is a different card that happens to share a few features.
+_MIN_SUBSTITUTE_SIMILARITY = 0.55
+
+_DROP_REASON_TEXT = {
+    "unknown": "no card by that name",
+    "not_legal": "not legal in this format",
+    "off_color": "outside the deck's colors",
+    "over_budget": "over the budget",
+    "bracket": "above the requested Commander bracket",
+    "excluded": "it is also on the exclude list",
+    "no_room": "cut to fit the deck size",
+}
+
+
+@lru_cache(maxsize=1)
+def _sideboard_staples() -> dict[str, list[str]]:
+    path = DATA_DIR / "sideboard_staples.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {key: list(names) for key, names in data.items() if not key.startswith("_")}
+
+
 class DeckGenerator:
     def __init__(self, repository: CardRepository, validator: DeckValidator) -> None:
         self.repository = repository
         self.validator = validator
 
     def generate(self, request: GenerateDeckRequest) -> DeckResponse:
+        trace = _BuildTrace()
+        started = time.perf_counter()
         if request.prompt:
             intent = interpret_generate_prompt(request.prompt)
             request = request.model_copy(update={
@@ -93,6 +144,16 @@ class DeckGenerator:
                 "exclude_cards": list(dict.fromkeys(request.exclude_cards + intent.exclude_cards)),
             })
 
+        if request.format == "commander" and not request.commander_name and request.prompt:
+            named = self._commander_named_in(request.prompt, list(request.colors))
+            if named:
+                request = request.model_copy(update={"commander_name": named})
+
+        # The user's constraints (explicit fields plus what the brief stated),
+        # before archetype anchors are merged in. Persisted on the response so
+        # a refine keeps them (budget, excludes, ...).
+        user_request = request
+
         # Built-in archetype seeds: when the brief names known shell(s) that
         # the tournament corpus doesn't cover (Burn, Tron, Yawgmoth, ...), we
         # inject canonical anchor cards into include_cards and merge the
@@ -104,13 +165,23 @@ class DeckGenerator:
         # A seed outside the requested colors cannot contribute cards (color
         # gating drops them); it would only pollute the blend's name and tags.
         matches = prefer_color_compatible(matches, list(request.colors))
+        if request.archetype_name:
+            # "Build this alternative": a named builtin seed wins; a named
+            # corpus shell is honored in retrieval.
+            forced = next(
+                (b for b in BUILTIN_ARCHETYPES
+                 if b.display_name.lower() == request.archetype_name.lower() and request.format in b.formats),
+                None,
+            )
+            matches = [forced] if forced else []
         builtin = blend_archetypes(matches, request.format) if matches else None
 
         # Compose-from-scratch fallback: when the brief has substance but no
         # builtin matched, ask Claude to compose ~30 anchor cards instead of
         # letting the corpus pick a near-miss shell. Synthesizes a transient
         # BuiltinArchetype so the rest of the pipeline doesn't change.
-        if builtin is None and request.prompt and request.prompt.strip():
+        # Fast-competitive stays on known shells; it never composes a new one.
+        if builtin is None and request.prompt and request.prompt.strip() and request.mode != "fast-competitive" and not request.archetype_name:
             composed = compose_from_scratch(
                 format_name=request.format,
                 colors=list(request.colors),
@@ -132,9 +203,11 @@ class DeckGenerator:
                     user_brief=request.prompt,
                 )
                 final_composed = refined if refined is not None else composed
+                trace.llm_anchor_names = {name for name, _ in final_composed["anchor_cards"]}
                 colors_tuple = tuple(request.colors) if request.colors else ()
                 builtin = BuiltinArchetype(
-                    id="composed-" + str(abs(hash(request.prompt)) % 10_000_000),
+                    # Stable across processes (hash() is salted per process).
+                    id="composed-" + hashlib.sha1(request.prompt.encode("utf-8")).hexdigest()[:10],
                     display_name=final_composed["archetype_label"] or "Composed",
                     keywords=(),
                     formats=(request.format,),
@@ -160,6 +233,7 @@ class DeckGenerator:
                 user_brief=request.prompt,
             )
             if llm_blend is not None and llm_blend.get("anchor_cards"):
+                trace.llm_anchor_names = {name for name, _ in llm_blend["anchor_cards"]}
                 builtin = BuiltinArchetype(
                     id=builtin.id + "-llm",
                     display_name=builtin.display_name,
@@ -173,25 +247,24 @@ class DeckGenerator:
                 )
 
         if builtin is not None:
-            # Push anchors through seed_cards (preserves quantity) and into
-            # include_cards (forces presence). Without seed_cards the include
-            # path clamps to ~2 copies, so 4x anchors never reach 4x.
+            # Anchors go in as seed cards (quantity preserved, protected from
+            # trimming, budget-checked with substitution). They are NOT user
+            # includes: include_cards stays what the user asked for, so the
+            # "forced card over budget" / "dropped include" reports name only
+            # cards the user actually requested.
             anchor_seeds: list[CardRef] = []
-            anchor_names: list[str] = []
             existing_seed_names = {ref.name.lower() for ref in request.seed_cards}
             for name, qty in builtin.anchor_cards:
                 if qty <= 0:
                     continue
                 if not self.repository.get_card(name):
                     continue
-                anchor_names.append(name)
                 if name.lower() not in existing_seed_names:
                     anchor_seeds.append(CardRef(name=name, quantity=qty))
             request = request.model_copy(update={
                 "colors": request.colors or list(builtin.colors),
                 "playstyle_tags": list(dict.fromkeys(list(request.playstyle_tags) + list(builtin.playstyle_tags))),
                 "theme_tags": list(dict.fromkeys(list(request.theme_tags) + list(builtin.theme_tags))),
-                "include_cards": list(dict.fromkeys(list(request.include_cards) + anchor_names)),
                 "seed_cards": list(request.seed_cards) + anchor_seeds,
             })
         requested_tags = [self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags]
@@ -203,7 +276,7 @@ class DeckGenerator:
             outcome, commander, commander_reason, commander_identity = self._build_commander_context(request, requested_tags)
             base = outcome.base
             colors = self._ordered_commander_identity(commander, list(commander_identity))
-            mainboard = self._build_commander_mainboard(base, request, list(commander_identity), requested_tags, commander)
+            mainboard = self._build_commander_mainboard(base, request, list(commander_identity), requested_tags, commander, trace=trace)
             mainboard, legality_actions = self._enforce_commander_color_identity(mainboard, commander_identity)
             sideboard: list[CardRef] = []
         else:
@@ -211,26 +284,37 @@ class DeckGenerator:
             base = outcome.base
             colors = request.colors or base.colors
             commander = None
-            mainboard = self._build_constructed_mainboard(base, request, colors, requested_tags)
-            sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard)
+            mainboard = self._build_constructed_mainboard(base, request, colors, requested_tags, trace=trace)
+            sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard, trace=trace)
             commander_identity = set(colors)
 
+        built = time.perf_counter()
         validation = self.validator.validate(
             ValidateDeckRequest(format=request.format, mainboard=mainboard, sideboard=sideboard, commander=commander)
         )
+        validated = time.perf_counter()
+        if request.format == "commander" and not validation.is_legal:
+            details = "; ".join(validation.errors) or "unknown commander legality failure"
+            raise ValueError(
+                "Commander generation failed its final legality gate; no deck was returned. "
+                f"{details}"
+            )
         estimated_price = self._estimate_price(mainboard, sideboard, commander)
         warnings = validation.warnings[:] + include_warnings + legality_actions
-        if request.budget is not None and estimated_price is not None and estimated_price > request.budget:
+        owned = self._owned_names(request)
+        budget_price = estimated_price
+        if owned and estimated_price is not None:
+            # With a collection, the budget covers only the cards to buy.
+            budget_price = round(sum(
+                (card.price_usd or 0.0) * ref.quantity
+                for ref in mainboard + sideboard
+                if (card := self.repository.get_card(ref.name)) is not None and card.name not in owned
+            ), 2)
+        if request.budget is not None and budget_price is not None and budget_price > request.budget:
+            label = "Cost to complete" if owned else "Estimated deck price"
             warnings.append(
-                f"Estimated deck price is about ${estimated_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
+                f"{label} is about ${budget_price:.2f}, which is above the requested budget of ${request.budget:.2f}."
             )
-
-        explanation = self._build_explanation(base, request, colors, mainboard, sideboard, warnings, commander_reason, outcome)
-        mechanics = self._build_mechanics(mainboard, commander)
-        role_summary = self._build_role_summary(mainboard)
-        sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
-        mana_curve = self._build_mana_curve(mainboard)
-        card_notes = self._build_card_notes(mainboard)
 
         # Honest confidence: replace the old "did we find a shell" signal with
         # a composite of (a) intent-match — did the brief's archetype match
@@ -246,6 +330,16 @@ class DeckGenerator:
             mainboard=mainboard,
             request=request,
         )
+        # The explanation text quotes the confidence, so build it from the
+        # final number (it used to print the retrieval-time 0.70 next to a
+        # 95% badge).
+        outcome = dataclasses.replace(outcome, confidence=round(confidence, 3))
+        explanation = self._build_explanation(base, request, colors, mainboard, sideboard, warnings, commander_reason, outcome)
+        mechanics = self._build_mechanics(mainboard, commander)
+        role_summary = self._build_role_summary(mainboard)
+        sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
+        mana_curve = self._build_mana_curve(mainboard)
+        card_notes = self._build_card_notes(mainboard)
         # Queue sim validation for blends (2+ archetypes merged) so the
         # frontend can show a "validated by simulator" badge once the
         # optimizer finishes. Best-effort — any failure is swallowed so the
@@ -277,7 +371,19 @@ class DeckGenerator:
             fallback_used=outcome.fallback_used,
             notes=outcome.notes,
             sim_validation_job_id=sim_job_id,
+            llm_added_cards=sorted(
+                card.name for name in trace.llm_anchor_names
+                if (card := self.repository.get_card(name)) is not None
+                and any(ref.name == card.name for ref in mainboard + sideboard)
+            ),
+            budget_substitutions=trace.budget_substitutions,
+            dropped_includes=self._dropped_includes(request, mainboard, sideboard, commander, commander_identity),
         )
+        for dropped in provenance.dropped_includes:
+            warnings.append(f"Requested card {dropped.name} was not included ({_DROP_REASON_TEXT[dropped.reason]}).")
+        for swap in trace.budget_substitutions:
+            saved = f", saves about ${swap.saved_usd:.2f} a copy" if swap.saved_usd else ""
+            warnings.append(f"Budget: swapped {swap.original} for {swap.replacement}{saved}.")
 
         # Final hard legality gate for commander format. The validator already
         # ran but if it surfaced color-identity errors we treat those as a
@@ -300,20 +406,47 @@ class DeckGenerator:
                 # Avoid stuttering when the display_name already includes the
                 # format word ("Legacy Reanimator" → "Legacy Legacy Reanimator").
                 format_word = request.format.title()
-                if builtin.display_name.lower().startswith(request.format.lower()):
-                    title = builtin.display_name
+                display = builtin.display_name
+                if colors and set(c for c in colors if c != "C") != set(builtin.colors):
+                    # A Boros Burn seed built mono-red is "Mono-Red Burn".
+                    display = self._color_titled(display, colors)
+                if display.lower().startswith(request.format.lower()):
+                    title = display
                 else:
-                    title = f"{format_word} {builtin.display_name}"
+                    title = f"{format_word} {display}"
             strategy_summary = (
                 builtin.strategy
                 or f"Built from a {builtin.display_name} seed: canonical anchor cards in this archetype, "
                 f"with the rest filled from the {request.format} card pool."
             )
         else:
-            title = self._build_title(request, base, commander)
+            title = self._build_title(request, base, commander, colors)
             strategy_summary = base.strategy
+            if outcome.source_type == "hybrid" and request.format != "commander":
+                # The shell is broader than the request (e.g. a 4-color shell
+                # for mono-blue control): name the deck for what was asked
+                # and say where its structure came from, instead of
+                # "Mono-Blue Legacy Reanimator".
+                wanted = (request.theme_tags[:1] or request.playstyle_tags[:1] or ["Deck"])[0]
+                title = f"{self._color_label(colors)} {wanted.replace('-', ' ').title()}"
+                strategy_summary = (
+                    f"A {self._color_label(colors).lower()} {wanted} list. No shell in the corpus plays exactly these "
+                    f"colors, so its structure is borrowed from {base.name} and every card is filtered to your colors."
+                )
 
-        return DeckResponse(
+        # Prose must describe the deck that was built: drop sentences that
+        # name cards filtering or the LLM left out of the final list.
+        in_deck = {ref.name for ref in mainboard + sideboard} | ({commander} if commander else set())
+        grounded, removed = ground_text(strategy_summary, in_deck, self.repository)
+        if removed:
+            strategy_summary = grounded or (
+                f"{title}: built from the {base.name} shell and filled from the {request.format} card pool."
+            )
+            provenance.notes.append(
+                f"Removed {len(removed)} summary sentence(s) that named cards not in this list."
+            )
+
+        deck = DeckResponse(
             format=request.format,
             title=title,
             colors=colors,
@@ -339,6 +472,223 @@ class DeckGenerator:
             theme_tags=request.theme_tags,
             card_types=self.repository.card_types_for(mainboard + sideboard, commander),
         )
+        enriched = self._enrich_response(deck, user_request=user_request, outcome=outcome)
+        done = time.perf_counter()
+        # One line per generation (spec §24/25 auditability): where the time
+        # went and what the result was built from.
+        logger.info(
+            "gen_stages format=%s source=%s retrieve_build_ms=%.0f validate_ms=%.0f explain_ms=%.0f total_ms=%.0f "
+            "legal=%s llm=%s",
+            request.format, outcome.source_type, (built - started) * 1000, (validated - built) * 1000,
+            (done - validated) * 1000, (done - started) * 1000, enriched.is_legal, bool(trace.llm_anchor_names),
+        )
+        return enriched
+
+    # ── Commander named in a brief ───────────────────────────────────────
+
+    @cached_property
+    def _commanders_by_first_name(self) -> dict[str, list[CardRecord]]:
+        """"krenko" → [Krenko, Mob Boss; Krenko, Tin Street Kingpin]: legal
+        commanders keyed by the part of the name before the comma."""
+        index: dict[str, list[CardRecord]] = defaultdict(list)
+        for card in self.repository.all_cards():
+            if ", " in card.name and self.repository.is_legal_commander(card):
+                index[card.name.split(", ", 1)[0].lower()].append(card)
+        return index
+
+    def _commander_named_in(self, prompt: str, colors: list[str]) -> str | None:
+        """A commander the brief names, for the no-LLM path: a full card name
+        first ("Atraxa, Praetors' Voice"), else a legend's first name
+        ("Krenko goblins" → the best-ranked Krenko)."""
+        for name in sorted(card_mentions(prompt, self.repository)):
+            card = self.repository.get_card(name)
+            if card is not None and self.repository.is_legal_commander(card):
+                return card.name
+        for word in re.findall(r"[A-Za-zÀ-ÿ'\-]{3,}", prompt):
+            options = self._commanders_by_first_name.get(word.lower())
+            if not options:
+                continue
+            if len(options) == 1:
+                return options[0].name
+            ranked = self.repository.rank_commanders(colors=colors or None, search=word, limit=10)
+            option_names = {card.name for card in options}
+            for result in ranked:
+                if result.name in option_names:
+                    return result.name
+            return sorted(option_names)[0]
+        return None
+
+    # ── Response enrichment ──────────────────────────────────────────────
+
+    @staticmethod
+    def deck_id_for(format_name: str, commander: str | None, mainboard: list[CardRef], sideboard: list[CardRef]) -> str:
+        """Stable id for an exact list: same cards → same id, in any process."""
+        def canon(refs: list[CardRef]) -> list[tuple[str, int]]:
+            merged: Counter[str] = Counter()
+            for ref in refs:
+                merged[ref.name] += ref.quantity
+            return sorted(merged.items())
+        payload = json.dumps([format_name, commander or "", canon(mainboard), canon(sideboard)])
+        return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+    def _enrich_response(
+        self,
+        deck: DeckResponse,
+        *,
+        user_request: GenerateDeckRequest,
+        outcome: "_RetrievalOutcome",
+    ) -> DeckResponse:
+        """Attach the spec-level extras that don't change the list itself:
+        stable id, persisted constraints, alternatives, color sources and
+        pricing transparency."""
+        deck.deck_id = self.deck_id_for(deck.format, deck.commander, deck.mainboard, deck.sideboard)
+        deck.constraints = DeckConstraints(
+            budget=user_request.budget,
+            include_cards=list(user_request.include_cards),
+            exclude_cards=list(user_request.exclude_cards),
+            owned_cards=list(user_request.owned_cards),
+            mode=user_request.mode,
+            match_type=user_request.match_type,
+            bracket=user_request.bracket,
+            experience_level=user_request.experience_level,
+            prompt=user_request.prompt,
+        )
+        deck.color_sources = self._color_sources(deck.mainboard, deck.colors)
+        owned = {name.lower() for name in user_request.owned_cards}
+        unpriced: list[str] = []
+        to_complete = 0.0
+        priced_any = False
+        refs = deck.mainboard + deck.sideboard + ([CardRef(name=deck.commander, quantity=1)] if deck.commander else [])
+        for ref in refs:
+            card = self.repository.get_card(ref.name)
+            if card is None or is_basic_land(card):
+                continue
+            if card.price_usd is None:
+                unpriced.append(card.name)
+                continue
+            priced_any = True
+            if card.name.lower() not in owned:
+                to_complete += card.price_usd * ref.quantity
+        deck.unpriced_cards = sorted(set(unpriced))
+        deck.cost_to_complete_usd = round(to_complete, 2) if priced_any else None
+        if deck.unpriced_cards:
+            deck.warnings.append(
+                f"{len(deck.unpriced_cards)} card(s) have no price data, so the estimate undercounts: "
+                + ", ".join(deck.unpriced_cards[:5])
+                + ("…" if len(deck.unpriced_cards) > 5 else "")
+            )
+        deck.alternatives = self._alternatives(outcome, deck)
+        if self.repository.card_data_is_stale():
+            deck.provenance.notes.append(
+                f"Card data is as of {self.repository.card_data_as_of()}; sets and ban-list changes since then "
+                "aren't reflected (re-run ingest_scryfall)."
+            )
+        deck.game_plan = build_game_plan(
+            format_name=deck.format,
+            mainboard=deck.mainboard,
+            sideboard=deck.sideboard,
+            commander=deck.commander,
+            tags=deck.playstyle_tags + deck.theme_tags,
+            archetypes=[a for a in self.repository.archetypes_for_format(deck.format)
+                        if deck.selected_archetype is None or a.name != deck.selected_archetype.name],
+            repository=self.repository,
+        )
+        if deck.format == "commander":
+            names = [ref.name for ref in deck.mainboard] + ([deck.commander] if deck.commander else [])
+            deck.bracket = bracket_rules.assess(names, self.repository, target=user_request.bracket)
+            if user_request.bracket is not None and deck.bracket.estimated > max(user_request.bracket, 2):
+                deck.warnings.append(
+                    f"This list reads as bracket {deck.bracket.estimated}, above the requested bracket "
+                    f"{user_request.bracket}: " + "; ".join(deck.bracket.notes[:2])
+                )
+        return deck
+
+    def _color_sources(self, mainboard: list[CardRef], colors: list[str]) -> list[ColorSourcePoint]:
+        """Per color: mana sources among the lands vs colored pips in spells."""
+        sources: Counter[str] = Counter()
+        pips: Counter[str] = Counter()
+        for ref in mainboard:
+            card = self.repository.get_card(ref.name)
+            if card is None:
+                continue
+            if is_land_card(card):
+                produced = self._land_produces(card)
+                for color in produced:
+                    sources[color] += ref.quantity
+                continue
+            cost = card.mana_cost or "".join(face.mana_cost or "" for face in card.faces)
+            for color in "WUBRG":
+                pips[color] += cost.count(color) * ref.quantity
+        order = [c for c in "WUBRG" if c in set(colors) or sources[c] or pips[c]]
+        return [ColorSourcePoint(color=c, sources=sources[c], pips=pips[c]) for c in order]
+
+    _BASIC_COLOR = {"Plains": "W", "Island": "U", "Swamp": "B", "Mountain": "R", "Forest": "G"}
+
+    def _land_produces(self, card: CardRecord) -> set[str]:
+        for basic, color in self._BASIC_COLOR.items():
+            if basic in card.type_line:  # basic land types, incl. shocks/duals
+                return {c for b, c in self._BASIC_COLOR.items() if b in card.type_line}
+        text = card.oracle_text or ""
+        produced = {c for c in "WUBRG" if "{" + c + "}" in text}
+        if "any color" in text or "one color" in text:
+            produced |= set("WUBRG")
+        if not produced and card.color_identity:
+            produced = set(card.color_identity)
+        return produced
+
+    def _alternatives(self, outcome: "_RetrievalOutcome", deck: DeckResponse) -> list[DeckAlternative]:
+        out: list[DeckAlternative] = []
+        chosen = {name.lower() for name in deck.source_archetypes[:1]}
+        deck_colors = {c for c in deck.colors if c != "C"}
+        for candidate in outcome.candidates:
+            if candidate.name.lower() in chosen or len(out) >= 2:
+                continue
+            # An alternative must be buildable in the requested colors.
+            if deck_colors and not set(candidate.colors) <= deck_colors:
+                continue
+            if deck.selected_archetype is not None and candidate.name == deck.selected_archetype.name:
+                continue
+            key_cards = [pkg.name for pkg in candidate.metadata.core_cards[:6]] or [
+                ref.name for ref in candidate.mainboard if not self._is_land_name(ref.name)
+            ][:6]
+            out.append(DeckAlternative(
+                name=candidate.name,
+                source_type="template" if candidate.metadata.evidence == "template" else "corpus",
+                colors=list(candidate.colors),
+                tags=list(candidate.tags)[:6],
+                key_cards=key_cards,
+                summary=candidate.strategy,
+                commander=candidate.commander,
+            ))
+        if len(out) < 2 and deck.format != "commander":
+            # Curated seeds that fit the colors and playstyle (built through
+            # archetype_name, which resolves builtin names).
+            wanted = {self._canonicalize_tag(tag) for tag in deck.playstyle_tags}
+            taken = {alt.name.lower() for alt in out} | {name.lower() for name in deck.source_archetypes} | {deck.title.lower()}
+            for seed in BUILTIN_ARCHETYPES:
+                if len(out) >= 2:
+                    break
+                if deck.format not in seed.formats or seed.display_name.lower() in taken:
+                    continue
+                if any(seed.display_name.lower() in name for name in taken):
+                    continue
+                if deck_colors and not set(seed.colors) <= deck_colors:
+                    continue
+                if wanted and not wanted & {self._canonicalize_tag(tag) for tag in seed.playstyle_tags}:
+                    continue
+                out.append(DeckAlternative(
+                    name=seed.display_name,
+                    source_type="template",
+                    colors=list(seed.colors),
+                    tags=list(seed.playstyle_tags + seed.theme_tags)[:6],
+                    key_cards=[name for name, _ in seed.anchor_cards if not self._is_land_name(name)][:6],
+                    summary=seed.strategy,
+                ))
+        return out
+
+    def _is_land_name(self, name: str) -> bool:
+        card = self.repository.get_card(name)
+        return bool(card and is_land_card(card))
 
     # ── Retrieval ────────────────────────────────────────────────────────
 
@@ -472,9 +822,8 @@ class DeckGenerator:
     ) -> _RetrievalOutcome:
         """Build a retrieval outcome from a builtin archetype seed.
 
-        Used when the requested format has no corpus archetypes at all (e.g.
-        Pioneer in our current data) but the user's brief matched a known
-        builtin shell. Synthesizes an ArchetypeRecord so downstream pipeline
+        Used whenever the user's brief matched a known builtin shell (and as
+        the last resort when a format has no corpus archetypes at all). Synthesizes an ArchetypeRecord so downstream pipeline
         steps (mainboard fill, strategy summary, sections) all run normally.
         """
         # If the archetype carries a mana_base template, strip any hand-
@@ -483,7 +832,7 @@ class DeckGenerator:
         # later in _materialize_mana_base via outcome.notes plumbing.
         def _is_land(name: str) -> bool:
             card = self.repository.get_card(name)
-            return bool(card and "Land" in card.type_line)
+            return bool(card and is_land_card(card))
 
         mainboard_anchors = list(builtin.anchor_cards)
         if builtin.mana_base is not None:
@@ -535,7 +884,7 @@ class DeckGenerator:
             retrieved_from=[builtin.display_name],
             fallback_used=True,
             notes=[
-                f"Format '{request.format}' has no corpus archetypes; synthesized base from built-in {builtin.display_name} seed.",
+                f"Your brief named the {builtin.display_name} archetype; built from its curated seed instead of a corpus shell.",
             ],
         )
 
@@ -553,11 +902,34 @@ class DeckGenerator:
         if builtin is not None:
             return self._synthesize_outcome_from_builtin(builtin, request)
 
+        if request.archetype_name:
+            named = [a for a in self.repository.archetypes_for_format(request.format)
+                     if a.name.lower() == request.archetype_name.lower()]
+            if named:
+                others = self.repository.top_archetypes(
+                    format_name=request.format, colors=request.colors,
+                    theme_tags=request.playstyle_tags + request.theme_tags, limit=4, strict_colors=True,
+                )
+                base = named[0]
+                return _RetrievalOutcome(
+                    base=base,
+                    candidates=[base] + [a for a in others if a.name != base.name],
+                    source_type="template" if base.metadata.evidence == "template" else "corpus",
+                    confidence=min(1.0, 0.45 + 0.05 * min(10, base.source_count)),
+                    evidence_count=base.source_count,
+                    retrieved_from=[base.name],
+                    fallback_used=False,
+                    notes=[f"Built from the {base.name} shell you picked."],
+                )
+
+        # Fast-competitive: the most-played shell in the colors (meta
+        # presence), not the closest theme match.
+        retrieval_tags = [] if request.mode == "fast-competitive" else request.playstyle_tags + request.theme_tags
         # Strict color subset first — stops a 4C shell from beating a 2C match.
         candidates = self.repository.top_archetypes(
             format_name=request.format,
             colors=request.colors,
-            theme_tags=request.playstyle_tags + request.theme_tags,
+            theme_tags=retrieval_tags,
             limit=8,
             strict_colors=True,
         )
@@ -568,13 +940,20 @@ class DeckGenerator:
             return _RetrievalOutcome(
                 base=base,
                 candidates=candidates,
-                source_type="corpus",
+                source_type="template" if base.metadata.evidence == "template" else "corpus",
                 confidence=confidence,
                 evidence_count=evidence,
                 retrieved_from=[archetype.name for archetype in candidates[:3]],
                 fallback_used=False,
                 notes=[],
             )
+        # No corpus shell inside the colors: a curated seed that fits the
+        # colors and playstyle beats borrowing a broader shell (mono-red
+        # aggro used to come back as "RU Spells Ramp").
+        seed = self._seed_for_request(request)
+        if seed is not None:
+            return self._synthesize_outcome_from_builtin(seed, request)
+
         # Soft fallback: relax color subset to overlap. Mark as hybrid so the
         # response still tells the user the corpus only partially matched.
         soft_candidates = self.repository.top_archetypes(
@@ -648,7 +1027,7 @@ class DeckGenerator:
             outcome = _RetrievalOutcome(
                 base=archetype,
                 candidates=[archetype],
-                source_type="corpus",
+                source_type="template" if archetype.metadata.evidence == "template" else "corpus",
                 confidence=min(1.0, 0.55 + 0.05 * min(8, archetype.source_count)),
                 evidence_count=max(archetype.source_count, 1),
                 retrieved_from=[archetype.name],
@@ -673,7 +1052,7 @@ class DeckGenerator:
             outcome = _RetrievalOutcome(
                 base=selected,
                 candidates=exact_matches,
-                source_type="corpus",
+                source_type="template" if selected.metadata.evidence == "template" else "corpus",
                 confidence=confidence,
                 evidence_count=sum(max(1, archetype.source_count) for archetype in exact_matches),
                 retrieved_from=[archetype.name for archetype in exact_matches[:3]],
@@ -780,14 +1159,24 @@ class DeckGenerator:
 
     def refine(self, deck: DeckResponse, prompt: str) -> DeckResponse:
         intent = interpret_refinement(prompt)
+        if not intent.include_cards and not intent.exclude_cards:
+            # No LLM (or it found no cards): read "add 4x X", "cut Y",
+            # "swap A for B" deterministically.
+            includes, excludes, quantities = self._parse_refine_cards(prompt)
+            intent = intent.model_copy(update={
+                "include_cards": includes, "exclude_cards": excludes, "include_quantities": quantities,
+            })
 
+        previous = deck.constraints
         current_price = deck.estimated_price_usd or 0
         if intent.budget is not None:
             budget: float | None = intent.budget
         elif intent.scale_budget_by is not None and current_price > 0:
             budget = current_price * intent.scale_budget_by
         else:
-            budget = None
+            # Keep the budget the deck was built under (it used to be dropped,
+            # so "add 4x Lightning Helix" to a $50 deck came back at $194).
+            budget = previous.budget
 
         original_tags = deck.playstyle_tags or ["midrange"]
         playstyle_tags = [t for t in original_tags if t not in intent.remove_playstyle_tags]
@@ -798,7 +1187,17 @@ class DeckGenerator:
             playstyle_tags = ["midrange"]
 
         commander_lower = (deck.commander or "").lower()
-        exclude_set = {name.lower() for name in intent.exclude_cards}
+        # Constraints accumulate across refinements: earlier excludes stay
+        # excluded unless this refinement asks for the card back.
+        readded = {name.lower() for name in intent.include_cards}
+        merged_excludes = list(dict.fromkeys(
+            [name for name in previous.exclude_cards if name.lower() not in readded] + intent.exclude_cards
+        ))
+        removed = {name.lower() for name in intent.exclude_cards}
+        merged_includes = list(dict.fromkeys(
+            [name for name in previous.include_cards if name.lower() not in removed] + intent.include_cards
+        ))
+        exclude_set = {name.lower() for name in merged_excludes}
         seed_cards = [
             ref for ref in deck.mainboard
             if ref.name.lower() != commander_lower and ref.name.lower() not in exclude_set
@@ -821,7 +1220,8 @@ class DeckGenerator:
 
         colors = list(dict.fromkeys(deck.colors + intent.color_changes))
 
-        forced_includes = ([deck.commander] if deck.commander else []) + intent.include_cards
+        if deck.format != "commander":
+            seed_cards = self._preserve_land_count(deck, seed_cards, colors, keep_lands=not intent.color_changes)
 
         request = GenerateDeckRequest(
             format=deck.format,
@@ -830,17 +1230,124 @@ class DeckGenerator:
             theme_tags=deck.theme_tags or [],
             budget=budget,
             commander_name=deck.commander,
-            include_cards=list(dict.fromkeys(forced_includes)),
+            include_cards=merged_includes,
+            exclude_cards=merged_excludes,
             seed_cards=seed_cards,
-            mode="constraint-aware",
-            experience_level="beginner",
+            preserve_mana_base=deck.format != "commander",
+            mode=previous.mode,
+            experience_level=previous.experience_level,
+            match_type=previous.match_type,
+            bracket=previous.bracket,
+            owned_cards=previous.owned_cards,
         )
         regenerated = self.generate(request)
+        # The original brief still describes the deck; refinements append.
+        regenerated.constraints.prompt = previous.prompt
         base_title = re.sub(r"( - Refined)+$", "", deck.title)
         regenerated.title = f"{base_title} - Refined"
+        diff = diff_decks(deck.mainboard, regenerated.mainboard).to_dict()
+        diff["sideboard"] = diff_decks(deck.sideboard, regenerated.sideboard).to_dict()["summary"]
+        regenerated.changes = diff
+        summary = diff["summary"]
         if prompt:
             regenerated.explanation.append(f"Refinement applied: {prompt}")
+        moves = (
+            [f"+{e['quantity']} {e['name']}" for e in diff["added"]]
+            + [f"+{e['delta']} {e['name']}" for e in diff["increased"]]
+            + [f"-{e['quantity']} {e['name']}" for e in diff["removed"]]
+            + [f"-{e['delta']} {e['name']}" for e in diff["decreased"]]
+        )
+        regenerated.explanation.append(
+            f"What changed: {', '.join(moves[:10])}{'…' if len(moves) > 10 else ''} "
+            f"({summary['total_changes']} card changes)." if moves else "What changed: no mainboard changes."
+        )
+        if previous.budget is not None and budget == previous.budget and regenerated.estimated_price_usd and regenerated.estimated_price_usd > budget:
+            regenerated.warnings.append(
+                f"The refined deck costs about ${regenerated.estimated_price_usd:.2f}, over the ${budget:.2f} budget it was built under."
+            )
         return regenerated
+
+    _SWAP = re.compile(r"\b(?:swap|replace|trade)\s+(?P<out>.+?)\s+(?:for|with)\s+(?P<in>.+)", re.IGNORECASE)
+    _REMOVE = re.compile(r"\b(?:remove|cut|drop|exclude|lose|take out|no more|without|get rid of)\b", re.IGNORECASE)
+    _ADD = re.compile(r"\b(?:add|include|play|put in|run|more|bring in|use)\b", re.IGNORECASE)
+    _COUNT = re.compile(r"\b(\d+)\s*x?\s*$|\ba playset of\s*$|\bfour (?:copies of )?\s*$", re.IGNORECASE)
+
+    def _parse_refine_cards(self, prompt: str) -> tuple[list[str], list[str], dict[str, int]]:
+        includes: list[str] = []
+        excludes: list[str] = []
+        quantities: dict[str, int] = {}
+
+        def count_before(clause: str, name: str) -> int | None:
+            idx = clause.lower().find(name.split(" // ")[0].lower())
+            if idx < 0:
+                return None
+            match = self._COUNT.search(clause[:idx])
+            if not match:
+                return None
+            return int(match.group(1)) if match.group(1) else 4
+
+        for clause in re.split(r"[.;\n]|,|\band then\b", prompt):
+            clause = clause.strip()
+            if not clause:
+                continue
+            swap = self._SWAP.search(clause)
+            if swap:
+                excludes += sorted(card_mentions(swap.group("out"), self.repository) or [])
+                for name in sorted(card_mentions(swap.group("in"), self.repository)):
+                    includes.append(name)
+                    if (n := count_before(swap.group("in"), name)):
+                        quantities[name] = n
+                continue
+            for part in re.split(r"\band\b", clause):
+                mentions = sorted(card_mentions(part, self.repository) or card_mentions(" " + part, self.repository))
+                if not mentions:
+                    continue
+                if self._REMOVE.search(part):
+                    excludes += mentions
+                elif self._ADD.search(part) or self._REMOVE.search(clause) is None:
+                    for name in mentions:
+                        includes.append(name)
+                        if (n := count_before(part, name)):
+                            quantities[name] = n
+        return list(dict.fromkeys(includes)), list(dict.fromkeys(excludes)), quantities
+
+    def _preserve_land_count(
+        self,
+        deck: DeckResponse,
+        seed_cards: list[CardRef],
+        colors: list[str],
+        *,
+        keep_lands: bool,
+    ) -> list[CardRef]:
+        """Keep a refined constructed deck at its original land count.
+
+        Excluding a land ("swap the Islands for Mountains") must not shrink the
+        mana base: the removed copies come back as on-color basics. When the
+        refinement changes colors the old lands are dropped instead, so the
+        builder derives a fresh mana base for the new colors.
+        """
+        def is_land(name: str) -> bool:
+            card = self.repository.get_card(name)
+            return bool(card and is_land_card(card))
+
+        if not keep_lands:
+            return [ref for ref in seed_cards if not is_land(ref.name)]
+        original_lands = sum(ref.quantity for ref in deck.mainboard if is_land(ref.name))
+        seeded_lands = sum(ref.quantity for ref in seed_cards if is_land(ref.name))
+        shortfall = original_lands - seeded_lands
+        if shortfall <= 0:
+            return seed_cards
+        basics = self._basic_lands_for_colors(colors) or ["Wastes"]
+        seeded_basics = [ref.name for ref in seed_cards if ref.name in basics]
+        # Prefer a basic the deck (or the refinement) already runs.
+        target = seeded_basics[0] if seeded_basics else basics[0]
+        out = list(seed_cards)
+        index = next((i for i, ref in enumerate(out) if ref.name == target), None)
+        if index is None:
+            out.append(CardRef(name=target, quantity=shortfall))
+        else:
+            out[index] = CardRef(name=target, quantity=out[index].quantity + shortfall)
+        return out
 
     def export_plain(self, deck: DeckResponse) -> str:
         lines = [deck.title, f"Format: {deck.format}"]
@@ -864,6 +1371,8 @@ class DeckGenerator:
             return self._export_csv(deck)
         if target == "moxfield":
             return self._export_moxfield(deck)
+        if target == "archidekt":
+            return self._export_archidekt(deck)
         return self.export_plain(deck)
 
     def _build_constructed_mainboard(
@@ -872,14 +1381,16 @@ class DeckGenerator:
         request: GenerateDeckRequest,
         colors: list[str],
         requested_tags: list[str],
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
-        excluded = {name.lower() for name in request.exclude_cards}
+        excluded = self._excluded_names(request.exclude_cards)
+        owned = self._owned_names(request)
         counts = Counter[str]()
         core_names = {package.name for package in archetype.metadata.core_cards[:18]}
 
         for ref in archetype.mainboard:
             card = self.repository.get_card(ref.name)
-            if not card or ref.name.lower() in excluded:
+            if not card or card.name.lower() in excluded:
                 continue
             if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
                 continue
@@ -888,7 +1399,7 @@ class DeckGenerator:
             # any shortfall with basics.
             if not self._fits_budget_request(card, request.budget, exempt_lands=False):
                 continue
-            desired_qty = max(ref.quantity, 2 if ref.name in core_names and "Land" not in card.type_line else ref.quantity)
+            desired_qty = max(ref.quantity, 2 if ref.name in core_names and not is_land_card(card) else ref.quantity)
             counts[card.name] = min(desired_qty, self._copy_limit(card, request.format) or desired_qty)
 
         for include_name in request.include_cards:
@@ -897,18 +1408,56 @@ class DeckGenerator:
                 counts[card.name] = max(counts[card.name], 2)
 
         # Seed from prior deck (refine path): preserve original quantities for cards that still pass all filters
+        seeded_land_total = 0
+        protected: set[str] = set()
         for ref in request.seed_cards:
             card = self.repository.get_card(ref.name)
-            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+            if not card or card.name.lower() in excluded:
+                continue
+            if is_land_card(card):
+                if not request.preserve_mana_base:
+                    continue
+                # A refine seeds the previous mana base (see
+                # _preserve_land_count). Keep it as-is: it is the land target.
+                if self._is_card_legal_record(card, request.format) and (
+                    is_basic_land(card) or self._matches_color_request(card, colors)
+                ):
+                    limit = self._copy_limit(card, request.format)
+                    counts[card.name] = min(ref.quantity, limit or ref.quantity)
+                    seeded_land_total += counts[card.name]
                 continue
             if not self._is_card_legal_record(card, request.format) or not self._matches_color_request(card, colors):
                 continue
             if not self._fits_budget_request(card, request.budget):
-                continue
+                card = self._budget_substitute(
+                    card, format_name=request.format, budget=request.budget, excluded=excluded,
+                    taken=set(counts), fits=lambda c: self._matches_color_request(c, colors), trace=trace,
+                )
+                if card is None:
+                    continue
             limit = self._copy_limit(card, request.format)
+            # A seed's quantity is the target (it overrides the include
+            # path's default of two copies).
             counts[card.name] = min(ref.quantity, limit or ref.quantity)
+            protected.add(card.name)
+        # Cards the user explicitly asked for are cut last of all.
+        requested = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
+        protected |= requested
+        if seeded_land_total:
+            # The seeded mana base replaces the retrieved shell's lands, which
+            # were added by the archetype loop above (e.g. Steam Vents pushing
+            # out the Mountains a user just swapped in).
+            seeded_land_names = {
+                card.name
+                for ref in request.seed_cards
+                if (card := self.repository.get_card(ref.name)) is not None and is_land_card(card)
+            }
+            for name in list(counts):
+                card = self.repository.get_card(name)
+                if card and is_land_card(card) and name not in seeded_land_names:
+                    del counts[name]
 
-        target_lands = self._target_land_count(archetype, requested_tags)
+        target_lands = seeded_land_total or self._target_land_count(archetype, requested_tags)
         package_candidates = self.repository.card_packages_by_role_theme(
             format_name=request.format,
             role="engine",
@@ -923,22 +1472,38 @@ class DeckGenerator:
         # everything else is filled from the format card pool ranked by
         # color and theme match.
         from_builtin = archetype.source_count == 0 and not archetype.metadata.core_cards
-        if from_builtin:
-            ranked_candidates = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+        pool_ranked = self._rank_cards(request.format, colors, requested_tags, request.budget, excluded, owned=owned)
+        if request.mode == "creative-but-viable":
+            # Flex slots from a rotated slice of the themed pool instead of
+            # the corpus packages: same quality band, different picks.
+            ranked_candidates = self._novelty_order(pool_ranked, request)
+        elif from_builtin:
+            ranked_candidates = pool_ranked
         else:
-            ranked_candidates = [item["name"] for item in package_candidates] + self._rank_cards(request.format, colors, requested_tags, request.budget, excluded)
+            ranked_candidates = [item["name"] for item in package_candidates] + pool_ranked
         nonland_target = CONSTRUCTED_DECK_SIZE - target_lands
         while self._nonland_total(counts) < nonland_target:
-            if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded):
+            if not self._add_ranked_candidate(counts, ranked_candidates, request.format, colors, request.budget, excluded, owned=owned):
                 break
-        self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format, budget=request.budget)
-        while self._total_cards(counts) > CONSTRUCTED_DECK_SIZE:
-            self._trim_excess_land_or_spell(counts, colors)
+        protected |= self._ensure_color_presence(
+            counts, colors, ranked_candidates, request.format, excluded, protected,
+            fits=lambda c: self._matches_color_request(c, colors) and self._fits_budget_request(c, request.budget),
+            copies=2,
+        )
+        if not seeded_land_total:
+            # A seeded (refined) mana base is kept as the user left it; only a
+            # fresh build derives lands from the shell and rebalances basics.
+            self._add_lands_from_packages(counts, colors, target_lands, archetype.metadata.land_packages, request.format, budget=request.budget)
+        self._trim_to_size(counts, colors, target_lands, protected, requested)
         max_fill_iters = 200
         for _ in range(max_fill_iters):
             if self._total_cards(counts) >= CONSTRUCTED_DECK_SIZE:
                 break
-            self._add_best_remaining(counts, ranked_candidates, request.format)
+            self._add_best_remaining(counts, ranked_candidates, request.format, colors, excluded)
+        self._enforce_total_budget(
+            counts, request.budget, request.format, colors, ranked_candidates, excluded, requested, trace,
+            fits=lambda c: self._matches_color_request(c, colors), owned=owned,
+        )
         return self._counts_to_refs(counts)
 
     def _build_sideboard(
@@ -948,61 +1513,119 @@ class DeckGenerator:
         colors: list[str],
         requested_tags: list[str],
         mainboard: list[CardRef],
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
+        """A full 15-card sideboard for best-of-three (none for best-of-one).
+
+        Curated archetype sideboards and corpus packages go first; the rest is
+        filled round-robin across the matchup classes in
+        ``sideboard_classes`` from the whole legal, on-color, in-budget pool,
+        so a shell without a corpus sideboard still gets real answers instead
+        of 0-6 cards (Standard and Pioneer used to ship empty sideboards).
+        """
+        if request.match_type == "bo1":
+            return []
+        excluded = self._excluded_names(request.exclude_cards)
         counts = Counter[str]()
         main_counts: Counter[str] = Counter()
         for ref in mainboard:
             resolved = self.repository.get_card(ref.name)
             main_counts[resolved.name if resolved else ref.name] += ref.quantity
-        # Builtin sideboard anchors: when the synthesized base carries a
-        # curated sideboard (Burn → Smash to Smithereens, Roiling Vortex,
-        # etc.), seed those first at their declared quantities. Eliminates
-        # the "15 Mountains" / random role-pool grab bag for top archetypes.
+
+        def room_for(card: CardRecord) -> int:
+            limit = self._copy_limit(card, request.format)
+            if limit is None:
+                return SIDEBOARD_SIZE
+            return max(0, limit - main_counts[card.name] - counts[card.name])
+
+        def eligible(card: CardRecord | None) -> bool:
+            return (
+                card is not None
+                and card.name.lower() not in excluded
+                and not is_land_card(card)
+                and self._is_card_legal_record(card, request.format)
+                and self._matches_color_request(card, colors)
+                and self._fits_budget_request(card, request.budget, exempt_lands=False)
+            )
+
+        def add(card: CardRecord, quantity: int) -> None:
+            take = min(quantity, room_for(card), SIDEBOARD_SIZE - self._total_cards(counts))
+            if take > 0:
+                counts[card.name] += take
+
+        # Curated sideboard (builtin seeds: Burn → Smash to Smithereens, ...).
         for ref in archetype.sideboard:
             card = self.repository.get_card(ref.name)
-            if not card or not self._is_card_legal_record(card, request.format):
-                continue
-            if not self._matches_color_request(card, colors):
-                continue
-            # The copy limit spans mainboard + sideboard combined, so subtract
-            # copies the mainboard already runs.
-            limit = self._copy_limit(card, request.format)
-            remaining = (limit - main_counts[card.name]) if limit is not None else ref.quantity
-            if remaining <= 0:
-                continue
-            counts[card.name] = min(ref.quantity, remaining)
+            if eligible(card):
+                add(card, ref.quantity)
         preferred_packages = archetype.metadata.sideboard_packages or archetype.metadata.matchup_tech_packages
         for package in preferred_packages:
             card = self.repository.get_card(package.name)
-            if not card or not self._matches_color_request(card, colors):
-                continue
-            if not self._is_card_legal_record(card, request.format):
-                continue
-            remaining = max(0, (self._copy_limit(card, request.format) or 4) - main_counts[card.name])
-            if remaining:
-                counts[card.name] = min(int(round(package.average_quantity or 1)), remaining)
+            if eligible(card):
+                add(card, int(round(package.average_quantity or 1)))
 
-        # Walk multiple role pools before giving up. Basic lands in a
-        # sideboard are always wrong, so we never pad with them — better to
-        # return a short sideboard than 15 Mountains.
-        for role in ("interaction", "removal", "threat", "advantage", "ramp"):
-            if self._total_cards(counts) >= SIDEBOARD_SIZE:
-                break
-            role_names = [
-                item["name"]
-                for item in self.repository.card_packages_by_role_theme(
-                    format_name=request.format,
-                    role=role,
-                    theme_tags=requested_tags,
-                    limit=20,
-                )
+        if self._total_cards(counts) < SIDEBOARD_SIZE:
+            pools = self._sideboard_class_pools(request.format)
+            covered = {cls.key for name in counts if (c := self.repository.get_card(name)) and (cls := classify(c))}
+            # Classes the deck doesn't already answer come first.
+            order = [cls for cls in SIDEBOARD_CLASSES if cls.key not in covered] + [
+                cls for cls in SIDEBOARD_CLASSES if cls.key in covered
             ]
-            while self._total_cards(counts) < SIDEBOARD_SIZE:
-                if not self._add_ranked_candidate(
-                    counts, role_names, request.format, colors, request.budget, set(), main_counts
-                ):
+            cursors = {cls.key: 0 for cls in order}
+            progressed = True
+            while self._total_cards(counts) < SIDEBOARD_SIZE and progressed:
+                progressed = False
+                for cls in order:
+                    pool = pools.get(cls.key, [])
+                    while cursors[cls.key] < len(pool):
+                        card = self.repository.get_card(pool[cursors[cls.key]])
+                        cursors[cls.key] += 1
+                        if eligible(card) and counts[card.name] == 0 and main_counts[card.name] == 0:
+                            add(card, 2)
+                            progressed = True
+                            break
+                    if self._total_cards(counts) >= SIDEBOARD_SIZE:
+                        break
+        if self._total_cards(counts) < SIDEBOARD_SIZE:
+            # Small pools (e.g. a fresh Standard) can run out of classified
+            # answers; finish with the best-ranked on-color interaction.
+            for name in self._rank_cards(request.format, colors, ["interaction"], request.budget, excluded):
+                if self._total_cards(counts) >= SIDEBOARD_SIZE:
                     break
+                card = self.repository.get_card(name)
+                if eligible(card) and counts[card.name] == 0 and main_counts[card.name] == 0:
+                    add(card, 2)
         return self._counts_to_refs(counts)
+
+    def _sideboard_class_pools(self, format_name: str) -> dict[str, list[str]]:
+        """Legal cards per sideboard class, cheapest-to-cast first. Cached
+        per format (the card pool is fixed for the process lifetime)."""
+        cache = self.__dict__.setdefault("_sideboard_pool_cache", {})
+        if format_name in cache:
+            return cache[format_name]
+        # Ranking signals, strongest first: a curated staple for that class
+        # (data/sideboard_staples.json, best-first), how often the corpus
+        # plays the card in this format, then cheap-to-cast and priced.
+        staples = _sideboard_staples()
+        corpus_counts: Counter[str] = Counter()
+        for archetype in self.repository.archetypes_for_format(format_name):
+            for ref in archetype.mainboard + archetype.sideboard:
+                corpus_counts[ref.name] += 1
+            for package in archetype.metadata.sideboard_packages + archetype.metadata.matchup_tech_packages:
+                corpus_counts[package.name] += 1
+        pools: dict[str, list[tuple]] = {cls.key: [] for cls in SIDEBOARD_CLASSES}
+        for card in self.repository.all_cards():
+            if is_land_card(card) or not self._is_card_legal_record(card, format_name):
+                continue
+            staple_class = next((key for key, names in staples.items() if card.name in names), None)
+            cls_key = staple_class or (cls.key if (cls := classify(card)) else None)
+            if cls_key is None:
+                continue
+            staple_rank = staples[cls_key].index(card.name) if staple_class else len(staples.get(cls_key, ())) + 1
+            price = card.price_usd if card.price_usd is not None else 1e6
+            pools[cls_key].append((staple_rank, -corpus_counts[card.name], card.mana_value, price, card.name))
+        cache[format_name] = {key: [row[-1] for row in sorted(rows)] for key, rows in pools.items()}
+        return cache[format_name]
 
     def _select_commander(
         self,
@@ -1015,28 +1638,57 @@ class DeckGenerator:
         # Hard-filter: a chosen commander must satisfy any explicit color
         # request the user passed in. A 5-color Sliver shell can never satisfy
         # a mono-W request, even if its support depth is overwhelming.
+        #
+        # Color fit is judged on the commander card's color identity, never the
+        # archetype row's colors: a U/R "Spellslinger" shell keyed to mono-U
+        # Talrand used to win a U/R request, and identity filtering then
+        # stripped every red card (36 Islands, zero red).
         requested_set = {color for color in colors if color and color != "C"} if colors else set()
+
+        def identity_of(commander_name: str | None) -> set[str]:
+            card = self.repository.get_card(commander_name) if commander_name else None
+            return set(card.color_identity or card.colors) if card else set()
+
+        def covers_request(identity: set[str]) -> bool:
+            return requested_set.issubset(identity)
+
+        # Brackets 1-2 allow no Game Changers, the commander included.
+        banned = self._bracket_exclusions(request)
+        candidates = [c for c in candidates if not (c.commander and c.commander.lower() in banned)]
         if requested_set:
-            candidates = [c for c in candidates if set(c.colors).issubset(requested_set)]
+            candidates = [c for c in candidates if c.commander and identity_of(c.commander).issubset(requested_set)]
+        elif colors and set(colors) == {"C"}:
+            candidates = [c for c in candidates if c.commander and not identity_of(c.commander)]
+        colorless_only = bool(colors) and set(colors) == {"C"}
         archetype_commander_card = self.repository.get_card(archetype.commander) if archetype.commander else None
+        archetype_identity = identity_of(archetype.commander)
         archetype_commander_ok = (
             archetype_commander_card is not None
+            and archetype_commander_card.name.lower() not in banned
             and self.repository.is_legal_commander(archetype_commander_card)
-            and (not requested_set or self.repository.fits_color_identity(archetype_commander_card, requested_set))
+            and (
+                not archetype_identity if colorless_only
+                else (not requested_set or archetype_identity.issubset(requested_set))
+            )
         )
-        if not candidates and archetype_commander_ok and archetype.commander:
+        # Shortcut only when the shell's commander can play every requested
+        # color; otherwise the card pool may hold one that can (a U/B request
+        # used to get mono-B Sheoldred from the Reanimator shell this way).
+        if not candidates and archetype_commander_ok and archetype.commander and covers_request(archetype_identity):
             return archetype.commander, f"Selected {archetype.commander} because no stronger commander corpus match was available.", archetype
-        best_score = float("-inf")
+        # Rank by (covers every requested color, score): a commander that can
+        # actually play all requested colors always beats one that can't.
+        best_rank: tuple[bool, float] = (False, float("-inf"))
         best_choice: ArchetypeRecord | None = None
         best_reason = ""
-        requested_color_set = set(colors)
         requested_tag_set = set(requested_tags)
         for candidate in candidates:
             package = candidate.metadata.commander_package
             if not candidate.commander or package is None:
                 continue
-            color_fit = len(requested_color_set & set(candidate.colors))
-            exact_color_fit = requested_color_set.issubset(set(candidate.colors)) if requested_color_set else True
+            identity = identity_of(candidate.commander)
+            color_fit = len(requested_set & identity)
+            exact_color_fit = covers_request(identity)
             theme_fit = len(requested_tag_set & {self._canonicalize_tag(tag) for tag in candidate.tags})
             support_depth = package.support_depth
             package_tags = {self._canonicalize_tag(tag) for pkg in package.synergy_packages for tag in pkg.tags}
@@ -1047,18 +1699,19 @@ class DeckGenerator:
                 score += 12
             if request.include_cards and candidate.commander in request.include_cards:
                 score += 25
-            if score > best_score:
-                best_score = score
+            if (exact_color_fit, score) > best_rank:
+                best_rank = (exact_color_fit, score)
                 best_choice = candidate
                 best_reason = (
                     f"Selected {candidate.commander} for color fit ({color_fit}), theme fit ({theme_fit}), "
                     f"support depth ({support_depth}), and commander package coherence ({mechanical_coherence:.0f})."
                 )
-        pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags)
+        pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags, banned)
         if pool_commander is not None:
-            pool_score = 18 + len(requested_color_set & set(self._commander_identity(pool_commander, colors))) * 8
+            pool_identity = identity_of(pool_commander)
+            pool_score = 18 + len(requested_set & pool_identity) * 8
             pool_score += len(requested_tag_set & {self._canonicalize_tag(tag) for tag in (self.repository.get_card(pool_commander).tags if self.repository.get_card(pool_commander) else [])}) * 8
-            if pool_score > best_score:
+            if (covers_request(pool_identity), pool_score) > best_rank:
                 return pool_commander, pool_reason, archetype
         if best_choice:
             return best_choice.commander, best_reason, best_choice
@@ -1118,6 +1771,8 @@ class DeckGenerator:
         ("Cyclonic Rift", frozenset({"U"})),
     ]
 
+    _IDENTITY_MANA_STAPLES = frozenset({"Command Tower", "Arcane Signet", "Exotic Orchard", "Path of Ancestry"})
+
     def _seed_commander_baseline(
         self,
         counts: Counter[str],
@@ -1132,6 +1787,10 @@ class DeckGenerator:
         """
         for name, requires in self._COMMANDER_BASELINE:
             if name.lower() in excluded:
+                continue
+            # These tap for the commander's colors; with a colorless
+            # commander they produce nothing.
+            if not commander_identity and name in self._IDENTITY_MANA_STAPLES:
                 continue
             # Color identity check: card's identity must subset the commander's.
             # Empty `requires` means colorless / always eligible.
@@ -1155,10 +1814,16 @@ class DeckGenerator:
         colors: list[str],
         requested_tags: list[str],
         commander: str | None,
+        trace: _BuildTrace | None = None,
     ) -> list[CardRef]:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
-        excluded = {name.lower() for name in request.exclude_cards}
+        excluded = self._excluded_names(request.exclude_cards) | self._bracket_exclusions(request)
+        owned = self._owned_names(request)
+        # The commander is the 100th card, never one of the 99. Corpus
+        # signature packages list it, so exclude it from every fill path.
+        if commander:
+            excluded.add(commander.lower())
         # Seed the canonical staples first so a Sliver Queen build never
         # ships without Sol Ring / Command Tower / Arcane Signet again.
         self._seed_commander_baseline(counts, commander_identity, excluded, request.format, request.budget)
@@ -1180,7 +1845,7 @@ class DeckGenerator:
         # around the legal anchors.
         for ref in request.seed_cards:
             card = self.repository.get_card(ref.name)
-            if not card or ref.name.lower() in excluded or "Land" in card.type_line:
+            if not card or card.name.lower() in excluded or is_land_card(card):
                 continue
             if card.name == commander:
                 continue
@@ -1189,9 +1854,27 @@ class DeckGenerator:
             if not self.repository.fits_color_identity(card, commander_identity):
                 continue
             if not self._fits_budget_request(card, request.budget):
-                continue
+                card = self._budget_substitute(
+                    card, format_name=request.format, budget=request.budget, excluded=excluded,
+                    taken=set(counts) | {commander or ""},
+                    fits=lambda c: self.repository.fits_color_identity(c, commander_identity), trace=trace,
+                )
+                if card is None:
+                    continue
             if counts[card.name] == 0:
                 counts[card.name] = 1  # Commander is singleton.
+
+        # The user's own includes. A request like "Atraxa with Doubling
+        # Season" used to come back without it and without a word.
+        for name in request.include_cards:
+            card = self.repository.get_card(name)
+            if not card or card.name.lower() in excluded or card.name == commander:
+                continue
+            if not self._is_card_legal_record(card, request.format):
+                continue
+            if not self.repository.fits_color_identity(card, commander_identity):
+                continue
+            counts[card.name] = max(counts[card.name], 1)
 
         package = archetype.metadata.commander_package
         if package:
@@ -1202,7 +1885,10 @@ class DeckGenerator:
             self._add_package_cards(counts, package.signature_cards, target=COMMANDER_ROLE_TARGETS["payoff"], format_name=request.format, colors=list(commander_identity), excluded=excluded)
 
         themed_candidates = [item["name"] for item in self.repository.card_packages_by_role_theme(format_name=request.format, role="engine", theme_tags=requested_tags, limit=30)]
-        fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded)
+        fallback_ranked = self._rank_cards(request.format, list(commander_identity), requested_tags or ["ramp"], request.budget, excluded, owned=owned)
+        if request.mode == "creative-but-viable":
+            themed_candidates = []
+            fallback_ranked = self._novelty_order(fallback_ranked, request, window=150)
         seen = set()
         ranked_nonlands = []
         for name in themed_candidates + fallback_ranked:
@@ -1211,17 +1897,41 @@ class DeckGenerator:
             seen.add(name)
             ranked_nonlands.append(name)
         while self._nonland_total(counts) < 62:
-            if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
+            if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander, owned=owned):
                 break
 
+        requested = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
+        protected = {card.name for ref in request.seed_cards if (card := self.repository.get_card(ref.name))} | requested
+
+        def price_of(name: str | None) -> float:
+            card = self.repository.get_card(name) if name else None
+            return (card.price_usd or 0.0) if card is not None else 0.0
+        fits_identity = lambda c: self.repository.fits_color_identity(c, commander_identity)  # noqa: E731
+        protected |= self._ensure_color_presence(
+            counts, sorted(commander_identity), ranked_nonlands, request.format, excluded, protected,
+            fits=lambda c: fits_identity(c) and self._fits_budget_request(c, request.budget),
+            copies=1, cards_per_color=4,
+        )
         self._add_lands_from_packages(counts, list(commander_identity), LAND_TARGET_COMMANDER, package.land_package if package else [], request.format, budget=request.budget)
-        while self._total_cards(counts) > COMMANDER_DECK_SIZE:
-            self._trim_excess_land_or_spell(counts, list(commander_identity))
+        # Land-aware trim: a refine whose seeds overflow 99 used to lose
+        # 1-4 lands because the old trim always cut basics first.
+        self._trim_to_size(counts, list(commander_identity), LAND_TARGET_COMMANDER, protected, requested, deck_size=COMMANDER_DECK_SIZE)
         while self._total_cards(counts) < COMMANDER_DECK_SIZE:
             self._add_basic_land(counts, list(commander_identity))
+        # Brackets 1-2: no two-card combos. Cut one piece of each and refill.
+        for victim in bracket_rules.combo_pieces_to_cut(set(counts) | {commander or ""}, request.bracket, requested | {commander or ""}):
+            if counts.pop(victim, 0):
+                excluded.add(victim.lower())
+                if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander, owned=owned):
+                    self._add_basic_land(counts, list(commander_identity))
+        self._enforce_total_budget(
+            counts, request.budget, request.format, list(commander_identity), ranked_nonlands, excluded,
+            requested | ({commander} if commander else set()), trace, fits=fits_identity,
+            fixed_cost=price_of(commander), owned=owned,
+        )
         return self._counts_to_refs(counts)
 
-    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None) -> str:
+    def _build_title(self, request: GenerateDeckRequest, archetype: ArchetypeRecord, commander: str | None, colors: list[str] | None = None) -> str:
         # Commander branch: "{commander} — {short archetype label}". Strips
         # the commander name from the archetype label if the clusterer
         # embedded it (e.g. "Yawgmoth, Thran Physician Aristocrats Combo
@@ -1237,16 +1947,37 @@ class DeckGenerator:
                 return commander
             return f"{commander} — {short_label}"
 
-        # Constructed: prefer the corpus archetype name; only prepend a
-        # single playstyle/theme modifier if the corpus name doesn't
-        # already start with one.
-        archetype_name = archetype.name or ""
-        modifiers = [tag.title() for tag in request.theme_tags[:1] + request.playstyle_tags[:1] if tag]
-        modifier_words = {m.lower() for m in modifiers}
-        starts_with_modifier = archetype_name.split(" ", 1)[0].lower() in modifier_words if archetype_name else False
-        if starts_with_modifier or not modifiers:
-            return archetype_name
-        return f"{modifiers[0]} {archetype_name}".strip()
+        # Constructed: the shell's name, re-labelled with the colors the deck
+        # actually plays (no "Control Azorius Control" stutter, no "RU Spells
+        # Ramp" on a mono-red list).
+        return self._color_titled(archetype.name or request.format.title(), colors or request.colors or archetype.colors)
+
+    _COLOR_LABELS: dict[frozenset[str], str] = {
+        frozenset("W"): "Mono-White", frozenset("U"): "Mono-Blue", frozenset("B"): "Mono-Black",
+        frozenset("R"): "Mono-Red", frozenset("G"): "Mono-Green",
+        frozenset("WU"): "Azorius", frozenset("UB"): "Dimir", frozenset("BR"): "Rakdos", frozenset("RG"): "Gruul",
+        frozenset("GW"): "Selesnya", frozenset("WB"): "Orzhov", frozenset("UR"): "Izzet", frozenset("BG"): "Golgari",
+        frozenset("RW"): "Boros", frozenset("GU"): "Simic",
+        frozenset("GWU"): "Bant", frozenset("WUB"): "Esper", frozenset("UBR"): "Grixis", frozenset("BRG"): "Jund",
+        frozenset("RGW"): "Naya", frozenset("WBG"): "Abzan", frozenset("URW"): "Jeskai", frozenset("BGU"): "Sultai",
+        frozenset("RWB"): "Mardu", frozenset("GUR"): "Temur",
+    }
+    _LEADING_COLOR_WORDS = re.compile(
+        r"^(?:(?:mono-(?:white|blue|black|red|green)|[2-5]-colou?r|four-colou?r|five-colou?r|colou?rless"
+        r"|[wubrg]{1,5}|[wubrg](?:/[wubrg])+|white|blue|black|red|green|azorius|dimir|rakdos|gruul|selesnya"
+        r"|orzhov|izzet|golgari|boros|simic|bant|esper|grixis|jund|naya|abzan|jeskai|sultai|mardu|temur|domain)\s+)+",
+        re.IGNORECASE,
+    )
+
+    def _color_label(self, colors: list[str]) -> str:
+        real = frozenset(c for c in colors if c in "WUBRG")
+        if not real:
+            return "Colorless"
+        return self._COLOR_LABELS.get(real) or f"{len(real)}-Color"
+
+    def _color_titled(self, name: str, colors: list[str]) -> str:
+        core = self._LEADING_COLOR_WORDS.sub("", name).strip() or name
+        return f"{self._color_label(colors)} {core}".strip()
 
     def _build_explanation(
         self,
@@ -1259,13 +1990,14 @@ class DeckGenerator:
         commander_reason: str | None,
         outcome: _RetrievalOutcome,
     ) -> list[str]:
-        total_lands = sum(ref.quantity for ref in mainboard if (card := self.repository.get_card(ref.name)) and "Land" in card.type_line)
+        total_lands = sum(ref.quantity for ref in mainboard if (card := self.repository.get_card(ref.name)) and is_land_card(card))
         role_summary = self._build_role_summary(mainboard)
         provenance_blurb = {
             "corpus": f"Started from the {archetype.name} shell, backed by {outcome.evidence_count} corpus deck(s) of supporting evidence.",
             "fallback": f"No matching corpus shell was found — the deck was assembled from the legal card pool using deterministic role and color filters (low confidence: {outcome.confidence:.2f}).",
             "hybrid": f"Started from the {archetype.name} shell but most slots were filled by deterministic fallbacks (mixed confidence: {outcome.confidence:.2f}).",
-            "builtin": f"No corpus archetype was available for this format — assembled from the built-in {archetype.name} seed and filled from the legal card pool.",
+            "builtin": f"Assembled from the curated {archetype.name} seed your brief matched, then filled from the legal card pool.",
+            "template": f"Started from the {archetype.name} template — a curated archetype shape, not observed tournament results — and filled from the legal card pool.",
         }[outcome.source_type]
         notes = [
             provenance_blurb,
@@ -1297,7 +2029,8 @@ class DeckGenerator:
             "corpus": f"Backed by {outcome.evidence_count} corpus deck(s); confidence {outcome.confidence:.2f}.",
             "fallback": f"No matching corpus shell — assembled from card pool. Confidence {outcome.confidence:.2f}.",
             "hybrid": f"Hybrid of corpus shell and card-pool fallback. Confidence {outcome.confidence:.2f}.",
-            "builtin": f"Built from a curated {archetype.name} seed (no corpus archetype for this format). Confidence {outcome.confidence:.2f}.",
+            "builtin": f"Built from the curated {archetype.name} seed. Confidence {outcome.confidence:.2f}.",
+            "template": f"Template shell (curated, not observed results). Confidence {outcome.confidence:.2f}.",
         }[outcome.source_type]
         sections = [
             DeckSectionSummary(
@@ -1366,7 +2099,7 @@ class DeckGenerator:
         tag_to_cards: defaultdict[str, list[str]] = defaultdict(list)
         for ref in mainboard:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             primary = self._primary_mechanic_tag(card.tags)
             if primary is None:
@@ -1395,7 +2128,7 @@ class DeckGenerator:
                 continue
             role = self._primary_role(card)
             counts[role] += ref.quantity
-            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and "Land" not in card.type_line:
+            if card.name not in key_cards[role] and len(key_cards[role]) < 4 and not is_land_card(card):
                 key_cards[role].append(card.name)
         ordered = sorted(counts.items(), key=lambda item: item[1], reverse=True)
         return [DeckRoleSummary(role=role, total_cards=total, key_cards=key_cards[role]) for role, total in ordered]
@@ -1404,7 +2137,7 @@ class DeckGenerator:
         buckets = Counter[int]()
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Land" in card.type_line:
+            if not card or is_land_card(card):
                 continue
             buckets[min(6, int(card.mana_value))] += ref.quantity
         return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
@@ -1413,7 +2146,7 @@ class DeckGenerator:
         notes: list[DeckCardExplanation] = []
         for ref in refs:
             card = self.repository.get_card(ref.name)
-            if not card or "Basic Land" in card.type_line:
+            if not card or is_basic_land(card):
                 continue
             role = self._primary_role(card)
             notes.append(
@@ -1439,6 +2172,7 @@ class DeckGenerator:
         requested_tags: list[str],
         budget: float | None,
         excluded_cards: set[str],
+        owned: frozenset[str] = frozenset(),
     ) -> list[str]:
         preferred_tags = set(requested_tags)
         expanded_tags: set[str] = set(preferred_tags)
@@ -1452,10 +2186,15 @@ class DeckGenerator:
                 continue
             if not self._matches_color_request(card, colors):
                 continue
-            if budget is not None and not self._fits_budget_request(card, budget):
+            is_owned = card.name in owned
+            if budget is not None and not is_owned and not self._fits_budget_request(card, budget):
                 continue
             score = len(expanded_tags & set(card.tags)) * 9
-            score += 2 if "Land" in card.type_line else max(0, 5 - card.mana_value)
+            if is_owned:
+                score += 6  # collection-aware: prefer cards the player has
+            elif budget is not None and card.price_usd is None:
+                score -= 3  # unknown price: prefer priced cards under a budget
+            score += 2 if is_land_card(card) else max(0, 5 - card.mana_value)
             if "interaction" in card.tags:
                 score += 3
             if "draw" in card.tags or "ramp" in card.tags:
@@ -1496,6 +2235,9 @@ class DeckGenerator:
         source_bias = {
             "builtin": 0.65,
             "corpus": 0.50,
+            # Synthesized-from-template shells: the shape is curated, the
+            # "evidence" is not observed play.
+            "template": 0.45,
             "hybrid": 0.35,
             "fallback": 0.20,
         }.get(outcome.source_type, 0.25)
@@ -1540,6 +2282,85 @@ class DeckGenerator:
             return False
         return card.legalities.get(format_name, "not_legal") in {"legal", "restricted"}
 
+    def _budget_substitute(
+        self,
+        card: CardRecord,
+        *,
+        format_name: str,
+        budget: float | None,
+        excluded: set[str],
+        taken: set[str],
+        fits,
+        trace: _BuildTrace | None,
+    ) -> CardRecord | None:
+        """Cheapest-fitting stand-in for an over-budget seed card: a similar
+        card (same primary role, land-ness) that is legal, inside the color
+        constraint, priced, and under the per-card budget cap. Recorded in
+        the trace so provenance can show the swap."""
+        role = self._primary_role(card)
+        card_type = self.repository.primary_type_for(card)
+        for hit in self._retriever.similar_to(card.name, k=80):
+            if hit.score < _MIN_SUBSTITUTE_SIMILARITY:
+                break  # hits are sorted; nothing closer follows
+            alt = self.repository.get_card(hit.name)
+            if alt is None or alt.name == card.name or alt.name in taken or alt.name.lower() in excluded:
+                continue
+            # A stand-in has to do the same job at about the same speed:
+            # same card type and role, mana value within one.
+            if is_land_card(alt) != is_land_card(card) or self._primary_role(alt) != role:
+                continue
+            if self.repository.primary_type_for(alt) != card_type or abs(alt.mana_value - card.mana_value) > 1:
+                continue
+            if not self._is_card_legal_record(alt, format_name) or not fits(alt):
+                continue
+            if alt.price_usd is None or not self._fits_budget_request(alt, budget, exempt_lands=False):
+                continue
+            if trace is not None:
+                saved = round(card.price_usd - alt.price_usd, 2) if card.price_usd is not None else None
+                trace.budget_substitutions.append(
+                    BudgetSubstitution(original=card.name, replacement=alt.name, saved_usd=saved)
+                )
+            return alt
+        return None
+
+    @cached_property
+    def _retriever(self):
+        from app.services.vector_retrieval import CardVectorRetriever
+
+        return CardVectorRetriever(self.repository)
+
+    def _dropped_includes(
+        self,
+        request: GenerateDeckRequest,
+        mainboard: list[CardRef],
+        sideboard: list[CardRef],
+        commander: str | None,
+        identity: set[str],
+    ) -> list[DroppedInclude]:
+        present = {ref.name for ref in mainboard + sideboard} | ({commander} if commander else set())
+        excluded = self._excluded_names(request.exclude_cards)
+        dropped: list[DroppedInclude] = []
+        for name in request.include_cards:
+            card = self.repository.get_card(name)
+            if card is not None and card.name in present:
+                continue
+            if card is None:
+                reason = "unknown"
+            elif card.name.lower() in excluded:
+                reason = "excluded"
+            elif not self._is_card_legal_record(card, request.format):
+                reason = "not_legal"
+            elif request.format == "commander" and not self.repository.fits_color_identity(card, identity):
+                reason = "off_color"
+            elif request.format != "commander" and not self._matches_color_request(card, list(identity)):
+                reason = "off_color"
+            elif request.budget is not None and not self._fits_budget_request(card, request.budget):
+                reason = "over_budget"
+            else:
+                reason = "bracket" if request.bracket else "no_room"
+            dropped.append(DroppedInclude(name=card.name if card else name, reason=reason))
+        return dropped
+
     def _check_include_cards(self, request: GenerateDeckRequest) -> list[str]:
         warnings: list[str] = []
         unresolved: list[str] = []
@@ -1558,12 +2379,7 @@ class DeckGenerator:
 
     @staticmethod
     def _copy_limit(card: CardRecord, format_name: str) -> int | None:
-        if "Basic Land" in card.type_line:
-            return None
-        legality = card.legalities.get(format_name, "not_legal")
-        if format_name == "commander" or legality == "restricted":
-            return 1
-        return 4
+        return copy_limit(card, format_name)
 
     def _commander_identity(self, commander_name: str | None, fallback_colors: list[str]) -> set[str]:
         if not commander_name:
@@ -1571,7 +2387,8 @@ class DeckGenerator:
         commander = self.repository.get_card(commander_name)
         if not commander:
             return set(fallback_colors)
-        return set(commander.color_identity or commander.colors or fallback_colors)
+        # An empty identity is real (colorless commanders), not "unknown".
+        return set(commander.color_identity or commander.colors)
 
     def _ordered_commander_identity(self, commander_name: str | None, fallback_colors: list[str]) -> list[str]:
         if not commander_name:
@@ -1579,7 +2396,7 @@ class DeckGenerator:
         commander = self.repository.get_card(commander_name)
         if not commander:
             return fallback_colors
-        return list(commander.color_identity or commander.colors or fallback_colors)
+        return list(commander.color_identity or commander.colors)
 
     @staticmethod
     def _matches_color_request(card: CardRecord, requested_colors: list[str]) -> bool:
@@ -1600,7 +2417,7 @@ class DeckGenerator:
         if budget is None or card.price_usd is None:
             return True
         per_card_cap = max(0.50, min(budget / 20.0, budget * 0.12))
-        if exempt_lands and "Land" in card.type_line:
+        if exempt_lands and is_land_card(card):
             return True
         return card.price_usd <= per_card_cap
 
@@ -1670,11 +2487,12 @@ class DeckGenerator:
         # dual land in a mono-R modern deck is technically legal but is never
         # what the user asked for (the U source is dead weight).
         identity = {color for color in colors if color and color != "C"}
+        enforce_identity = format_name == "commander" or bool(colors)
         for package in packages:
             if self._land_total(counts) >= target_lands:
                 break
             card = self.repository.get_card(package.name)
-            if not card or "Land" not in card.type_line:
+            if not card or not is_land_card(card):
                 continue
             if not self._is_card_legal_record(card, format_name):
                 continue
@@ -1683,7 +2501,7 @@ class DeckGenerator:
             # and the basics backfill below covers the shortfall.
             if not self._fits_budget_request(card, budget, exempt_lands=False):
                 continue
-            if identity and not self.repository.fits_color_identity(card, identity):
+            if enforce_identity and not self.repository.fits_color_identity(card, identity):
                 continue
             limit = self._copy_limit(card, format_name)
             if limit is not None and counts[card.name] >= limit:
@@ -1724,7 +2542,7 @@ class DeckGenerator:
             card = self.repository.get_card(name)
             if not card:
                 continue
-            if "Land" in card.type_line:
+            if is_land_card(card):
                 land_total += qty
                 if name in basic_names:
                     basics_total += qty
@@ -1809,9 +2627,14 @@ class DeckGenerator:
             if added >= target:
                 break
             card = self.repository.get_card(package.name)
-            if not card or package.name.lower() in excluded:
+            if not card or card.name.lower() in excluded:
                 continue
-            if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
+            if not self._is_card_legal_record(card, format_name):
+                continue
+            if format_name == "commander":
+                if not self.repository.fits_color_identity(card, set(colors)):
+                    continue
+            elif not self._matches_color_request(card, colors):
                 continue
             if counts[card.name] >= (self._copy_limit(card, format_name) or 99):
                 continue
@@ -1829,19 +2652,20 @@ class DeckGenerator:
         main_counts: Counter[str] | None = None,
         commander_name: str | None = None,
         allow_lands: bool = False,
+        owned: frozenset[str] = frozenset(),
     ) -> bool:
         main_counts = main_counts or Counter()
         for candidate_name in ranked_candidates:
             card = self.repository.get_card(candidate_name)
-            if not card or candidate_name.lower() in excluded_cards:
+            if not card or card.name.lower() in excluded_cards:
                 continue
-            if not allow_lands and "Land" in card.type_line:
+            if not allow_lands and is_land_card(card):
                 continue
             if commander_name and card.name == commander_name:
                 continue
             if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
                 continue
-            if budget is not None and not self._fits_budget_request(card, budget):
+            if budget is not None and card.name not in owned and not self._fits_budget_request(card, budget):
                 continue
             if format_name == "commander" and not self.repository.fits_color_identity(card, set(colors)):
                 continue
@@ -1852,25 +2676,34 @@ class DeckGenerator:
             return True
         return False
 
-    def _best_card_pool_commander(self, colors: list[str], requested_tags: list[str]) -> tuple[str | None, str | None]:
+    def _best_card_pool_commander(
+        self, colors: list[str], requested_tags: list[str], banned: set[str] | None = None
+    ) -> tuple[str | None, str | None]:
         requested_color_set = set(colors)
         expanded_tags = set(requested_tags)
         for tag in requested_tags:
             expanded_tags.update(THEME_TO_TAGS.get(tag, {tag}))
+        requested_real = {color for color in requested_color_set if color and color != "C"}
         best_name: str | None = None
-        best_score = float("-inf")
+        # (covers every requested color, score): see _select_commander.
+        best_rank: tuple[bool, float] = (False, float("-inf"))
         for card in self.repository.all_cards():
-            if not self.repository.is_legal_commander(card):
+            if not self.repository.is_legal_commander(card) or (banned and card.name.lower() in banned):
                 continue
             identity = set(card.color_identity or card.colors)
-            if requested_color_set and (not identity or not identity.issubset(requested_color_set)):
+            if requested_color_set == {"C"}:
+                # Colorless request: only colorless commanders (Kozilek, Karn...).
+                if identity:
+                    continue
+            elif requested_color_set and (not identity or not identity.issubset(requested_color_set)):
                 continue
             tag_score = len(expanded_tags & set(card.tags)) * 12
             color_score = len(identity) * 2
             cost_score = max(0, 6 - card.mana_value)
             score = tag_score + color_score + cost_score
-            if score > best_score:
-                best_score = score
+            rank = (requested_real.issubset(identity), score)
+            if rank > best_rank:
+                best_rank = rank
                 best_name = card.name
         if best_name is None:
             return None, None
@@ -1882,9 +2715,9 @@ class DeckGenerator:
             if quantity <= 0:
                 continue
             card = self.repository.get_card(name)
-            if not card or "Basic Land" in card.type_line:
+            if not card or is_basic_land(card):
                 continue
-            weight = 100.0 if "Land" in card.type_line else 10.0 + card.mana_value
+            weight = 100.0 if is_land_card(card) else 10.0 + card.mana_value
             if "interaction" in card.tags:
                 weight = 35.0
             elif "creature" in card.tags:
@@ -1896,6 +2729,189 @@ class DeckGenerator:
             if counts[name] <= 0:
                 del counts[name]
 
+    def _trim_to_size(
+        self,
+        counts: Counter[str],
+        colors: list[str],
+        target_lands: int,
+        protected: set[str],
+        requested: set[str] | None = None,
+        deck_size: int = CONSTRUCTED_DECK_SIZE,
+    ) -> None:
+        """Cut a list back to ``deck_size`` without gutting the mana base.
+
+        Spells over the nonland budget go first: unprotected cards, then kept
+        cards, and cards the user explicitly requested last. Lands are only
+        trimmed down to ``target_lands``. The old
+        trim always took basics first, so a refine whose seeds plus a new
+        corpus shell overflowed 60 shipped with zero lands.
+        """
+        nonland_target = deck_size - target_lands
+        while (before := self._total_cards(counts)) > deck_size:
+            if self._nonland_total(counts) > nonland_target:
+                if not self._decrement_nonland(counts, protected):
+                    if not self._decrement_nonland(counts, requested or set()):
+                        self._decrement_nonland(counts, set())
+            elif not self._decrement_basic(counts, colors):
+                self._decrement_least_important(counts, "modern")
+            if self._total_cards(counts) == before:
+                break  # nothing removable; leave it for the validator to report
+
+    def _ensure_color_presence(
+        self,
+        counts: Counter[str],
+        colors: list[str],
+        ranked: list[str],
+        format_name: str,
+        excluded: set[str],
+        protected: set[str],
+        *,
+        fits,
+        copies: int,
+        cards_per_color: int = 2,
+    ) -> set[str]:
+        """Every requested color must actually show up on nonland cards.
+
+        A three-color request could come back with no green card at all
+        (only the shell's two colors filled). For each missing color, swap in
+        the best-ranked candidates of that color for the least important
+        unprotected spells. Returns the names added (callers protect them)."""
+        added: set[str] = set()
+        for color in [c for c in colors if c in "WUBRG"]:
+            present = any(
+                (card := self.repository.get_card(name)) is not None
+                and not is_land_card(card)
+                and color in (card.color_identity or card.colors)
+                for name, qty in counts.items() if qty > 0
+            )
+            if present:
+                continue
+            picked = 0
+            for name in ranked:
+                if picked >= cards_per_color:
+                    break
+                card = self.repository.get_card(name)
+                if card is None or card.name.lower() in excluded or is_land_card(card) or counts[card.name]:
+                    continue
+                if color not in (card.color_identity or card.colors) or not fits(card):
+                    continue
+                if not self._is_card_legal_record(card, format_name):
+                    continue
+                limit = self._copy_limit(card, format_name)
+                take = min(copies, limit) if limit is not None else copies
+                for _ in range(take):
+                    if not self._decrement_nonland(counts, protected | added):
+                        break
+                    counts[card.name] += 1
+                if counts[card.name]:
+                    added.add(card.name)
+                    picked += 1
+        return added
+
+    def _enforce_total_budget(
+        self,
+        counts: Counter[str],
+        budget: float | None,
+        format_name: str,
+        colors: list[str],
+        ranked: list[str],
+        excluded: set[str],
+        keep: set[str],
+        trace: _BuildTrace | None,
+        *,
+        fits,
+        fixed_cost: float = 0.0,
+        owned: frozenset[str] = frozenset(),
+    ) -> None:
+        """Bring the list's total price (plus ``fixed_cost``, e.g. the
+        commander) under ``budget``.
+
+        The per-card cap alone let a $75 Commander deck reach $200 (many
+        cards just under the cap). Repeatedly swap the most expensive card
+        (all copies) that isn't in ``keep`` for the best-ranked cheaper
+        candidate; an expensive nonbasic land becomes an on-color basic.
+        Every swap is recorded as a budget substitution."""
+        if budget is None:
+            return
+
+        def price(name: str) -> float:
+            if name in owned:
+                return 0.0  # already in the player's collection
+            card = self.repository.get_card(name)
+            return (card.price_usd or 0.0) if card is not None else 0.0
+
+        def total() -> float:
+            return fixed_cost + sum(price(name) * qty for name, qty in counts.items())
+
+        tried: set[str] = set()
+        for _ in range(120):
+            if total() <= budget:
+                return
+            candidates = [
+                (price(name) * qty, name) for name, qty in counts.items()
+                if qty > 0 and name not in keep and name not in tried and price(name) > 0
+            ]
+            if not candidates:
+                return
+            _, victim = max(candidates)
+            tried.add(victim)
+            card = self.repository.get_card(victim)
+            qty = counts[victim]
+            if card is None:
+                continue
+            replacement: CardRecord | None = None
+            if is_land_card(card):
+                basics = self._basic_lands_for_colors([c for c in (card.color_identity or colors) if c in colors] or colors)
+                replacement = self.repository.get_card(basics[0]) if basics else None
+            else:
+                for name in ranked:
+                    alt = self.repository.get_card(name)
+                    if alt is None or alt.name == victim or counts[alt.name] or alt.name.lower() in excluded:
+                        continue
+                    if is_land_card(alt) or not fits(alt) or not self._is_card_legal_record(alt, format_name):
+                        continue
+                    if alt.price_usd is None or alt.price_usd >= price(victim):
+                        continue
+                    limit = self._copy_limit(alt, format_name)
+                    if limit is not None and limit < qty:
+                        continue
+                    replacement = alt
+                    break
+            if replacement is None:
+                continue
+            del counts[victim]
+            counts[replacement.name] += qty
+            if trace is not None:
+                trace.budget_substitutions.append(BudgetSubstitution(
+                    original=victim, replacement=replacement.name,
+                    saved_usd=round(price(victim) - (replacement.price_usd or 0.0), 2),
+                ))
+
+    def _decrement_nonland(self, counts: Counter[str], protected: set[str]) -> bool:
+        """Remove one copy of the highest-cost unprotected nonland card."""
+        candidates: list[tuple[float, str]] = []
+        for name, quantity in counts.items():
+            card = self.repository.get_card(name)
+            if quantity <= 0 or name in protected or not card or is_land_card(card):
+                continue
+            candidates.append((card.mana_value, name))
+        if not candidates:
+            return False
+        _, name = max(candidates)
+        counts[name] -= 1
+        if counts[name] <= 0:
+            del counts[name]
+        return True
+
+    def _decrement_basic(self, counts: Counter[str], colors: list[str]) -> bool:
+        for basic_land in reversed(self._basic_lands_for_colors(colors)):
+            if counts[basic_land] > 0:
+                counts[basic_land] -= 1
+                if counts[basic_land] <= 0:
+                    del counts[basic_land]
+                return True
+        return False
+
     def _trim_excess_land_or_spell(self, counts: Counter[str], colors: list[str]) -> None:
         for basic_land in reversed(self._basic_lands_for_colors(colors)):
             if counts[basic_land] > 0:
@@ -1905,17 +2921,106 @@ class DeckGenerator:
                 return
         self._decrement_least_important(counts, "modern")
 
-    def _add_best_remaining(self, counts: Counter[str], ranked_candidates: list[str], format_name: str) -> None:
+    def _add_best_remaining(
+        self,
+        counts: Counter[str],
+        ranked_candidates: list[str],
+        format_name: str,
+        colors: list[str],
+        excluded: set[str],
+    ) -> None:
+        """Last-resort fill to reach the deck size: the best remaining legal,
+        on-color, non-excluded candidate, else a basic in the deck's colors."""
         for candidate_name in ranked_candidates:
             card = self.repository.get_card(candidate_name)
-            if not card:
+            if not card or card.name.lower() in excluded:
+                continue
+            if not self._is_card_legal_record(card, format_name) or not self._matches_color_request(card, colors):
                 continue
             limit = self._copy_limit(card, format_name)
             if limit is not None and counts[card.name] >= limit:
                 continue
             counts[card.name] += 1
             return
-        self._add_basic_land(counts, ["R"])
+        self._add_basic_land(counts, colors)
+
+    @cached_property
+    def _bracket_pool(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Mass-land-denial and extra-turn card names in the pool (computed
+        once; oracle-text scans over 33k cards are too slow per request)."""
+        mld = frozenset(card.name for card in self.repository.all_cards() if bracket_rules.is_mass_land_denial(card))
+        extra = frozenset(card.name for card in self.repository.all_cards() if bracket_rules.is_extra_turn(card))
+        return mld, extra
+
+    def _bracket_exclusions(self, request: GenerateDeckRequest) -> set[str]:
+        if request.format != "commander" or request.bracket is None or request.bracket >= 4:
+            return set()
+        allow = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
+        mld, extra = self._bracket_pool
+        return bracket_rules.excluded_for_bracket(request.bracket, allow, mld, extra)
+
+    def _seed_for_request(self, request: GenerateDeckRequest) -> BuiltinArchetype | None:
+        """Best curated seed inside the requested colors, by exact color
+        match then playstyle/theme overlap. None without colors or overlap."""
+        wanted_colors = {c for c in request.colors if c != "C"}
+        if not wanted_colors:
+            return None
+        wanted_tags = {self._canonicalize_tag(tag) for tag in request.playstyle_tags + request.theme_tags}
+        best: tuple[tuple[int, int, int], BuiltinArchetype] | None = None
+        for seed in BUILTIN_ARCHETYPES:
+            if request.format not in seed.formats or seed.id.startswith("mechanic-"):
+                continue
+            seed_colors = set(seed.colors)
+            if not seed_colors or not seed_colors <= wanted_colors:
+                continue
+            overlap = len(wanted_tags & {self._canonicalize_tag(tag) for tag in seed.playstyle_tags + seed.theme_tags})
+            if wanted_tags and not overlap:
+                continue
+            rank = (int(seed_colors == wanted_colors), overlap, -len(seed.id))
+            if best is None or rank > best[0]:
+                best = (rank, seed)
+        return best[1] if best else None
+
+    @staticmethod
+    def _novelty_order(ranked: list[str], request: GenerateDeckRequest, window: int = 60) -> list[str]:
+        """Deterministically rotate the top of a ranked list so creative builds
+        pick different (still top-ranked) cards than constraint-aware ones,
+        and different requests get different rotations."""
+        head, tail = ranked[:window], ranked[window:]
+        if not head:
+            return ranked
+        key = json.dumps([request.format, sorted(request.colors), sorted(request.playstyle_tags), request.prompt])
+        shift = int(hashlib.sha1(key.encode("utf-8")).hexdigest(), 16) % len(head)
+        shift = max(shift, len(head) // 3)
+        return head[shift:] + head[:shift] + tail
+
+    def warm_caches(self) -> None:
+        """Precompute the lazily built pools (safe to call from a thread)."""
+        started = time.perf_counter()
+        try:
+            for format_name in ("standard", "pioneer", "modern", "legacy", "commander"):
+                self._sideboard_class_pools(format_name)
+            _ = self._bracket_pool
+            _ = self._commanders_by_first_name
+        except Exception:  # noqa: BLE001 - warming is best-effort
+            logger.warning("cache warm-up failed", exc_info=True)
+            return
+        logger.info("caches warmed in %.1fs", time.perf_counter() - started)
+
+    def _owned_names(self, request: GenerateDeckRequest) -> frozenset[str]:
+        return frozenset(card.name for name in request.owned_cards if (card := self.repository.get_card(name)))
+
+    def _excluded_names(self, names: list[str]) -> set[str]:
+        """Lower-cased exclusions, plus each one's canonical card name, so
+        "Picklock Prankster" also excludes "Picklock Prankster // Free the Fae"
+        (fill paths check the resolved card's name)."""
+        out: set[str] = set()
+        for name in names:
+            out.add(name.lower())
+            card = self.repository.get_card(name)
+            if card is not None:
+                out.add(card.name.lower())
+        return out
 
     def _primary_role(self, card: CardRecord | None) -> str:
         if not card:
@@ -1923,7 +3028,7 @@ class DeckGenerator:
         for tag in card.tags:
             if tag in ROLE_MAP:
                 return ROLE_MAP[tag]
-        if "Land" in card.type_line:
+        if is_land_card(card):
             return "mana base"
         if "Creature" in card.type_line:
             return "threat"
@@ -1941,7 +3046,7 @@ class DeckGenerator:
         total = 0
         for name, quantity in counts.items():
             card = self.repository.get_card(name)
-            if card and "Land" in card.type_line:
+            if card and is_land_card(card):
                 total += quantity
         return total
 
@@ -1949,7 +3054,9 @@ class DeckGenerator:
         return self._total_cards(counts) - self._land_total(counts)
 
     def _export_arena(self, deck: DeckResponse) -> str:
-        lines = [deck.title, ""]
+        # Arena's importer treats every line as a card or a section header,
+        # so no title line.
+        lines: list[str] = []
         if deck.commander:
             lines.append("Commander")
             lines.append(f"1 {deck.commander}")
@@ -1970,6 +3077,15 @@ class DeckGenerator:
             lines.append(f"commander,1,{deck.commander}")
         lines.extend(f"mainboard,{card.quantity},{card.name}" for card in deck.mainboard)
         lines.extend(f"sideboard,{card.quantity},{card.name}" for card in deck.sideboard)
+        return "\n".join(lines)
+
+    def _export_archidekt(self, deck: DeckResponse) -> str:
+        """Archidekt text import: "1x Name" lines with a [Category] tag."""
+        lines: list[str] = []
+        if deck.commander:
+            lines.append(f"1x {deck.commander} [Commander{{top}}]")
+        lines.extend(f"{card.quantity}x {card.name}" for card in deck.mainboard)
+        lines.extend(f"{card.quantity}x {card.name} [Sideboard]" for card in deck.sideboard)
         return "\n".join(lines)
 
     def _export_moxfield(self, deck: DeckResponse) -> str:

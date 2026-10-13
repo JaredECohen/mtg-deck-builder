@@ -1,10 +1,13 @@
 import logging
+import os
+import threading
 import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from app.auth import require_api_key
 from app.config import CORS_ORIGINS
@@ -32,11 +35,11 @@ from app.models import (
     ValidateDeckRequest,
     ValidationResult,
 )
-from app.optimizer import AnnealConfig, OptimizerConstraints
 from app.rate_limiter import (
     deck_rate_limiter,
     evaluate_rate_limiter,
     prose_rate_limiter,
+    public_rate_limiter,
 )
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
@@ -52,7 +55,7 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
-from app.services.deck_history_service import DeckHistoryService
+from app.services.deck_history_service import DeckHistoryService, owner_id
 from app.services.vector_retrieval import CardVectorRetriever
 
 repository = CardRepository()
@@ -65,8 +68,57 @@ parser_service = DeckParserService(repository)
 card_refresh_service = CardRefreshService(repository)
 repository.refresh_service = card_refresh_service
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger(__name__)
+
+# Behind a reverse proxy (the Next.js /api/backend proxy, a load balancer)
+# every request arrives from the proxy's address, so per-client rate limits
+# collapse into one bucket. Set MTG_TRUST_FORWARDED=1 only when the API is
+# reachable solely through a proxy that sets X-Forwarded-For.
+TRUST_FORWARDED = os.getenv("MTG_TRUST_FORWARDED", "").lower() in {"1", "true", "yes"}
+
+
+def client_key(req: Request) -> str:
+    if TRUST_FORWARDED:
+        forwarded = req.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first
+    return req.client.host if req.client else "unknown"
+
+
+# Whole-response cache for identical generate requests (spec §25 "cache
+# repeated generations"). Generation is deterministic for a given request
+# without an LLM, and LLM sub-results are cached anyway; this skips the
+# rebuild entirely. Small and short-lived: it's a burst/refresh absorber.
+_GENERATE_CACHE_TTL = float(os.getenv("MTG_GENERATE_CACHE_TTL", "600"))
+_GENERATE_CACHE_MAX = 256
+_generate_cache: "OrderedDict[str, tuple[float, DeckResponse]]" = OrderedDict()
+_generate_cache_lock = threading.Lock()
+
+
+def _cache_get(key: str) -> DeckResponse | None:
+    with _generate_cache_lock:
+        hit = _generate_cache.get(key)
+        if hit is None:
+            return None
+        stored_at, deck = hit
+        if time.monotonic() - stored_at > _GENERATE_CACHE_TTL:
+            del _generate_cache[key]
+            return None
+        _generate_cache.move_to_end(key)
+        return deck.model_copy(deep=True)
+
+
+def _cache_put(key: str, deck: DeckResponse) -> None:
+    with _generate_cache_lock:
+        _generate_cache[key] = (time.monotonic(), deck.model_copy(deep=True))
+        _generate_cache.move_to_end(key)
+        while len(_generate_cache) > _GENERATE_CACHE_MAX:
+            _generate_cache.popitem(last=False)
 
 def _card_profile_coverage() -> dict[str, int | float | str]:
     """Compare card count vs card_profiles count. Surfaces the stale-profile
@@ -123,6 +175,11 @@ async def _lifespan(app: FastAPI):
     except Exception:
         logger.warning("card_profile coverage check failed", exc_info=True)
     card_refresh_service.start()
+    # Build the per-format sideboard pools and the bracket scans (oracle-text
+    # passes over the whole card pool) off the request path; the first
+    # generation otherwise pays ~10 s for them on the full dataset.
+    if os.getenv("MTG_WARM_CACHES", "1").lower() not in {"0", "false", "no"}:
+        threading.Thread(target=generator.warm_caches, name="warm-caches", daemon=True).start()
     try:
         yield
     finally:
@@ -132,12 +189,31 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(title="MTG Deck Builder API", version="0.1.0", lifespan=_lifespan)
 
 
+_LIMITED_ELSEWHERE = ("/v1/decks/generate", "/v1/decks/refine", "/v1/decks/chat", "/v1/decks/evaluate", "/v1/jobs/")
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next: object) -> Response:
     start = time.monotonic()
-    response: Response = await call_next(request)  # type: ignore[operator]
+    path = request.url.path
+    if (path.startswith("/v1/") or path.startswith("/api/")) and not path.startswith(_LIMITED_ELSEWHERE):
+        if not public_rate_limiter.is_allowed(f"public:{client_key(request)}"):
+            return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+    try:
+        response: Response = await call_next(request)  # type: ignore[operator]
+    except Exception:
+        # Failure category for observability; never leak the traceback.
+        logger.exception("request failed category=internal method=%s path=%s", request.method, path)
+        return JSONResponse(status_code=500, content={"detail": "Internal error. It has been logged."})
     elapsed_ms = (time.monotonic() - start) * 1000
-    logger.info("%s %s → %d (%.0fms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    category = (
+        "ok" if response.status_code < 400
+        else "rate_limited" if response.status_code == 429
+        else "auth" if response.status_code in (401, 403)
+        else "client_error" if response.status_code < 500
+        else "server_error"
+    )
+    logger.info("%s %s → %d (%.0fms) category=%s", request.method, path, response.status_code, elapsed_ms, category)
     return response
 app.add_middleware(
     CORSMiddleware,
@@ -166,7 +242,11 @@ def data_status() -> DataStatusResponse:
 
 
 @app.post("/v1/decks/generate", response_model=DeckResponse)
-def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
+def generate_deck(
+    request: GenerateDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> DeckResponse:
     """Generate a deck.
 
     By default routes to the legacy heuristic generator. When
@@ -175,16 +255,27 @@ def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
     the same ``DeckResponse`` shape. Falls back to legacy on optimizer
     errors so users never see a stack trace.
     """
-    import os
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"generate:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait before trying again.")
 
     use_optimizer = os.getenv("MTG_USE_OPTIMIZER_DEFAULT", "").lower() in {"1", "true", "yes"}
-    if use_optimizer and request.format == "modern":
+    cache_key = f"{int(use_optimizer)}:{request.model_dump_json()}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    deck = _generate_uncached(request, use_optimizer)
+    _cache_put(cache_key, deck)
+    return deck
+
+
+def _generate_uncached(request: GenerateDeckRequest, use_optimizer: bool) -> DeckResponse:
+    if use_optimizer and request.format != "commander":
         try:
             from app.services.optimizer_default_path import generate_via_optimizer
-            return generate_via_optimizer(request, repository=repository, validator=validator)
+            return generate_via_optimizer(request, repository=repository, validator=validator, generator=generator)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             logger.warning("optimizer-default path failed (%s); falling back to legacy", exc)
 
@@ -195,8 +286,12 @@ def generate_deck(request: GenerateDeckRequest, req: Request) -> DeckResponse:
 
 
 @app.post("/v1/decks/refine", response_model=DeckResponse)
-def refine_deck(request: RefineDeckRequest, req: Request) -> DeckResponse:
-    client_ip = req.client.host if req.client else "unknown"
+def refine_deck(
+    request: RefineDeckRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> DeckResponse:
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"refine:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many refinement requests. Please wait before trying again.")
     try:
@@ -213,7 +308,7 @@ def chat_deck(
     # A no-op while MTG_API_KEY is unset (auth disabled).
     _key: str | None = Depends(require_api_key),
 ) -> ChatDeckResponse:
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"chat:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many chat requests. Please wait before trying again.")
 
@@ -256,7 +351,10 @@ def validate_deck(request: ValidateDeckRequest) -> ValidationResult:
 
 
 @app.post("/v1/decks/analyze", response_model=DeckAnalysisResponse)
-def analyze_deck(request: AnalyzeDeckRequest) -> DeckAnalysisResponse:
+def analyze_deck(
+    request: AnalyzeDeckRequest,
+    _key: str | None = Depends(require_api_key),
+) -> DeckAnalysisResponse:
     try:
         return analysis_service.analyze(request)
     except ValueError as exc:
@@ -275,7 +373,7 @@ def evaluate_deck(
     consistency, card-advantage density, and a Wilson-interval win rate —
     the same battery the optimizer's deep-eval uses, exposed directly.
     """
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not evaluate_rate_limiter.is_allowed(f"evaluate:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many evaluation requests. Please wait before trying again.")
     from app.services.deck_evaluation_service import evaluate_decklist
@@ -304,7 +402,7 @@ def save_deck(
     key: str | None = Depends(require_api_key),
 ) -> dict:
     """Persist a deck to history and mint a share token. When auth is
-    enabled the API key becomes the deck's owner."""
+    enabled a hash of the API key becomes the deck's owner."""
     return deck_history.save(
         name=request.name,
         format_id=request.format,
@@ -313,7 +411,7 @@ def save_deck(
         commander=request.commander,
         notes=request.notes,
         evaluation=request.evaluation,
-        owner=key,
+        owner=owner_id(key),
     )
 
 
@@ -322,12 +420,16 @@ def deck_history_list(
     limit: int = 50,
     key: str | None = Depends(require_api_key),
 ) -> dict:
-    return {"decks": deck_history.history(owner=key, limit=max(1, min(limit, 200)))}
+    return {"decks": deck_history.history(owner=owner_id(key), limit=max(1, min(limit, 200)))}
 
 
 @app.get("/v1/decks/saved/{deck_id}")
-def get_saved_deck(deck_id: str) -> dict:
-    deck = deck_history.get(deck_id)
+def get_saved_deck(
+    deck_id: str,
+    key: str | None = Depends(require_api_key),
+) -> dict:
+    """Owner-only read by id. Public reads go through the share token."""
+    deck = deck_history.get(deck_id, owner=owner_id(key))
     if deck is None:
         raise HTTPException(status_code=404, detail="saved deck not found")
     return deck
@@ -346,7 +448,7 @@ def delete_saved_deck(
     deck_id: str,
     key: str | None = Depends(require_api_key),
 ) -> dict:
-    if not deck_history.delete(deck_id, owner=key):
+    if not deck_history.delete(deck_id, owner=owner_id(key)):
         raise HTTPException(status_code=404, detail="saved deck not found")
     return {"deleted": deck_id}
 
@@ -373,7 +475,7 @@ def submit_optimize(
     req: Request,
     _key: str | None = Depends(require_api_key),
 ) -> OptimizerJobResponse:
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not deck_rate_limiter.is_allowed(f"optimize:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many optimizer submissions. Wait before retrying.")
     try:
@@ -412,7 +514,7 @@ def get_job_prose(
     """
     from fastapi.responses import JSONResponse
     from app.services.deck_rationale import prose_for_rationale_dict
-    client_ip = req.client.host if req.client else "unknown"
+    client_ip = client_key(req)
     if not prose_rate_limiter.is_allowed(f"prose:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many prose requests. Please wait before trying again.")
     try:
@@ -440,21 +542,46 @@ def get_job_prose(
 @app.get("/v1/meta/summary", response_model=MetaSummaryResponse)
 def meta_summary(format: FormatName) -> MetaSummaryResponse:
     archetypes = repository.archetypes_for_format(format)
-    return MetaSummaryResponse(format=format, archetypes=archetypes)
+    dates = [a.metadata.last_seen for a in archetypes if a.metadata.last_seen]
+    return MetaSummaryResponse(format=format, archetypes=archetypes, as_of=max(dates) if dates else None)
 
 
 @app.get("/v1/cards", response_model=CardSearchResponse)
 def card_search(query: str, format: FormatName | None = None, limit: int = 12) -> CardSearchResponse:
-    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=limit))
+    return CardSearchResponse(cards=repository.search_cards(query=query, format_name=format, limit=max(1, min(limit, 50))))
 
 
 @app.get("/v1/cards/{card_name}/similar")
-def similar_cards(card_name: str, k: int = 10) -> dict:
+def similar_cards(
+    card_name: str,
+    k: int = 10,
+    format: FormatName | None = None,
+    colors: str | None = None,
+) -> dict:
     """Semantic-ish nearest neighbours for a card (pgvector when wired,
-    deterministic lexical-feature cosine otherwise)."""
+    deterministic lexical-feature cosine otherwise).
+
+    With ``format`` / ``colors`` (comma-separated, e.g. ``U,R``) only cards
+    legal in that format and inside those colors come back, which is what an
+    "alternatives for this slot" suggestion needs."""
     if repository.get_card(card_name) is None:
         raise HTTPException(status_code=404, detail="Card not found")
-    hits = card_retriever.similar_to(card_name, k=max(1, min(k, 50)))
+    k = max(1, min(k, 50))
+    allowed_colors = {c for c in (colors or "").split(",") if c and c != "C"} if colors is not None else None
+    filtered = format is not None or allowed_colors is not None
+    hits = card_retriever.similar_to(card_name, k=k * 6 if filtered else k)
+    if filtered:
+        kept = []
+        for hit in hits:
+            card = repository.get_card(hit.name)
+            if card is None:
+                continue
+            if format is not None and card.legalities.get(format) not in {"legal", "restricted"}:
+                continue
+            if allowed_colors is not None and not set(card.color_identity or card.colors) <= allowed_colors:
+                continue
+            kept.append(hit)
+        hits = kept[:k]
     return {
         "card": card_name,
         "mode": card_retriever.mode,
@@ -494,7 +621,7 @@ def commander_search(
         theme_tags=[tag for tag in (theme_tags or "").split(",") if tag],
         search=search,
         sort=sort,
-        limit=limit,
+        limit=max(1, min(limit, 100)),
     )
     return CommanderSearchResponse(commanders=commanders)
 

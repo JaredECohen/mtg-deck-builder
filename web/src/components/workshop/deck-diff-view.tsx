@@ -1,42 +1,66 @@
 "use client";
 
 /**
- * DeckDiffView — visualizes a before/after decklist diff
- * (POST /v1/decks/diff). Used to show what the optimizer / refinement
- * changed relative to the starting list.
+ * DeckDiffView: a before/after decklist diff (refine `changes`, or a local
+ * compare between two revisions).
  */
 
-import type { DeckDiffResult } from "@/lib/api";
+import type { DeckChanges, DeckDiffResult } from "@/lib/types";
 
-export function DeckDiffView({ diff }: { diff: DeckDiffResult }) {
+type Props = {
+  diff: DeckDiffResult | DeckChanges;
+  title?: string;
+};
+
+export function DeckDiffView({ diff, title = "Changes" }: Props) {
+  const sideboard = "sideboard" in diff ? diff.sideboard : undefined;
+  const sideboardNote =
+    sideboard && !sideboard.identical
+      ? `Sideboard: +${sideboard.cards_added} / −${sideboard.cards_removed}.`
+      : null;
   if (diff.summary.identical) {
-    return <p className="deck-diff-empty">No changes — the lists are identical.</p>;
+    return (
+      <section aria-label={title} className="deck-diff">
+        <h3 className="label">{title}</h3>
+        <p className="muted deck-diff-empty">No mainboard changes.{sideboardNote ? ` ${sideboardNote}` : ""}</p>
+      </section>
+    );
   }
   return (
-    <section aria-label="Deck changes" className="deck-diff">
-      <header>
-        <h3>Changes</h3>
-        <p>
-          +{diff.summary.cards_added} added · −{diff.summary.cards_removed} removed ·{" "}
-          {diff.summary.total_changes} total
-        </p>
-      </header>
-      <ul className="diff-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {diff.added.map((e) => (
-          <li key={`a-${e.name}`} style={{ color: "#16a34a" }}>+ {e.quantity} {e.name}</li>
-        ))}
-        {diff.increased.map((e) => (
-          <li key={`i-${e.name}`} style={{ color: "#16a34a" }}>
-            ↑ {e.name} {e.from} → {e.to}
+    <section aria-label={title} className="deck-diff">
+      <h3 className="label">{title}</h3>
+      <p className="muted deck-diff-summary">
+        +{diff.summary.cards_added} added · −{diff.summary.cards_removed} removed · {diff.summary.total_changes} total
+        {sideboardNote ? ` · ${sideboardNote}` : ""}
+      </p>
+      <ul className="diff-list">
+        {diff.added.map((entry) => (
+          <li key={`a-${entry.name}`} className="diff-add">
+            <span aria-hidden="true">+ </span>
+            <span className="sr-only">Added </span>
+            {entry.quantity} {entry.name}
           </li>
         ))}
-        {diff.decreased.map((e) => (
-          <li key={`d-${e.name}`} style={{ color: "#dc2626" }}>
-            ↓ {e.name} {e.from} → {e.to}
+        {diff.increased.map((entry) => (
+          <li key={`i-${entry.name}`} className="diff-add">
+            <span aria-hidden="true">↑ </span>
+            <span className="sr-only">More copies of </span>
+            {entry.name} {entry.from} → {entry.to}
           </li>
         ))}
-        {diff.removed.map((e) => (
-          <li key={`r-${e.name}`} style={{ color: "#dc2626" }}>− {e.quantity} {e.name}</li>
+        {diff.decreased.map((entry) => (
+          <li key={`d-${entry.name}`} className="diff-remove">
+            <span aria-hidden="true">↓ </span>
+            <span className="sr-only">Fewer copies of </span>
+            {entry.name} {entry.from} → {entry.to}
+          </li>
+        ))}
+        {diff.removed.map((entry) => (
+          <li key={`r-${entry.name}`} className="diff-remove">
+            <span aria-hidden="true">− </span>
+            <span className="sr-only">Removed </span>
+            {entry.quantity} {entry.name}
+          </li>
         ))}
       </ul>
     </section>

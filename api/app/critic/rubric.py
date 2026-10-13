@@ -10,7 +10,6 @@ loop even consults the LLM.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
 
 from app.critic.envelope import CritiqueItem, DeckEnvelope
 

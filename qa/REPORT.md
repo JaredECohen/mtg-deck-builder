@@ -115,3 +115,9 @@
 - Commander issues: `[]`
 - Main issues: `["Mana base may not support the deck's B requirements cleanly; only 0 likely sources were detected.", 'Estimated deck price is about $127.05, which is above the requested budget of $120.00.']`
 
+
+---
+
+## Note (2026-10-12): see the deterministic benchmark
+
+This report predates the May 2026 deck-lab pivot and was judged by an LLM over 10 hand-written scenarios. For current, reproducible numbers see [`BENCHMARK.md`](BENCHMARK.md) (fixture DB) and [`BENCHMARK-full-db.md`](BENCHMARK-full-db.md) (full local ingest), produced by `qa/benchmark.py`: 108 generated scenarios, no LLM, objective metrics (legality, color/budget/prompt fidelity, land counts, sideboards, brackets, scripted refine, latency). How to run both harnesses: [`README.md`](README.md). Re-running `run_eval.py` rewrites this file and drops this note.

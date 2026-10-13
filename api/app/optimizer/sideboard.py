@@ -27,7 +27,6 @@ from typing import Any
 
 from app.optimizer.swap_proposals import BASIC_NAMES
 from app.oracle.profile import CardProfile
-from app.sim.policy import select_policy
 
 
 # Map archetype labels (used by the matchup matrix) to *answer

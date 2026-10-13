@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 
 from app.oracle.profile import (
     CardProfile,
@@ -178,7 +177,7 @@ def test_tron_assembly_produces_seven_mana():
     """Urza's Tower + Power Plant + Mine together should produce 7
     colorless mana, enabling T3 7-drops."""
     from app.sim.goldfish import _gain_mana_phase
-    from app.sim.state import CardInPlay, GameState, ManaPool
+    from app.sim.state import CardInPlay, GameState
     from app.oracle.profile import (
         CardProfile, ComboPrimitives, CostVector, EffectVector, RoleWeights, PROFILE_VERSION
     )

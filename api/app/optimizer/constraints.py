@@ -8,10 +8,10 @@ off-color cards, and dropped includes during refinement.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable
 
-from app.optimizer.format_config import FORMATS, FormatConfig, get_format_config
+from app.optimizer.format_config import FormatConfig, get_format_config
 from app.oracle.profile import CardProfile
+from app.rules import is_basic_type_line
 
 
 @dataclass
@@ -132,15 +132,15 @@ def validate_constraints(
 
     # Playset cap. Singleton formats (Commander) limit non-basics to 1;
     # other constructed formats limit to 4. Basics are always uncapped.
-    BASIC_NAMES = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
-                   "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
-                   "Snow-Covered Mountain", "Snow-Covered Forest"}
     cap = 1 if constraints.singleton else 4
     counts: dict[str, int] = {}
-    for profile, _ in deck:
+    basics: set[str] = set()
+    for profile, type_line in deck:
         counts[profile.name] = counts.get(profile.name, 0) + 1
+        if is_basic_type_line(type_line):
+            basics.add(profile.name)
     for name, count in counts.items():
-        if count > cap and name not in BASIC_NAMES:
+        if count > cap and name not in basics:
             out.append(ConstraintViolation(
                 code="over_playset",
                 detail=f"{name} has {count} copies (max {cap})",

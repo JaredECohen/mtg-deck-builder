@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -8,11 +8,29 @@ from pydantic import BaseModel, Field, model_validator
 FormatName = Literal["standard", "modern", "pioneer", "legacy", "commander"]
 ModeName = Literal["fast-competitive", "constraint-aware", "creative-but-viable"]
 ExperienceLevel = Literal["beginner", "expert"]
+MatchType = Literal["bo1", "bo3"]
+# Where a deck's evidence comes from: observed tournament results, or curated /
+# synthesized templates that only encode an archetype's canonical shape.
+EvidenceType = Literal["observed", "template"]
+
+
+# Request-size bounds. Several endpoints are public and some spend LLM tokens,
+# so every free-text field and list a client sends is capped. The web UI caps
+# prompts at 1,500 characters, so these leave headroom for API callers.
+PromptText = Annotated[str, Field(max_length=2_000)]
+ChatText = Annotated[str, Field(max_length=8_000)]
+CardName = Annotated[str, Field(min_length=1, max_length=200)]
+CardNameList = Annotated[list[CardName], Field(max_length=100)]
+TagList = Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=20)]
 
 
 class CardRef(BaseModel):
-    name: str
+    name: CardName
     quantity: int = Field(ge=1, le=100)
+
+
+# A decklist is at most a few hundred entries; anything larger is abuse.
+CardRefList = Annotated[list[CardRef], Field(max_length=250)]
 
 
 class TournamentDeckIngestMetadata(BaseModel):
@@ -110,6 +128,10 @@ class ArchetypeMetadata(BaseModel):
     mana_curve_profile: list[dict[str, int | float]] = Field(default_factory=list)
     role_profile: list[RoleProfilePoint] = Field(default_factory=list)
     commander_package: CommanderPackageSummary | None = None
+    # Most recent event date among the archetype's source decks (ISO date),
+    # used for recency weighting and to timestamp meta claims.
+    last_seen: str | None = None
+    evidence: EvidenceType = "observed"
 
 
 class CardFaceRecord(BaseModel):
@@ -177,8 +199,15 @@ class DataStatusResponse(BaseModel):
     card_count: int
     archetype_source: Literal["database", "sample"]
     archetype_count: int
-    database_url: str
+    # Backend name only ("sqlite", "postgresql"). This endpoint is public, so
+    # the URL itself (path, host, credentials) is never exposed.
+    database_backend: str
     scryfall_ingested: bool
+    # Newest card release date in the DB: a proxy for how current the card,
+    # legality and ban data is (the ingest records no timestamps).
+    card_data_as_of: str | None = None
+    # True when that date is older than DATA_STALE_DAYS (re-run ingest_scryfall).
+    stale: bool = False
 
 
 class ArchetypeRecord(BaseModel):
@@ -198,33 +227,45 @@ class ArchetypeRecord(BaseModel):
 
 class GenerateDeckRequest(BaseModel):
     format: FormatName
-    colors: list[str] = Field(default_factory=list)
-    commander_name: str | None = None
-    playstyle_tags: list[str] = Field(default_factory=list)
-    theme_tags: list[str] = Field(default_factory=list)
+    colors: TagList = Field(default_factory=list)
+    commander_name: CardName | None = None
+    playstyle_tags: TagList = Field(default_factory=list)
+    theme_tags: TagList = Field(default_factory=list)
     budget: float | None = Field(default=None, ge=0)
-    include_cards: list[str] = Field(default_factory=list)
-    exclude_cards: list[str] = Field(default_factory=list)
-    seed_cards: list[CardRef] = Field(default_factory=list)
+    include_cards: CardNameList = Field(default_factory=list)
+    exclude_cards: CardNameList = Field(default_factory=list)
+    seed_cards: CardRefList = Field(default_factory=list)
     mode: ModeName = "constraint-aware"
     experience_level: ExperienceLevel = "beginner"
-    prompt: str = ""
+    prompt: PromptText = ""
+    match_type: MatchType = "bo3"
+    # Commander power bracket target (WotC brackets 1-5). Ignored elsewhere.
+    bracket: int | None = Field(default=None, ge=1, le=5)
+    # Collection-aware building: owned cards are preferred and don't count
+    # toward the budget.
+    owned_cards: CardNameList = Field(default_factory=list)
+    # Build from a specific retrieved shell (e.g. a listed alternative).
+    archetype_name: Annotated[str, Field(max_length=200)] | None = None
+    # Set by refine: the land seeds are the deck's existing mana base and are
+    # kept as-is (generation from a prompt seeds archetype anchors instead,
+    # whose lands go through the normal, budget-checked land build).
+    preserve_mana_base: bool = False
 
 
 class RefineDeckRequest(BaseModel):
     deck: "DeckResponse"
-    refinement_prompt: str
+    refinement_prompt: PromptText
 
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: ChatText
 
 
 class ChatDeckRequest(BaseModel):
     deck: "DeckResponse"
-    message: str
-    history: list[ChatMessage] = Field(default_factory=list)
+    message: PromptText
+    history: list[ChatMessage] = Field(default_factory=list, max_length=40)
 
 
 class ChatDeckResponse(BaseModel):
@@ -234,47 +275,47 @@ class ChatDeckResponse(BaseModel):
 
 class ValidateDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
 
 
 class AnalyzeDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
-    notes: str = ""
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
+    notes: PromptText = ""
     deep_analysis: bool = True
 
 
 class DiffDeckRequest(BaseModel):
-    before: list[CardRef]
-    after: list[CardRef]
+    before: CardRefList
+    after: CardRefList
 
 
 class SaveDeckRequest(BaseModel):
-    name: str = "Untitled deck"
+    name: Annotated[str, Field(max_length=200)] = "Untitled deck"
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
-    notes: str = ""
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
+    notes: PromptText = ""
     evaluation: dict = Field(default_factory=dict)
 
 
 class EvaluateDeckRequest(BaseModel):
     format: FormatName
-    mainboard: list[CardRef]
-    sideboard: list[CardRef] = Field(default_factory=list)
-    commander: str | None = None
+    mainboard: CardRefList
+    sideboard: CardRefList = Field(default_factory=list)
+    commander: CardName | None = None
     games: int = Field(default=200, ge=20, le=1000)
     seed: int = 1729
 
 
 class ParseDecklistRequest(BaseModel):
     format: FormatName
-    deck_text: str
+    deck_text: Annotated[str, Field(max_length=100_000)]
 
 
 class ParsedDecklistResponse(BaseModel):
@@ -287,7 +328,7 @@ class ParsedDecklistResponse(BaseModel):
 
 class ExportDeckRequest(BaseModel):
     deck: "DeckResponse"
-    target: Literal["arena", "plain", "csv", "moxfield"] = "plain"
+    target: Literal["arena", "plain", "csv", "moxfield", "archidekt"] = "plain"
 
 
 class ScoreBreakdown(BaseModel):
@@ -336,7 +377,7 @@ class ManaCurvePoint(BaseModel):
     card_count: int
 
 
-SourceType = Literal["corpus", "fallback", "hybrid", "builtin"]
+SourceType = Literal["corpus", "fallback", "hybrid", "builtin", "template"]
 
 # Primary categorization for deck breakdown UI. Order matters: a card with
 # multiple types (e.g. Artifact Creature) is bucketed by the first match in
@@ -379,6 +420,95 @@ class DeckProvenance(BaseModel):
     # the optimizer job id the frontend can poll. None means no sim
     # validation was queued (single-archetype matches don't need it).
     sim_validation_job_id: str | None = None
+    # Spec §24 provenance: what reasoning added, what budget swapped, and
+    # which requested cards could not be honored (and why).
+    llm_added_cards: list[str] = Field(default_factory=list)
+    budget_substitutions: list["BudgetSubstitution"] = Field(default_factory=list)
+    dropped_includes: list["DroppedInclude"] = Field(default_factory=list)
+
+
+class BudgetSubstitution(BaseModel):
+    original: str
+    replacement: str
+    saved_usd: float | None = None
+
+
+class DroppedInclude(BaseModel):
+    name: str
+    reason: Literal["unknown", "not_legal", "off_color", "over_budget", "bracket", "excluded", "no_room"]
+
+
+class DeckConstraints(BaseModel):
+    """The request constraints a deck was built under, so a refine can keep
+    them (budget, excludes, ...) instead of silently dropping them."""
+
+    budget: float | None = None
+    include_cards: list[str] = Field(default_factory=list)
+    exclude_cards: list[str] = Field(default_factory=list)
+    owned_cards: list[str] = Field(default_factory=list)
+    mode: ModeName = "constraint-aware"
+    match_type: MatchType = "bo3"
+    bracket: int | None = None
+    experience_level: ExperienceLevel = "beginner"
+    prompt: str = ""
+
+
+class DeckAlternative(BaseModel):
+    """A runner-up shell the user can build instead (spec §11F)."""
+
+    name: str
+    source_type: SourceType
+    colors: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    key_cards: list[str] = Field(default_factory=list)
+    summary: str = ""
+    commander: str | None = None
+
+
+class SideboardGuideEntry(BaseModel):
+    card: str
+    quantity: int
+    purpose: str
+    bring_in_against: list[str] = Field(default_factory=list)
+    take_out: list[str] = Field(default_factory=list)
+
+
+class MatchupNote(BaseModel):
+    opponent: str
+    outlook: Literal["favored", "even", "unfavored", "unknown"] = "unknown"
+    note: str
+
+
+class GamePlan(BaseModel):
+    """Deterministic how-to-play guidance (spec §11G)."""
+
+    summary: str = ""
+    win_conditions: list[str] = Field(default_factory=list)
+    opening_hand: list[str] = Field(default_factory=list)
+    mulligan: list[str] = Field(default_factory=list)
+    sideboard_guide: list[SideboardGuideEntry] = Field(default_factory=list)
+    matchups: list[MatchupNote] = Field(default_factory=list)
+    commander_packages: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class BracketAssessment(BaseModel):
+    """Commander power bracket (WotC brackets 1-5) with the evidence."""
+
+    estimated: int = Field(ge=1, le=5)
+    target: int | None = None
+    game_changers: list[str] = Field(default_factory=list)
+    mass_land_denial: list[str] = Field(default_factory=list)
+    extra_turns: list[str] = Field(default_factory=list)
+    tutors: list[str] = Field(default_factory=list)
+    two_card_combos: list[list[str]] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    game_changers_as_of: str | None = None
+
+
+class ColorSourcePoint(BaseModel):
+    color: str
+    sources: int
+    pips: int
 
 
 class DeckResponse(BaseModel):
@@ -408,13 +538,25 @@ class DeckResponse(BaseModel):
     # Map of card name -> primary type bucket. Used by the UI to group the
     # mainboard/sideboard into Creatures / Spells / Lands sections.
     card_types: dict[str, PrimaryCardType] = Field(default_factory=dict)
+    # Stable id of the exact list (format, commander, main, side).
+    deck_id: str = ""
+    constraints: DeckConstraints = Field(default_factory=DeckConstraints)
+    alternatives: list[DeckAlternative] = Field(default_factory=list)
+    game_plan: GamePlan = Field(default_factory=GamePlan)
+    bracket: BracketAssessment | None = None
+    color_sources: list[ColorSourcePoint] = Field(default_factory=list)
+    # Set by refine: the card-level diff against the previous version.
+    changes: dict | None = None
+    unpriced_cards: list[str] = Field(default_factory=list)
+    # Price of the cards not in constraints.owned_cards.
+    cost_to_complete_usd: float | None = None
 
     @model_validator(mode="after")
     def check_deck_sizes(self) -> "DeckResponse":
         if self.format == "commander" and sum(card.quantity for card in self.mainboard) != 99:
             raise ValueError("Commander decks must include 99 cards in the mainboard.")
-        if self.format != "commander" and sum(card.quantity for card in self.mainboard) != 60:
-            raise ValueError("Constructed decks must include 60 cards in the mainboard.")
+        if self.format != "commander" and sum(card.quantity for card in self.mainboard) < 60:
+            raise ValueError("Constructed decks must include at least 60 cards in the mainboard.")
         return self
 
 
@@ -479,6 +621,9 @@ class DeckAnalysisResponse(BaseModel):
 class MetaSummaryResponse(BaseModel):
     format: FormatName
     archetypes: list[ArchetypeRecord]
+    # Most recent event date across the format's corpus; meta claims are
+    # timestamped (spec §26).
+    as_of: str | None = None
 
 
 class CommanderSearchResult(BaseModel):
@@ -491,6 +636,7 @@ class CommanderSearchResult(BaseModel):
     package_richness: int = 0
     ranking_score: float = 0
     image_uri: str | None = None
+    provenance: DeckProvenance
 
 
 class CommanderProfile(BaseModel):
@@ -512,6 +658,7 @@ class CommanderProfile(BaseModel):
     interaction_package: list[ArchetypePackage] = Field(default_factory=list)
     land_package: list[ArchetypePackage] = Field(default_factory=list)
     related_archetypes: list[str] = Field(default_factory=list)
+    provenance: DeckProvenance
 
 
 class CommanderSearchResponse(BaseModel):
@@ -524,3 +671,4 @@ class CommanderProfileResponse(BaseModel):
 
 RefineDeckRequest.model_rebuild()
 ExportDeckRequest.model_rebuild()
+DeckProvenance.model_rebuild()

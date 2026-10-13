@@ -19,9 +19,12 @@ from __future__ import annotations
 import math
 import statistics
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from app.oracle.profile import CardProfile
+
+if TYPE_CHECKING:
+    from app.sim.mana import ManaCostDemand
 from app.sim import (
     GoldfishConfig,
     LandSuite,
@@ -30,7 +33,6 @@ from app.sim import (
     MulliganProfile,
     build_land_suite,
     build_matchup_matrix,
-    classify_land,
     goldfish,
     select_policy,
     solve_mana_base,
@@ -236,7 +238,7 @@ def _aggregate_role_profile(profiles: list[CardProfile]) -> dict[str, float]:
     return profile
 
 
-def _build_demand_for_deck(profiles: list[CardProfile]) -> "ManaCostDemand":
+def _build_demand_for_deck(profiles: list[CardProfile]) -> ManaCostDemand:
     spells = []
     for p in profiles:
         if p.role_weights.land >= 0.9:

@@ -217,7 +217,10 @@ class AnthropicBuilder(BuilderClient):
     ):
         from anthropic import Anthropic  # lazy
 
-        self._anthropic = Anthropic()  # picks up ANTHROPIC_API_KEY from env
+        from app.config import LLM_BACKGROUND_TIMEOUT_SECONDS, LLM_MAX_RETRIES
+
+        # Picks up ANTHROPIC_API_KEY from env.
+        self._anthropic = Anthropic(timeout=LLM_BACKGROUND_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         self.model = model or os.getenv("MTG_BUILDER_MODEL", "claude-opus-4-7")
         self.system_prompt = _skill_prompt(skill_dir)
         self.budget = budget or CostBudget.from_env()
@@ -287,7 +290,10 @@ class OpenAICritic(CriticClient):
         self.system_prompt = _skill_prompt(skill_dir)
         if client_factory is None:
             from openai import OpenAI  # lazy
-            self._client = OpenAI()  # picks up OPENAI_API_KEY from env
+            from app.config import LLM_BACKGROUND_TIMEOUT_SECONDS, LLM_MAX_RETRIES
+
+            # Picks up OPENAI_API_KEY from env.
+            self._client = OpenAI(timeout=LLM_BACKGROUND_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES)
         else:
             self._client = client_factory()
         self.budget = budget or CostBudget.from_env()

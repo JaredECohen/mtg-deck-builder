@@ -124,11 +124,12 @@ export function DeckChat({
         ) : null}
       </div>
 
-      {error ? <div className="deck-chat-error">{error}</div> : null}
+      {error ? <div className="deck-chat-error" role="alert">{error}</div> : null}
 
       <div className="deck-chat-input-row">
         <textarea
           className="textarea deck-chat-input"
+          aria-label="Ask about this deck"
           rows={2}
           placeholder="Ask about the deck, or describe a change…"
           value={draft}

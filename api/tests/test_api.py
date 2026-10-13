@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.main as main_module
 from app.main import app
 from app.scripts.build_archetypes import main as build_archetypes_main
 from app.scripts.ingest_tournament_decks import main as ingest_tournament_main
@@ -58,6 +59,8 @@ def test_validate_bad_deck() -> None:
     payload = response.json()
     assert payload["is_legal"] is False
     assert payload["errors"]
+    assert "prompt_fit" not in payload["score"]
+    assert "budget_fit" not in payload["score"]
 
 
 def test_export_csv_format() -> None:
@@ -224,6 +227,10 @@ def test_commander_search_and_detail_endpoints() -> None:
     assert search_response.status_code == 200
     search_payload = search_response.json()
     assert search_payload["commanders"]
+    search_provenance = search_payload["commanders"][0]["provenance"]
+    assert search_provenance["source_type"] in {"corpus", "template", "fallback"}
+    assert 0 <= search_provenance["confidence"] <= 1
+    assert isinstance(search_provenance["retrieved_from"], list)
 
     commander_name = search_payload["commanders"][0]["name"]
     detail_response = client.get(f"/v1/commanders/{commander_name}")
@@ -231,6 +238,8 @@ def test_commander_search_and_detail_endpoints() -> None:
     detail_payload = detail_response.json()["commander"]
     assert detail_payload["card"]["name"] == commander_name
     assert "strategy_summary" in detail_payload
+    assert detail_payload["provenance"]["source_type"] in {"corpus", "template", "fallback"}
+    assert detail_payload["provenance"]["evidence_count"] >= 0
 
 
 def test_explicit_commander_selection_builds_around_requested_commander() -> None:
@@ -262,6 +271,34 @@ def test_invalid_explicit_commander_returns_400() -> None:
     assert response.status_code == 400
 
 
+def test_commander_generation_fails_closed_when_final_validator_rejects(monkeypatch) -> None:
+    """Generation bugs must become clear failures, never illegal deck payloads."""
+    real_validate = main_module.validator.validate
+
+    def reject_commander(request):
+        result = real_validate(request)
+        if request.format != "commander":
+            return result
+        return result.model_copy(update={
+            "is_legal": False,
+            "errors": ["Injected final legality failure."],
+        })
+
+    monkeypatch.setattr(main_module.validator, "validate", reject_commander)
+    response = client.post(
+        "/v1/decks/generate",
+        json={
+            "format": "commander",
+            "commander_name": "The First Sliver",
+            "playstyle_tags": ["tribal"],
+            "theme_tags": ["slivers"],
+        },
+    )
+    assert response.status_code == 400
+    assert "final legality gate" in response.json()["detail"]
+    assert "Injected final legality failure" in response.json()["detail"]
+
+
 def test_planeswalker_commander_is_searchable_and_buildable() -> None:
     search_response = client.get("/v1/commanders", params={"search": "Aminatou", "limit": 5})
     assert search_response.status_code == 200
@@ -289,6 +326,25 @@ def test_colorless_commander_search_returns_only_colorless_options() -> None:
     commanders = search_response.json()["commanders"]
     assert commanders
     assert all(item["colors"] == [] for item in commanders)
+
+
+def test_colorless_commander_validation_rejects_colored_cards() -> None:
+    search_response = client.get("/v1/commanders", params={"colors": "C", "limit": 1})
+    assert search_response.status_code == 200
+    commander_name = search_response.json()["commanders"][0]["name"]
+    response = client.post(
+        "/v1/decks/validate",
+        json={
+            "format": "commander",
+            "commander": commander_name,
+            "mainboard": [{"name": "Mountain", "quantity": 99}],
+            "sideboard": [],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_legal"] is False
+    assert any("color identity" in error for error in payload["errors"])
 
 
 def test_card_search_endpoint_returns_matches() -> None:
@@ -474,7 +530,7 @@ def test_provenance_corpus_path_for_format_with_archetypes() -> None:
     )
     assert response.status_code == 200
     provenance = response.json()["provenance"]
-    assert provenance["source_type"] in {"corpus", "hybrid"}
+    assert provenance["source_type"] in {"corpus", "template", "hybrid"}
     assert provenance["fallback_used"] is False
     assert provenance["confidence"] >= 0.4
     assert provenance["evidence_count"] >= 1
@@ -603,3 +659,33 @@ def test_manual_analysis_exact_swaps_use_specific_cards() -> None:
     assert payload["swap_recommendations"]
     assert any(item["category"] in {"Shell Alignment", "Interaction", "Draw", "Threat", "Engine"} for item in payload["swap_recommendations"])
     assert all(item["cut_card"] != item["add_card"] for item in payload["swap_recommendations"])
+
+
+def test_commander_identity_covers_every_requested_color() -> None:
+    """A U/R request used to pick mono-U Talrand from a U/R archetype row and
+    strip every red card. The chosen commander must be able to play all
+    requested colors, and the deck must actually contain each of them."""
+    for colors, tags in ((["U", "R"], ["aggro", "spells"]), (["W", "B"], ["tokens"])):
+        response = client.post(
+            "/v1/decks/generate",
+            json={"format": "commander", "colors": colors, "playstyle_tags": tags},
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        commander = client.get(f"/v1/cards/{payload['commander']}").json()["card"]
+        assert set(colors) <= set(commander["color_identity"]), (colors, payload["commander"])
+        deck_colors: set[str] = set()
+        for ref in payload["mainboard"]:
+            card = client.get(f"/v1/cards/{ref['name']}").json()["card"]
+            deck_colors.update(card["colors"])
+        assert set(colors) <= deck_colors, (colors, deck_colors)
+
+
+def test_commander_is_never_in_its_own_99() -> None:
+    response = client.post(
+        "/v1/decks/generate",
+        json={"format": "commander", "colors": ["B", "G", "U"], "playstyle_tags": ["graveyard"]},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["commander"] not in {ref["name"] for ref in payload["mainboard"]}

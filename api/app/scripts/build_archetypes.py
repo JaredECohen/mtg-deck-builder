@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date, datetime
 
 from sqlalchemy import select
@@ -147,12 +147,15 @@ def infer_name(deck: TournamentDeck, tags: list[str], colors: list[str]) -> str:
     return f"{color_name} {theme}".strip()
 
 
-def infer_strategy(deck: TournamentDeck, tags: list[str]) -> str:
+def infer_strategy(deck: TournamentDeck, tags: list[str], evidence: str = "observed") -> str:
     if deck.commander:
         focus = ", ".join(tags[:3]) or "synergy"
         return f"Built around {deck.commander}, this commander archetype converts commander identity into a consistent {focus} plan."
     focus = ", ".join(tags[:3]) or "pressure and interaction"
-    return f"This tournament-derived shell consistently performs by leaning on {focus} and preserving a coherent curve."
+    if evidence == "template":
+        # No performance claim: a template encodes a shape, not results.
+        return f"A curated template that leans on {focus} with a coherent curve (an archetype's shape, not observed tournament results)."
+    return f"This tournament-derived shell leans on {focus} and keeps a coherent curve."
 
 
 def weighted_card_packages(
@@ -437,7 +440,18 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
         reverse=True,
     )[:5]
     archetype_type = "commander" if rep.commander else "constructed"
+    event_dates = [str(deck.event_date)[:10] for deck in decks if deck.event_date]
+    # Template evidence: every source deck was synthesized from a curated
+    # builtin or is bundled sample data, so the archetype encodes a shape,
+    # not observed tournament results.
+    evidence = (
+        "template"
+        if all((deck.source or "").startswith("synthesized") or deck.source == "sample" for deck in decks)
+        else "observed"
+    )
     metadata_json: dict[str, object] = {
+        "last_seen": max(event_dates) if event_dates else None,
+        "evidence": evidence,
         "signature_sample": build_signature(repository, rep),
         "source_event_names": sorted({deck.event_name for deck in decks}),
         "sample_deck_ids": [deck.id for deck in decks[:5]],
@@ -464,7 +478,7 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
         "format": rep.format,
         "colors": colors,
         "tags": tags,
-        "strategy": infer_strategy(rep, tags),
+        "strategy": infer_strategy(rep, tags, evidence),
         "commander": rep.commander,
         "mainboard": rep.mainboard,
         "sideboard": rep.sideboard,

@@ -4,12 +4,17 @@ The shipped sample corpus has 11 entries — all RU Spells / W Lifegain
 variants — which is why every fallback path picks "W Lifegain Payoff" for
 arbitrary requests and the Format Meta Snapshot is dominated by 2 archetypes.
 
-This script turns each builtin archetype into 2 tournament_deck records
-(slight quantity perturbations so the archetype builder's clusterer sees
-"multiple decks of this archetype" rather than a single point). The result:
-~200 tournament decks across ~100 archetypes, all format-correct, all
-covering the actual Modern / Pioneer / Standard / Legacy / Commander
-metagame instead of two niche shells.
+This script turns each builtin archetype into ONE tournament_deck record
+(source "synthesized-from-builtin"). These are templates, not observed
+results: build_archetypes marks archetypes built only from them as
+evidence="template" and the API labels them that way. (Until 2026-10-12 it
+wrote two near-identical variants per archetype, which showed up as "2
+evidence decks" for what was one curated list.)
+
+Lists are padded to deck size with basics split across the archetype's
+colors. Commander records get a 37-land mana base and are otherwise left at
+the anchor list's size — padding the nonland slots with ~60 copies of one
+basic (as before) produced "Mountain 100% • 70 avg" land packages.
 
 After running this, run:
     python -m app.scripts.ingest_tournament_decks
@@ -36,20 +41,24 @@ DECK_SIZE = {"commander": 99, "standard": 60, "modern": 60, "pioneer": 60, "lega
 SIDEBOARD_SIZE = {"commander": 0, "standard": 15, "modern": 15, "pioneer": 15, "legacy": 15}
 
 
-def _expand_to_size(cards: list[dict], target: int, basic_land: str) -> list[dict]:
-    """Pad with basics to reach target size, or trim trailing basics if over."""
+def _expand_to_size(cards: list[dict], target: int, basics: list[str]) -> list[dict]:
+    """Pad with basics (split evenly across ``basics``) to reach target size,
+    or trim basics if over."""
     current = sum(c["quantity"] for c in cards)
     if current == target:
         return cards
     if current < target:
-        # Add more of the basic land
         deficit = target - current
-        out = list(cards)
-        existing = next((c for c in out if c["name"] == basic_land), None)
-        if existing is not None:
-            existing["quantity"] += deficit
-        else:
-            out.append({"name": basic_land, "quantity": deficit})
+        out = [dict(c) for c in cards]
+        for i, basic in enumerate(basics):
+            share = deficit // len(basics) + (1 if i < deficit % len(basics) else 0)
+            if share <= 0:
+                continue
+            existing = next((c for c in out if c["name"] == basic), None)
+            if existing is not None:
+                existing["quantity"] += share
+            else:
+                out.append({"name": basic, "quantity": share})
         return out
     # Over target — trim from any basic-land entry; if none, trim trailing
     excess = current - target
@@ -64,18 +73,37 @@ def _expand_to_size(cards: list[dict], target: int, basic_land: str) -> list[dic
     return [c for c in out if c["quantity"] > 0]
 
 
-def _pick_basic(colors: tuple[str, ...]) -> str:
-    if "G" in colors:
-        return "Forest"
-    if "R" in colors:
-        return "Mountain"
-    if "B" in colors:
-        return "Swamp"
-    if "U" in colors:
-        return "Island"
-    if "W" in colors:
-        return "Plains"
-    return "Wastes"
+_BASIC_FOR = {"W": "Plains", "U": "Island", "B": "Swamp", "R": "Mountain", "G": "Forest"}
+_BASICS = set(_BASIC_FOR.values()) | {"Wastes"}
+COMMANDER_LANDS = 37
+
+
+def _basics_for(colors: tuple[str, ...]) -> list[str]:
+    return [_BASIC_FOR[c] for c in "WUBRG" if c in colors] or ["Wastes"]
+
+
+def _with_land_base(cards: list[dict], colors: tuple[str, ...], target_lands: int, is_land) -> list[dict]:
+    """Anchor list plus basics up to ``target_lands``; nonland slots are not
+    padded (the record is a template of the archetype's shape, not a full
+    list). Padding nonland slots with basics produced 28-Plains Hatebears and
+    70-Mountain Commander land packages."""
+    lands = sum(c["quantity"] for c in cards if is_land(c["name"]))
+    out = [dict(c) for c in cards]
+    shortfall = target_lands - lands
+    if shortfall > 0:
+        out = _expand_to_size(out, sum(c["quantity"] for c in out) + shortfall, _basics_for(colors))
+    return out
+
+
+def _target_lands(archetype) -> int:
+    if archetype.mana_base is not None:
+        return archetype.mana_base.total_lands
+    tags = set(archetype.playstyle_tags)
+    if "aggro" in tags or "burn" in tags:
+        return 20
+    if "control" in tags or "ramp" in tags:
+        return 24
+    return 22
 
 
 def _perturb(cards: list[tuple[str, int]], variant_index: int) -> list[dict]:
@@ -99,6 +127,17 @@ def _perturb(cards: list[tuple[str, int]], variant_index: int) -> list[dict]:
 
 
 def build_records() -> list[dict]:
+    from app.rules import is_land_card
+    from app.services.card_repository import CardRepository
+
+    repository = CardRepository()
+
+    def is_land(name: str) -> bool:
+        card = repository.get_card(name)
+        if card is not None:
+            return is_land_card(card)
+        return name in _BASICS
+
     records: list[dict] = []
     for archetype in BUILTIN_ARCHETYPES:
         # mechanic-* archetypes are too generic to seed as tournament decks;
@@ -107,9 +146,6 @@ def build_records() -> list[dict]:
             continue
 
         primary_format = archetype.formats[0] if archetype.formats else "modern"
-        target_main = DECK_SIZE.get(primary_format, 60)
-        target_side = SIDEBOARD_SIZE.get(primary_format, 15)
-        basic = _pick_basic(archetype.colors)
         commander = None
         if primary_format == "commander":
             # Pick the highest-quantity "Legendary"-looking anchor as commander
@@ -120,11 +156,12 @@ def build_records() -> list[dict]:
                     commander = name
                     break
 
-        for variant in range(2):  # two variants per archetype
+        for variant in range(1):  # one template record per archetype
             mainboard_cards = _perturb(list(archetype.anchor_cards), variant)
-            mainboard = _expand_to_size(mainboard_cards, target_main, basic)
-            sideboard_cards = _perturb(list(archetype.sideboard_anchors), variant)
-            sideboard = _expand_to_size(sideboard_cards, target_side, basic) if archetype.sideboard_anchors else []
+            target_lands = COMMANDER_LANDS if primary_format == "commander" else _target_lands(archetype)
+            mainboard = _with_land_base(mainboard_cards, archetype.colors, target_lands, is_land)
+            # Sideboards are never padded with basics.
+            sideboard = _perturb(list(archetype.sideboard_anchors), variant)
 
             record = {
                 "id": f"synth-{archetype.id}-{variant}",

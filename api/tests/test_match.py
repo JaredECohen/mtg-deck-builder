@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import pytest
 
 from app.sim import (
     MatchConfig,
-    META_DECKS,
     build_matchup_matrix,
     simulate_match,
 )
-from app.sim.meta_archetypes import burn, living_end, murktide, tron
+from app.sim.meta_archetypes import burn, murktide, tron
 
 
 def test_burn_vs_burn_is_roughly_50_50():

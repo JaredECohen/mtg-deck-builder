@@ -14,7 +14,7 @@ box during development.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from urllib.parse import parse_qs, quote_plus, unquote, urlparse
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from app.config import TCGPLAYER_AFFILIATE_URL
 
@@ -27,19 +27,39 @@ _MASS_ENTRY_BASE = "https://www.tcgplayer.com/massentry"
 # canonical destination before re-wrapping with our own prefix, otherwise
 # attribution chains through the original affiliate.
 _AFFILIATE_HOSTS = ("pxf.io", "partner.tcgplayer.com")
+_MAX_UNWRAP = 5
+
+
+def _host(url: str) -> str:
+    return (urlparse(url).hostname or "").lower()
+
+
+def _host_is(host: str, domain: str) -> bool:
+    """Exact domain or a subdomain of it ("tcgplayer.pxf.io" is pxf.io;
+    "evilpxf.io.example.com" is not)."""
+    return host == domain or host.endswith("." + domain)
+
+
+def _is_redirector(url: str) -> bool:
+    return any(_host_is(_host(url), domain) for domain in _AFFILIATE_HOSTS)
+
+
+def is_tcgplayer_url(url: str) -> bool:
+    return urlparse(url).scheme in {"http", "https"} and _host_is(_host(url), "tcgplayer.com")
 
 
 def _canonical_destination(url: str) -> str:
     """Strip any Impact-style affiliate wrapper, returning the innermost
-    real destination URL."""
-    for _ in range(5):  # bounded unwrap to avoid pathological loops
-        parsed = urlparse(url)
-        if not any(host in parsed.netloc for host in _AFFILIATE_HOSTS):
+    real destination URL (at most five layers deep)."""
+    for _ in range(_MAX_UNWRAP):
+        if not _is_redirector(url):
             return url
-        inner = parse_qs(parsed.query).get("u", [None])[0]
+        # parse_qs already percent-decodes; decoding again would corrupt
+        # destinations containing an encoded "%".
+        inner = parse_qs(urlparse(url).query).get("u", [None])[0]
         if not inner:
             return url
-        url = unquote(inner)
+        url = inner
     return url
 
 
@@ -54,6 +74,10 @@ def tcgplayer_affiliate(destination_url: str | None) -> str | None:
     if not destination_url:
         return destination_url
     canonical = _canonical_destination(destination_url)
+    if not is_tcgplayer_url(canonical):
+        # Never wrap (or pass through) a non-TCGplayer destination: a
+        # crafted u= parameter must not turn our buy button into a redirect.
+        return None
     if not TCGPLAYER_AFFILIATE_URL:
         return canonical
     return f"{TCGPLAYER_AFFILIATE_URL}?u={quote_plus(canonical)}"
@@ -71,7 +95,9 @@ def ensure_tcgplayer_link(url: str | None, card_name: str) -> str:
     search URL built from its name.
     """
     if url:
-        return tcgplayer_affiliate(url) or url
+        wrapped = tcgplayer_affiliate(url)
+        if wrapped:
+            return wrapped
     return tcgplayer_search_url(card_name)
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.optimizer import SideboardPlan, build_sideboard
+from app.optimizer import build_sideboard
 from app.oracle.profile import (
     CardProfile,
     ComboPrimitives,

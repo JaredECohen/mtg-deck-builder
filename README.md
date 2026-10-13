@@ -40,19 +40,32 @@ uvicorn app.main:app --reload
 ```bash
 cd web
 npm install
-npm run dev
+API_BASE=http://127.0.0.1:8000 MTG_API_KEY=<same key as the API, if set> npm run dev
 ```
+
+The browser never talks to the API directly: `web/src/app/api/backend/[...path]`
+is a server-side proxy that forwards `/v1/*` and `/api/*` calls to `API_BASE`
+and adds `X-API-Key` from the web server's `MTG_API_KEY`, so the key never
+ships in the JS bundle. Run the API with `MTG_TRUST_FORWARDED=1` behind it so
+rate limits stay per client.
 
 ### Tests
 
 ```bash
 cd api
-python -m pytest -q     # 291 passing, 13 skipped (need full dataset / Celery without Redis)
+python -m pytest -q     # ~390 tests, ~40 s, no skips
 ```
 
-A handful of integration tests need the full Scryfall dataset and are
-skipped by default; after `ingest_scryfall`, run them with
-`MTG_FULL_DATASET=1 python -m pytest`.
+Tests always run against `api/tests/fixtures/cards.db.gz`: a deterministic
+cut of about 2k cards from the full Scryfall ingest, plus the full archetype
+and tournament corpus. `conftest.py` decompresses it into a temp dir per run,
+so local runs and CI see the same data and never write to `var/`.
+
+- Rebuild it after re-ingesting, or when a test needs a card the fixture
+  lacks. Naming the card in the test is enough:
+  `python -m app.scripts.build_test_fixture`.
+- Run against the full local DB instead with
+  `MTG_TEST_DATABASE_URL=sqlite:///../var/mtg_deck_builder.db python -m pytest`.
 
 ## CI
 
@@ -240,9 +253,46 @@ fitness as the `resilience` + `inevitability` axes (computed on
 - `GET /v1/cards/{name}/similar` — semantic-ish neighbours (pgvector
   fast-path, deterministic lexical fallback)
 
-Optional API-key auth (`MTG_API_KEY`, `X-API-Key` header) gates the
-optimize / prose / evaluate / save endpoints; the prose endpoint also
-carries a tighter dedicated rate limit.
+Optional API-key auth (`MTG_API_KEY`, `X-API-Key` header) gates every
+endpoint that spends LLM tokens or touches saved decks — generate, refine,
+analyze, chat, evaluate, optimize, prose, save/history — while validate,
+parse, export, diff, card/commander search, meta and shared-deck reads stay
+public behind a per-client rate limit. Saved decks store a hash of the key,
+and no response contains it.
+
+### What a generated deck carries (2026-10)
+
+- `constraints` — the budget, includes/excludes, owned cards, mode, match
+  type and bracket it was built under; a refine keeps them.
+- `game_plan` — win conditions, exact opening-hand land odds, mulligan
+  rules, a sideboard guide (each card's job, when it comes in, what goes
+  out) and matchup notes; Commander decks also get ramp/draw/removal/wipes/
+  tutors packages. Deterministic, from the list itself.
+- `bracket` (Commander) — Game Changers, mass land denial, extra turns,
+  tutors and two-card combos with an estimated bracket floor
+  ([game_changers.json](api/app/data/game_changers.json), versioned).
+- `alternatives` — 1-2 other shells that fit; `archetype_name` builds one.
+- `color_sources`, `unpriced_cards`, `cost_to_complete_usd`, `deck_id`,
+  and on refine `changes` (the card diff).
+- Provenance: `source_type` (`template` = curated/synthesized shape, not
+  observed results), plus `llm_added_cards`, `budget_substitutions` and
+  `dropped_includes` with reasons.
+
+Request options beyond the basics: `mode` (fast-competitive /
+constraint-aware / creative-but-viable), `match_type` (bo1 → no sideboard),
+`bracket` (1-5), `owned_cards`, `archetype_name`. Briefs are parsed
+deterministically when no LLM key is set (colors, guilds, budgets,
+playstyles, "no X", commander names). Export targets: plain, Arena,
+Moxfield, Archidekt, CSV.
+
+### Evaluation
+
+`qa/benchmark.py` runs 108 deterministic scenarios (all formats, colors,
+budgets, modes, Bo1/Bo3, brackets, prompts, scripted refines) and reports
+legality, color fidelity, budget adherence, sideboard completeness, bracket
+compliance, refine success, prompt fidelity and latency — see
+[qa/README.md](qa/README.md). A 40-scenario subset gates CI
+(`api/tests/test_benchmark_gate.py`).
 
 ## Resolved to-do items
 
@@ -265,6 +315,10 @@ carries a tighter dedicated rate limit.
 - A *learned* embedding model to replace the deterministic feature-hash
   embedder (the full pipeline — table, build script, `vector`/pgvector
   retrieval modes — is wired and tested today)
-- Multi-tenant identity (the current `owner` field keys off the API key)
-- Deeper frontend wiring of the new evaluation/diff/history components
-  into the workshop flow
+- Multi-tenant identity (the current `owner` field is a hash of the API key)
+- A real (observed) Commander and constructed tournament corpus: the
+  bundled corpus is synthesized from curated templates and labelled as
+  such. Licensed lists can be imported with `ingest_deck_source` (CSV/JSON
+  adapters) and `build_archetypes`.
+- Price data: ~22% of cards have no price in the current ingest; decks
+  list them (`unpriced_cards`) rather than counting them as free.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter
 
 from app.constants import (
     COMMANDER_DECK_SIZE,
@@ -8,11 +8,11 @@ from app.constants import (
     COMMANDER_LAND_RANGE,
     CONSTRUCTED_DECK_SIZE,
     CONSTRUCTED_LAND_RANGE,
-    MAX_COPIES,
     ROLE_TAGS,
     SIDEBOARD_SIZE,
 )
 from app.models import CardRecord, CardRef, ScoreBreakdown, ValidateDeckRequest, ValidationResult
+from app.rules import can_be_commander, copy_limit, is_basic_land, is_land_card
 from app.services.card_repository import CardRepository
 
 
@@ -25,9 +25,13 @@ class DeckValidator:
         warnings: list[str] = []
         main_count = sum(card.quantity for card in request.mainboard)
         side_count = sum(card.quantity for card in request.sideboard)
+        # Copies are counted across mainboard + sideboard (+ commander), keyed
+        # by canonical card name, against each card's own copy limit.
         name_counter = Counter[str]()
+        copy_limits: dict[str, int] = {}
         mainboard_land_count = 0
         commander_identity: set[str] = set()
+        commander_resolved = False
         role_counts: Counter[str] = Counter()
         color_symbol_demand: Counter[str] = Counter()
         mana_value_buckets: Counter[int] = Counter()
@@ -42,12 +46,10 @@ class DeckValidator:
             legality = card.legalities.get(request.format, "not_legal")
             if legality not in {"legal", "restricted"}:
                 errors.append(f"{ref.name} is not legal in {request.format}.")
-            if legality == "restricted" and ref.quantity > 1:
-                errors.append(f"{ref.name} is restricted in {request.format} and may only appear once.")
 
-            if count_mainboard_lands and "Land" in card.type_line:
+            if count_mainboard_lands and is_land_card(card):
                 mainboard_land_count += ref.quantity
-                if "Basic Land" in card.type_line:
+                if is_basic_land(card):
                     basic_color = self._basic_land_color(card.name)
                     if basic_color:
                         mana_source_count[basic_color] += ref.quantity
@@ -55,11 +57,13 @@ class DeckValidator:
                     for color in card.color_identity or card.colors:
                         mana_source_count[color] += ref.quantity
 
-            if "Basic Land" not in card.type_line:
-                name_counter[ref.name.lower()] += ref.quantity
+            limit = copy_limit(card, request.format)
+            if limit is not None:
+                name_counter[card.name] += ref.quantity
+                copy_limits[card.name] = limit
 
             if count_mainboard_lands:
-                if "Land" not in card.type_line:
+                if not is_land_card(card):
                     mana_value_buckets[min(6, int(card.mana_value or 0))] += ref.quantity
                 for role in self._card_roles(card):
                     role_counts[role] += ref.quantity
@@ -79,16 +83,27 @@ class DeckValidator:
                 commander_legality = commander_card.legalities.get(request.format, "not_legal")
                 if commander_legality not in {"legal", "restricted"}:
                     errors.append(f"{request.commander} is not legal in {request.format}.")
+                if not can_be_commander(commander_card):
+                    errors.append(f"{commander_card.name} can't be your commander (not a legendary creature).")
                 commander_identity = set(commander_card.color_identity or commander_card.colors)
+                commander_resolved = True
+                # The commander is one of the deck's 100 cards, so a copy in
+                # the 99 breaks singleton.
+                commander_limit = copy_limit(commander_card, request.format)
+                if commander_limit is not None:
+                    name_counter[commander_card.name] += 1
+                    copy_limits[commander_card.name] = commander_limit
 
-        if request.format == "commander":
-            for name, quantity in name_counter.items():
-                if quantity > 1:
-                    errors.append(f"{name.title()} exceeds Commander singleton rules.")
-        else:
-            for name, quantity in name_counter.items():
-                if quantity > MAX_COPIES:
-                    errors.append(f"{name.title()} exceeds the {MAX_COPIES}-copy limit.")
+        for name, quantity in name_counter.items():
+            limit = copy_limits[name]
+            if quantity <= limit:
+                continue
+            if request.format == "commander" and limit == 1:
+                errors.append(f"{name} exceeds Commander singleton rules.")
+            elif limit == 1:
+                errors.append(f"{name} is restricted in {request.format} and may only appear once.")
+            else:
+                errors.append(f"{name} exceeds the {limit}-copy limit.")
 
         if request.format == "commander":
             if not request.commander:
@@ -97,7 +112,9 @@ class DeckValidator:
                 errors.append(f"Commander decks must have exactly {COMMANDER_DECK_SIZE} cards in the mainboard.")
             if side_count != 0:
                 warnings.append("Commander decks typically do not use a sideboard.")
-            if commander_identity:
+            # An empty identity is meaningful: colorless commanders may only
+            # contain colorless cards. Do not use truthiness as the gate.
+            if commander_resolved:
                 for ref in request.mainboard + request.sideboard:
                     card = self.repository.get_card(ref.name)
                     if not card:
@@ -105,9 +122,11 @@ class DeckValidator:
                     if not self.repository.fits_color_identity(card, commander_identity):
                         errors.append(f"{ref.name} falls outside the commander's color identity.")
         else:
-            if main_count != CONSTRUCTED_DECK_SIZE:
-                errors.append(f"Constructed decks must have exactly {CONSTRUCTED_DECK_SIZE} cards in the mainboard.")
-            if side_count not in {0, SIDEBOARD_SIZE}:
+            if main_count < CONSTRUCTED_DECK_SIZE:
+                errors.append(f"Constructed decks must have at least {CONSTRUCTED_DECK_SIZE} cards in the mainboard.")
+            if side_count > SIDEBOARD_SIZE:
+                errors.append(f"Sideboards may have at most {SIDEBOARD_SIZE} cards (this one has {side_count}).")
+            elif side_count not in {0, SIDEBOARD_SIZE}:
                 warnings.append(f"Competitive constructed decks usually run a {SIDEBOARD_SIZE}-card sideboard.")
 
         mana_score = 100
@@ -116,10 +135,15 @@ class DeckValidator:
         competitiveness = 85
         curve_score = 100
 
-        min_lands, max_lands = self._recommended_land_range(request.format)
+        nonland_cards = sum(mana_value_buckets.values())
+        avg_mana_value = (
+            sum(value * count for value, count in mana_value_buckets.items()) / nonland_cards if nonland_cards else 0.0
+        )
+        min_lands, max_lands = self._recommended_land_range(request.format, avg_mana_value, main_count)
         if mainboard_land_count < min_lands:
+            curve = f" for a curve averaging {avg_mana_value:.1f}" if request.format != "commander" else ""
             warnings.append(
-                f"Land count looks low: selected {mainboard_land_count} lands, and {request.format} decks usually want at least {min_lands}."
+                f"Land count looks low: selected {mainboard_land_count} lands, and {request.format} decks usually want at least {min_lands}{curve}."
             )
             mana_score -= 25 if request.format != "commander" else 15
         if mainboard_land_count > max_lands:
@@ -201,9 +225,22 @@ class DeckValidator:
             ),
         )
 
-    @staticmethod
-    def _recommended_land_range(format_name: str) -> tuple[int, int]:
-        return COMMANDER_LAND_RANGE if format_name == "commander" else CONSTRUCTED_LAND_RANGE
+    # Land share of the main deck by average nonland mana value: Burn
+    # (avg ~1.5) runs 18-20 lands, control (avg 3+) 24-27. A single range
+    # flagged every 19-land aggro deck as "low".
+    _LAND_SHARE_BY_CURVE = ((1.8, 0.27, 0.35), (2.4, 0.30, 0.38), (3.0, 0.35, 0.43), (99.0, 0.38, 0.47))
+
+    @classmethod
+    def _recommended_land_range(cls, format_name: str, avg_mana_value: float = 0.0, deck_size: int = 60) -> tuple[int, int]:
+        if format_name == "commander":
+            return COMMANDER_LAND_RANGE
+        if avg_mana_value <= 0:
+            return CONSTRUCTED_LAND_RANGE
+        size = max(deck_size, 60)
+        for ceiling, low, high in cls._LAND_SHARE_BY_CURVE:
+            if avg_mana_value <= ceiling:
+                return round(size * low), round(size * high)
+        return CONSTRUCTED_LAND_RANGE
 
     @staticmethod
     def _basic_land_color(name: str) -> str | None:
@@ -213,12 +250,12 @@ class DeckValidator:
             "Swamp": "B",
             "Mountain": "R",
             "Forest": "G",
-        }.get(name)
+        }.get(name.removeprefix("Snow-Covered "))
 
     @staticmethod
     def _card_roles(card: CardRecord) -> set[str]:
         roles: set[str] = set()
-        if "Land" in card.type_line:
+        if is_land_card(card):
             return {"mana"}
         for tag in card.tags:
             role = ROLE_TAGS.get(tag)

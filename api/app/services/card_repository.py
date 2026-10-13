@@ -3,16 +3,19 @@ from __future__ import annotations
 import json
 import logging
 import math
+import unicodedata
+from datetime import date
 from functools import cached_property
-from urllib.parse import quote_plus
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 
 logger = logging.getLogger(__name__)
 
-from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATABASE_URL
+from app.config import ARCHETYPE_PATH, CARD_CACHE_PATH, DATA_STALE_DAYS, DATABASE_URL
 from app.db import session_scope
+from app.rules import can_be_commander, is_land_card
 from app.services.affiliate import ensure_tcgplayer_link
 from app.db_models import Archetype, Card
 from app.models import (
@@ -27,6 +30,7 @@ from app.models import (
     CommanderProfile,
     CommanderSearchResult,
     DataStatusResponse,
+    DeckProvenance,
 )
 
 
@@ -161,6 +165,33 @@ class CardRepository:
     def _cards_by_name(self) -> dict[str, CardRecord]:
         return {self._normalize_name(card.name): card for card in self._all_cards_cache}
 
+    @staticmethod
+    def _fold_name(name: str) -> str:
+        """Spelling-insensitive key: accents stripped (Lim-Dûl → lim-dul),
+        Æ → ae, curly quotes straightened, whitespace collapsed. MTGO and many
+        list sites export the ASCII spellings."""
+        text = name.replace("Æ", "Ae").replace("æ", "ae").replace("’", "'").replace("‘", "'")
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return " ".join(text.lower().split())
+
+    @cached_property
+    def _cards_by_folded_name(self) -> dict[str, CardRecord]:
+        """Fallback lookup: folded full names plus each face of a multi-face
+        card ("Fable of the Mirror-Breaker" → the DFC). Full names win over
+        face names when they collide."""
+        index: dict[str, CardRecord] = {}
+        for card in self._all_cards_cache:
+            for face in card.faces:
+                if face.name:
+                    index.setdefault(self._fold_name(face.name), card)
+            if " // " in card.name:
+                for part in card.name.split(" // "):
+                    index.setdefault(self._fold_name(part), card)
+        for card in self._all_cards_cache:
+            index[self._fold_name(card.name)] = card
+        return index
+
     def all_archetypes(self) -> list[ArchetypeRecord]:
         return self._all_archetypes_cache
 
@@ -205,9 +236,17 @@ class CardRepository:
                     if requested_color_set:
                         if not archetype_colors.issubset(requested_color_set):
                             continue
+                        # The empty set is a subset of everything, so a
+                        # colorless shell (Eldrazi) used to win mono-U control
+                        # and mono-R aggro requests on source count alone.
+                        if not archetype_colors and self.COLORLESS_SYMBOL not in requested_colors:
+                            continue
                     elif self.COLORLESS_SYMBOL in requested_colors and archetype_colors:
                         continue
                 elif self.COLORLESS_SYMBOL in requested_colors and archetype_colors:
+                    continue
+                elif requested_color_set and not (archetype_colors & requested_color_set):
+                    # Soft matching still needs at least one shared color.
                     continue
             score = max(1.0, float(archetype.source_count))
             if requested_colors:
@@ -332,6 +371,7 @@ class CardRepository:
                     package_richness=package_richness,
                     ranking_score=round(ranking_score, 2),
                     image_uri=card.image_uri or next((face.image_uri for face in card.faces if face.image_uri), None),
+                    provenance=self._commander_provenance(card.name, related_archetypes),
                 )
             )
 
@@ -365,7 +405,10 @@ class CardRepository:
             return CommanderProfile(
                 card=card,
                 strategy_summary=best.strategy,
-                colors=best.colors or list(card.color_identity or card.colors),
+                # Color identity is a card fact, not archetype metadata. A
+                # malformed corpus row must never broaden a commander's UI or
+                # generation constraints.
+                colors=list(card.color_identity or card.colors),
                 tags=tags,
                 popularity=float(best.source_count),
                 support_depth=package.support_depth if package else best.source_count,
@@ -381,6 +424,7 @@ class CardRepository:
                 interaction_package=package.interaction_package if package else self._fallback_packages("interaction", tags),
                 land_package=package.land_package if package else best.metadata.land_packages[:8],
                 related_archetypes=[archetype.name for archetype in archetypes[:5]],
+                provenance=self._commander_provenance(card.name, archetypes),
             )
 
         fallback_tags = list(dict.fromkeys(card.tags + self._infer_commander_tags(card)))
@@ -407,6 +451,45 @@ class CardRepository:
             interaction_package=self._fallback_packages("interaction", fallback_tags),
             land_package=self._fallback_land_package(commander_colors),
             related_archetypes=[],
+            provenance=self._commander_provenance(card.name, []),
+        )
+
+    @staticmethod
+    def _commander_provenance(
+        commander_name: str,
+        archetypes: list[ArchetypeRecord],
+    ) -> DeckProvenance:
+        """Describe the evidence behind a commander recommendation/profile.
+
+        A commander being format-legal is factual; the recommendation quality
+        is not. Keep those concepts separate by exposing whether ranking and
+        packages came from observed corpus shells or deterministic card-text
+        and role heuristics.
+        """
+        if not archetypes:
+            return DeckProvenance(
+                source_type="fallback",
+                confidence=0.25,
+                evidence_count=0,
+                retrieved_from=[],
+                fallback_used=True,
+                notes=[
+                    f"No corpus shell is keyed to {commander_name}; tags and support packages are inferred from the legal card pool.",
+                ],
+            )
+
+        evidence_count = sum(max(0, archetype.source_count) for archetype in archetypes)
+        confidence = min(0.95, 0.55 + math.log1p(evidence_count) * 0.08)
+        template = all(archetype.metadata.evidence == "template" for archetype in archetypes)
+        return DeckProvenance(
+            source_type="template" if template else "corpus",
+            confidence=round(confidence, 3),
+            evidence_count=evidence_count,
+            retrieved_from=[archetype.name for archetype in archetypes[:5]],
+            fallback_used=False,
+            notes=[
+                f"Recommendation and packages are backed by {len(archetypes)} corpus shell(s) keyed to {commander_name}.",
+            ],
         )
 
     def card_packages_by_role_theme(
@@ -478,13 +561,13 @@ class CardRepository:
     def is_legal_commander(self, card: CardRecord) -> bool:
         if card.legalities.get("commander", "not_legal") != "legal":
             return False
-        if "Legendary" not in card.type_line:
-            return False
-        return "Creature" in card.type_line or "Planeswalker" in card.type_line
+        return can_be_commander(card)
 
     def get_card(self, name: str) -> CardRecord | None:
         normalized = self._normalize_name(name)
         card = self._cards_by_name.get(normalized)
+        if card is None and name:
+            card = self._cards_by_folded_name.get(self._fold_name(name))
         if card is not None:
             self._maybe_enqueue_refresh(card)
         return card
@@ -657,7 +740,7 @@ class CardRepository:
             normalized_name = self._normalize_name(card.name)
             if normalized_name in excluded:
                 continue
-            if "Land" in card.type_line:
+            if is_land_card(card):
                 continue
             legality = card.legalities.get(format_name, "not_legal")
             if legality not in {"legal", "restricted"}:
@@ -728,9 +811,25 @@ class CardRepository:
             card_count=card_count,
             archetype_source=archetype_source,
             archetype_count=archetype_count,
-            database_url=DATABASE_URL,
+            database_backend=make_url(DATABASE_URL).get_backend_name(),
             scryfall_ingested=card_source == "database" and card_count > 1000,
+            card_data_as_of=self.card_data_as_of(),
+            stale=self.card_data_is_stale(),
         )
+
+    def card_data_as_of(self) -> str | None:
+        dates = [card.released_at for card in self._all_cards_cache if card.released_at]
+        return max(dates)[:10] if dates else None
+
+    def card_data_is_stale(self, today: date | None = None) -> bool:
+        as_of = self.card_data_as_of()
+        if not as_of:
+            return False
+        try:
+            newest = date.fromisoformat(as_of)
+        except ValueError:
+            return False
+        return ((today or date.today()) - newest).days > DATA_STALE_DAYS
 
     def _fallback_packages(self, role: str, tags: list[str]) -> list[ArchetypePackage]:
         packages = self.card_packages_by_role_theme(format_name="commander", role=role, theme_tags=tags, limit=8)

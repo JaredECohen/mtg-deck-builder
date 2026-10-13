@@ -1,14 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AlternativesPanel } from "./alternatives-panel";
+import { ColorSourceChart } from "./color-source-chart";
 import { DeckChat } from "./deck-chat";
+import { DeckDiffView } from "./deck-diff-view";
+import { DeckExplanationTabs, HowToPlay } from "./deck-explanation";
+import { DeckCardRow, GroupedDeckList, notesByCard } from "./deck-list";
+import { ExportPanel } from "./export-panel";
+import { ManaCurveChart } from "./mana-curve-chart";
 import { ProvenanceBanner } from "./provenance-banner";
+import { RevisionHistory } from "./revision-history";
 import { useDeckChat } from "@/hooks/use-deck-chat";
+import type { DeckRevision } from "@/hooks/use-deck-generator";
 import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
-import type { ExportTarget } from "@/lib/api";
-import { groupByType } from "@/lib/group-by-type";
-import type { ArchetypePackage, CardRef, CardTypeMap, CommanderProfile, DeckResponse, MetaSummaryResponse } from "@/lib/types";
+import { MAX_PROMPT_CHARS } from "@/lib/api";
+import { cardCount } from "@/lib/deck-diff";
+import type {
+  ArchetypePackage,
+  CardRef,
+  CommanderProfile,
+  DeckAlternative,
+  DeckChanges,
+  DeckDiffResult,
+  DeckResponse,
+  MetaSummaryResponse
+} from "@/lib/types";
+
+// Re-exported for the Analyze workflow, which renders the same grouped list.
+export { GroupedDeckList } from "./deck-list";
 
 const BASIC_LAND_NAMES = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"]);
 
@@ -25,41 +46,30 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
   }
   if (!shoppable.length) return null;
   // The whole deck — including basics — goes into the one-click cart.
-  const commanderEntries = deck.commander ? [{ name: deck.commander, quantity: 1 }] : [];
-  const massEntryUrl = tcgplayerMassEntryUrl([
-    ...commanderEntries,
-    ...deck.mainboard,
-    ...deck.sideboard,
-  ]);
+  const massEntryUrl = tcgplayerMassEntryUrl([...commanderRefs, ...deck.mainboard, ...deck.sideboard]);
   return (
-    <div className="panel results-card">
-      <div className="label">Shop This Deck</div>
+    <section className="panel results-card" aria-labelledby="shop-heading">
+      <h3 id="shop-heading" className="label">Shop This Deck</h3>
       <p className="muted" style={{ marginTop: 0 }}>
-        Buy the whole list in one TCGplayer cart at the cheapest available prices,
-        or grab individual singles below.
+        Buy the whole list in one TCGplayer cart at the cheapest available prices, or grab individual singles below.
       </p>
-      <a
-        href={massEntryUrl}
-        target="_blank"
-        rel="noreferrer sponsored"
-        className="button"
-        style={{ marginBottom: 12 }}
-      >
+      <a href={massEntryUrl} target="_blank" rel="noreferrer sponsored" className="button" style={{ marginBottom: 12 }}>
         Buy entire deck on TCGplayer
       </a>
       <details>
-        <summary style={{ cursor: "pointer" }}>
-          {shoppable.length} cards to shop individually
-        </summary>
+        <summary style={{ cursor: "pointer" }}>{shoppable.length} cards to shop individually</summary>
         <ul className="card-list" style={{ marginTop: 8 }}>
           {shoppable.map((card) => (
             <li key={`shop-${card.name}`} className="card-row">
-              <span>{card.quantity}x {card.name}</span>
+              <span>
+                {card.quantity}x {card.name}
+              </span>
               <a
                 href={tcgplayerSearchUrl(card.name)}
                 target="_blank"
                 rel="noreferrer sponsored"
                 className="chip"
+                aria-label={`Buy ${card.name} on TCGplayer`}
               >
                 TCGplayer
               </a>
@@ -68,23 +78,9 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
         </ul>
       </details>
       <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
-    </div>
+    </section>
   );
 }
-
-type Props = {
-  deck: DeckResponse;
-  meta: MetaSummaryResponse | null;
-  selectedCommanderName: string;
-  selectedCommanderProfile: CommanderProfile | null;
-  refinePrompt: string;
-  onRefinePromptChange: (value: string) => void;
-  onRefine: () => void;
-  onExport: (target: ExportTarget) => void;
-  exportContent: string;
-  onOpenCard: (name: string) => void;
-  loading: boolean;
-};
 
 function PackageList({ title, packages }: { title: string; packages: ArchetypePackage[] }) {
   if (!packages.length) return null;
@@ -106,74 +102,47 @@ function PackageList({ title, packages }: { title: string; packages: ArchetypePa
   );
 }
 
-function DeckCardRow({ card, suffix, quantityLabel, onOpen }: { card: CardRef; suffix: string; quantityLabel: string; onOpen: (name: string) => void }) {
-  return (
-    <li key={`${card.name}-${card.quantity}-${suffix}`} className="card-row card-row-action">
-      <button type="button" className="card-button" onClick={() => onOpen(card.name)}>
-        <span>{card.name}</span>
-        <span className="muted">{quantityLabel}</span>
-      </button>
-    </li>
-  );
-}
-
-export function GroupedDeckList({
-  cards,
-  typeMap,
-  emptyLabel,
-  suffix,
-  onOpenCard
-}: {
-  cards: CardRef[];
-  typeMap: CardTypeMap | undefined;
-  emptyLabel?: string;
-  suffix: string;
+type Props = {
+  deck: DeckResponse;
+  meta: MetaSummaryResponse | null;
+  metaError: string | null;
+  selectedCommanderName: string;
+  selectedCommanderProfile: CommanderProfile | null;
+  refinePrompt: string;
+  onRefinePromptChange: (value: string) => void;
+  onRefine: () => void;
   onOpenCard: (name: string) => void;
-}) {
-  const sections = groupByType(cards, typeMap);
-  if (!sections.length) {
-    return emptyLabel ? <p className="muted" style={{ marginTop: 4 }}>{emptyLabel}</p> : null;
-  }
-  return (
-    <div className="deck-type-sections">
-      {sections.map((section) => (
-        <div key={`${suffix}-${section.type}`} className="deck-type-section">
-          <div className="deck-type-heading">
-            <span>{section.label}</span>
-            <span className="muted">{section.count}</span>
-          </div>
-          <ul className="card-list">
-            {section.cards.map((card) => (
-              <DeckCardRow
-                key={`${suffix}-${section.type}-${card.name}`}
-                card={card}
-                suffix={`${suffix}-${section.type}`}
-                quantityLabel={`${card.quantity}x`}
-                onOpen={onOpenCard}
-              />
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
+  /** Any request in flight (generate or refine). */
+  loading: boolean;
+  expertMode: boolean;
+  /** What the latest refine changed, if the deck on screen came from one. */
+  changes: DeckChanges | DeckDiffResult | null;
+  revisions: DeckRevision[];
+  onUndo: () => void;
+  onRestore: (id: number) => void;
+  onApplyOptimized: (next: DeckResponse) => void;
+  onBuildAlternative: (alternative: DeckAlternative) => void;
+};
 
 export function DeckResults({
   deck,
   meta,
+  metaError,
   selectedCommanderName,
   selectedCommanderProfile,
   refinePrompt,
   onRefinePromptChange,
   onRefine,
-  onExport,
-  exportContent,
   onOpenCard,
-  loading
+  loading,
+  expertMode,
+  changes,
+  revisions,
+  onUndo,
+  onRestore,
+  onApplyOptimized,
+  onBuildAlternative
 }: Props) {
-  const [exportTarget, setExportTarget] = useState<ExportTarget>("plain");
-
   // "Ask About This Deck". The chat API is stateless — the server gets the
   // current deck plus the transcript on every turn — so the conversation should
   // survive a refinement of the same deck (the refiner even renames it) and
@@ -185,6 +154,9 @@ export function DeckResults({
   const { reset: resetChat, markApplied } = chat;
   const [pendingApply, setPendingApply] = useState<{ bubbleId: string; refinement: string } | null>(null);
   const refineInFlight = useRef(false);
+  // The chat bubble whose proposal is being applied. It is marked "Applied"
+  // only when the refined deck arrives, so a failed refine stays retryable.
+  const applyingBubble = useRef<string | null>(null);
   const startRefine = useCallback(() => {
     refineInFlight.current = true;
     onRefine();
@@ -192,103 +164,113 @@ export function DeckResults({
   useEffect(() => {
     if (refineInFlight.current) {
       refineInFlight.current = false;
+      if (applyingBubble.current) markApplied(applyingBubble.current);
+      applyingBubble.current = null;
       return;
     }
     resetChat();
     setPendingApply(null);
-  }, [deck, resetChat]);
+  }, [deck, resetChat, markApplied]);
   useEffect(() => {
     // A refinement that failed leaves the deck unchanged; don't let its marker
     // swallow the reset for the next generation.
-    if (!loading) refineInFlight.current = false;
+    if (!loading) {
+      refineInFlight.current = false;
+      applyingBubble.current = null;
+    }
   }, [loading]);
   // A proposed change goes through the existing Refine flow: it lands in the
   // Refine box (visible, editable, undoable like any refinement) and the refine
   // fires once the parent's state carries it — the callback reads that state.
   useEffect(() => {
     if (!pendingApply || loading || refinePrompt !== pendingApply.refinement) return;
+    applyingBubble.current = pendingApply.bubbleId;
     startRefine();
-    markApplied(pendingApply.bubbleId);
     setPendingApply(null);
-  }, [pendingApply, refinePrompt, loading, startRefine, markApplied]);
+  }, [pendingApply, refinePrompt, loading, startRefine]);
+
+  const notes = useMemo(() => notesByCard(deck.card_notes), [deck.card_notes]);
+  const isBo1 = deck.constraints?.match_type === "bo1";
 
   return (
     <>
-      <ProvenanceBanner provenance={deck.provenance} commanderRequested={Boolean(deck.commander)} />
+      <ProvenanceBanner
+        provenance={deck.provenance}
+        commanderRequested={Boolean(deck.commander)}
+        currentDeck={deck}
+        onApplyOptimized={onApplyOptimized}
+      />
 
-      <div className="panel results-card">
+      <section className="panel results-card" aria-label="Decklist">
         <div className="deck-columns">
           <div>
-            <div className="label">
+            <h3 className="label">
               Mainboard
-              <span className="muted" style={{ marginLeft: 8, fontWeight: "normal" }}>
-                {deck.mainboard.reduce((sum, ref) => sum + ref.quantity, 0)} cards
-              </span>
-            </div>
-            <GroupedDeckList cards={deck.mainboard} typeMap={deck.card_types} suffix="main" onOpenCard={onOpenCard} />
+              <span className="muted label-count">{cardCount(deck.mainboard)} cards</span>
+            </h3>
+            <GroupedDeckList cards={deck.mainboard} typeMap={deck.card_types} suffix="main" notes={notes} onOpenCard={onOpenCard} />
           </div>
           <div>
-            <div className="label">
-              {deck.commander ? "Commander / Sideboard" : "Sideboard"}
-              {deck.commander ? (
-                <span className="chip" style={{ marginLeft: 8, fontSize: "0.72rem", opacity: 0.85 }}>
-                  {selectedCommanderName && selectedCommanderName === deck.commander ? "Your pick" : "Recommended"}
-                </span>
-              ) : null}
-            </div>
             {deck.commander ? (
-              <ul className="card-list" style={{ marginBottom: 12 }}>
-                <DeckCardRow card={{ name: deck.commander, quantity: 1 }} suffix="commander" quantityLabel="Commander" onOpen={onOpenCard} />
-              </ul>
+              <>
+                <h3 className="label">
+                  Commander
+                  <span className="chip chip-tag">
+                    {selectedCommanderName && selectedCommanderName === deck.commander ? "Your pick" : "Recommended"}
+                  </span>
+                </h3>
+                <ul className="card-list deck-commander">
+                  <DeckCardRow card={{ name: deck.commander, quantity: 1 }} quantityLabel="Commander" note={notes.get(deck.commander)} onOpen={onOpenCard} />
+                </ul>
+              </>
             ) : null}
             {deck.sideboard.length ? (
-              <GroupedDeckList cards={deck.sideboard} typeMap={deck.card_types} suffix="sideboard" onOpenCard={onOpenCard} />
-            ) : (
-              <ul className="card-list">
-                {deck.card_notes.slice(0, 6).map((note) => (
-                  <DeckCardRow
-                    key={`note-${note.name}`}
-                    card={{ name: note.name, quantity: 1 }}
-                    suffix="note"
-                    quantityLabel="note"
-                    onOpen={onOpenCard}
-                  />
-                ))}
-              </ul>
-            )}
+              <>
+                <h3 className="label">
+                  Sideboard
+                  <span className="muted label-count">{cardCount(deck.sideboard)} cards</span>
+                </h3>
+                <GroupedDeckList cards={deck.sideboard} typeMap={deck.card_types} suffix="sideboard" notes={notes} onOpenCard={onOpenCard} />
+              </>
+            ) : !deck.commander ? (
+              <>
+                <h3 className="label">Sideboard</h3>
+                <p className="muted">{isBo1 ? "Best-of-one: no sideboard." : "No sideboard for this list."}</p>
+              </>
+            ) : null}
           </div>
         </div>
-      </div>
+        {notes.size ? <p className="muted field-help deck-why-hint">Tap “Why?” next to a card to see why it made the list.</p> : null}
+      </section>
 
-      <div className="panel results-card">
-        <div className="label">Why This Deck</div>
-        <ul className="card-list">
-          {deck.explanation.map((item, index) => (
-            <li key={`why-${index}`} className="card-row"><span>{item}</span></li>
-          ))}
-        </ul>
-      </div>
+      {!expertMode ? <HowToPlay deck={deck} onOpenCard={onOpenCard} /> : null}
 
-      {deck.sections.length ? (
-        <div className="panel results-card">
-          <div className="label">Deck Breakdown</div>
-          <div className="card-list">
-            {deck.sections.map((section) => (
-              <div key={section.title} className="card-row" style={{ display: "block" }}>
-                <strong>{section.title}</strong>
-                <p className="muted" style={{ marginTop: 6 }}>{section.summary}</p>
-                {section.bullets.length ? (
-                  <ul style={{ margin: "8px 0 0 18px" }}>
-                    {section.bullets.map((bullet) => (
-                      <li key={`${section.title}-${bullet}`}>{bullet}</li>
-                    ))}
-                  </ul>
-                ) : null}
+      <DeckExplanationTabs deck={deck} showGamePlanTab={expertMode} onOpenCard={onOpenCard} />
+
+      {deck.role_summary.length || deck.mana_curve.length || deck.color_sources?.length ? (
+        <section className="panel results-card" aria-labelledby="structure-heading">
+          <h3 id="structure-heading" className="label">Structure</h3>
+          <div className="structure-grid">
+            <ManaCurveChart points={deck.mana_curve} />
+            <ColorSourceChart points={deck.color_sources ?? []} />
+            {deck.role_summary.length ? (
+              <div>
+                <div className="label">Roles</div>
+                <ul className="card-list">
+                  {deck.role_summary.map((item) => (
+                    <li key={item.role} className="card-row">
+                      <span>{item.role}</span>
+                      <span className="muted">{item.total_cards}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            ))}
+            ) : null}
           </div>
-        </div>
+        </section>
       ) : null}
+
+      <AlternativesPanel alternatives={deck.alternatives ?? []} loading={loading} onBuild={onBuildAlternative} onOpenCard={onOpenCard} />
 
       {selectedCommanderProfile && deck.commander === selectedCommanderProfile.card.name ? (
         <div className="panel results-card panel-strong">
@@ -319,51 +301,6 @@ export function DeckResults({
         </div>
       ) : null}
 
-      {deck.mechanics.length ? (
-        <div className="panel results-card">
-          <div className="label">Key Mechanics</div>
-          <ul className="card-list">
-            {deck.mechanics.map((mechanic) => (
-              <li key={mechanic.label} className="card-row" style={{ display: "block" }}>
-                <strong>{mechanic.label}</strong>
-                <p className="muted" style={{ marginTop: 6 }}>{mechanic.summary}</p>
-                <span>{mechanic.cards.join(", ")}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {(deck.role_summary.length || deck.mana_curve.length) ? (
-        <div className="panel results-card">
-          <div className="label">Structure</div>
-          <div className="deck-columns">
-            <div>
-              <div className="label">Roles</div>
-              <ul className="card-list">
-                {deck.role_summary.map((item) => (
-                  <li key={item.role} className="card-row">
-                    <span>{item.role}</span>
-                    <span className="muted">{item.total_cards}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <div className="label">Mana Curve</div>
-              <ul className="card-list">
-                {deck.mana_curve.map((point) => (
-                  <li key={point.mana_value} className="card-row">
-                    <span>{point.mana_value === 6 ? "6+" : point.mana_value}</span>
-                    <span className="muted">{point.card_count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {deck.warnings.length ? (
         <div className="panel results-card">
           <div className="label">Quality Warnings</div>
@@ -388,7 +325,52 @@ export function DeckResults({
         </div>
       ) : null}
 
-      {deck.selected_archetype ? (
+      <section className="panel results-card" aria-labelledby="refine-heading">
+        <div className="field-label-row">
+          <label id="refine-heading" className="label" htmlFor="refine">Refine Deck</label>
+          <span className={`muted field-count ${refinePrompt.length > MAX_PROMPT_CHARS * 0.8 ? "warn" : ""}`}>
+            {refinePrompt.length}/{MAX_PROMPT_CHARS}
+          </span>
+        </div>
+        <textarea
+          id="refine"
+          className="textarea"
+          value={refinePrompt}
+          maxLength={MAX_PROMPT_CHARS}
+          onChange={(event) => onRefinePromptChange(event.target.value)}
+          placeholder="e.g. Make it cheaper without losing pressure, or add 4x Counterspell."
+        />
+        <button type="button" className="button secondary" onClick={startRefine} disabled={loading || !refinePrompt.trim()} style={{ marginTop: 12 }}>
+          Apply Refinement
+        </button>
+        {changes ? (
+          <div className="refine-changes">
+            <DeckDiffView diff={changes} title="What changed" />
+          </div>
+        ) : null}
+      </section>
+
+      <RevisionHistory revisions={revisions} loading={loading} onUndo={onUndo} onRestore={onRestore} />
+
+      <DeckChat
+        bubbles={chat.bubbles}
+        sending={chat.sending}
+        error={chat.error}
+        refining={loading}
+        onSend={(message) => void chat.send(deck, message)}
+        onApplyRefinement={(bubbleId, refinement) => {
+          onRefinePromptChange(refinement);
+          setPendingApply({ bubbleId, refinement });
+        }}
+        onEditRefinement={onRefinePromptChange}
+        onClear={resetChat}
+      />
+
+      <ShopDeckPanel deck={deck} />
+
+      <ExportPanel deck={deck} />
+
+      {deck.selected_archetype && expertMode ? (
         <>
           <div className="panel results-card panel-strong">
             <div className="label">Selected Archetype</div>
@@ -424,79 +406,31 @@ export function DeckResults({
       ) : null}
 
       {meta?.archetypes?.length ? (
-        <div className="panel results-card">
-          <div className="label">Format Meta Snapshot</div>
+        <section className="panel results-card" aria-labelledby="meta-heading">
+          <h3 id="meta-heading" className="label">Format Meta Snapshot</h3>
+          {meta.as_of ? <p className="muted field-help">Latest event in the corpus: {meta.as_of}.</p> : null}
           <ul className="card-list">
             {meta.archetypes.slice(0, 5).map((archetype) => (
-              <li key={archetype.id} className="card-row">
+              <li key={archetype.id} className="card-row meta-row">
                 <span>
                   {archetype.name}
+                  {archetype.metadata?.evidence === "template" ? <span className="chip chip-tag">template</span> : null}
                   {archetype.tags?.slice(0, 2).map((tag) => (
-                    <span key={tag} className="chip" style={{ marginLeft: 6, fontSize: "0.72rem" }}>{tag}</span>
+                    <span key={tag} className="chip chip-tag">{tag}</span>
                   ))}
                 </span>
                 <span className="muted">
                   {archetype.source_count} decks
                   {archetype.avg_placement ? ` • avg ${archetype.avg_placement.toFixed(1)}` : ""}
+                  {archetype.metadata?.last_seen ? ` • seen ${archetype.metadata.last_seen}` : ""}
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
+      ) : metaError ? (
+        <p className="muted panel results-card">Meta snapshot unavailable: {metaError}</p>
       ) : null}
-
-      <DeckChat
-        bubbles={chat.bubbles}
-        sending={chat.sending}
-        error={chat.error}
-        refining={loading}
-        onSend={(message) => void chat.send(deck, message)}
-        onApplyRefinement={(bubbleId, refinement) => {
-          onRefinePromptChange(refinement);
-          setPendingApply({ bubbleId, refinement });
-        }}
-        onEditRefinement={onRefinePromptChange}
-        onClear={resetChat}
-      />
-
-      <div className="panel results-card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <label className="label" htmlFor="refine">Refine Deck</label>
-          <span style={{ fontSize: "0.75rem", color: refinePrompt.length > 1200 ? "orange" : "#9ca3af" }}>{refinePrompt.length}/1500</span>
-        </div>
-        <textarea
-          id="refine"
-          className="textarea"
-          value={refinePrompt}
-          maxLength={1500}
-          onChange={(event) => onRefinePromptChange(event.target.value)}
-        />
-        <button type="button" className="button secondary" onClick={startRefine} disabled={loading} style={{ marginTop: 12 }}>
-          Apply Refinement
-        </button>
-      </div>
-
-      <ShopDeckPanel deck={deck} />
-
-      <div className="panel results-card">
-        <div className="label">Export Deck</div>
-        <div className="export-row">
-          <select className="select" value={exportTarget} onChange={(event) => setExportTarget(event.target.value as ExportTarget)}>
-            <option value="plain">Plain Text</option>
-            <option value="arena">MTG Arena</option>
-            <option value="csv">CSV</option>
-            <option value="moxfield">Moxfield</option>
-          </select>
-          <button type="button" className="button secondary" onClick={() => onExport(exportTarget)}>Build Export</button>
-        </div>
-        {exportContent ? (
-          <pre className="export-output">{exportContent}</pre>
-        ) : (
-          <p className="muted" style={{ marginTop: 12 }}>
-            Render this list as plain text, Arena import text, CSV, or Moxfield formatting.
-          </p>
-        )}
-      </div>
     </>
   );
 }

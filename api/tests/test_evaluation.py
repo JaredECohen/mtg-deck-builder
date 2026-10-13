@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 
 from app.sim import evaluate_deck, wilson_interval
 from app.sim.evaluation import _card_advantage_density
 from app.sim.meta_archetypes import burn, midrange_goodstuff_cmd, mono_red_std
-from app.optimizer.fitness import compute_fitness, fitness_score, _aggregate_role_profile
+from app.optimizer.fitness import compute_fitness
 
 
 def test_wilson_interval_basic_properties():

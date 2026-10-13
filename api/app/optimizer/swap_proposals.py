@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Iterable
 
 from app.oracle.profile import CardProfile
 from app.optimizer.fitness import FitnessVector
@@ -91,7 +90,6 @@ def propose_constraint_repair_swaps(
             if tl.lower().startswith("basic") and p.name not in locked
         ]
         # Find non-land non-locked candidates from pool that fit colors.
-        colors = set(constraints.colors or [])
         non_land_pool = [pa for pa in pool if "land" not in pa[1].lower()]
         non_land_pool = _filter_legal_adds(non_land_pool, deck, constraints)
         # Sort non-lands by role priority.

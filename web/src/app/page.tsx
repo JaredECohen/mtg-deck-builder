@@ -12,7 +12,7 @@ export default function HomePage() {
           <p className="subhead">Pick a format, colors, and strategy. Get a legal deck with transparent provenance.</p>
         </div>
         <ul className="hero-bullets" aria-label="What this builds">
-          <li><strong>Corpus-backed</strong><span>Sources labeled per card.</span></li>
+          <li><strong>Honest provenance</strong><span>Every result says what it was built from.</span></li>
           <li><strong>Legality enforced</strong><span>Color identity gated end-to-end.</span></li>
           <li><strong>Build or analyze</strong><span>Generate, or import for coaching.</span></li>
         </ul>

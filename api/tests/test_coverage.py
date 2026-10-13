@@ -399,8 +399,8 @@ def test_validate_constructed_deck_size_under() -> None:
     assert any("60" in err for err in payload["errors"])
 
 
-def test_validate_constructed_deck_size_over() -> None:
-    """61-card deck should fail validation with a size error."""
+def test_validate_constructed_deck_size_over_is_legal() -> None:
+    """60 is a minimum, not an exact size: a 61-card deck has no size error."""
     mainboard = [{"name": "Mountain", "quantity": 61}]
     response = client.post("/v1/decks/validate", json={
         "format": "modern",
@@ -409,8 +409,7 @@ def test_validate_constructed_deck_size_over() -> None:
     })
     assert response.status_code == 200
     payload = response.json()
-    assert payload["is_legal"] is False
-    assert any("60" in err for err in payload["errors"])
+    assert not any("60" in err for err in payload["errors"])
 
 
 def test_validate_insufficient_blue_sources() -> None:
