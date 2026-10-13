@@ -52,6 +52,7 @@ from app.rules import copy_limit, is_basic_land, is_land_card
 from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
 from app.services import brackets as bracket_rules
 from app.services.deck_diff import diff_decks
+from app.services.game_plan import build_game_plan
 from app.services.grounding import card_mentions, ground_text
 from app.services.builtin_archetypes import (
     BuiltinArchetype,
@@ -528,6 +529,16 @@ class DeckGenerator:
                 + ("…" if len(deck.unpriced_cards) > 5 else "")
             )
         deck.alternatives = self._alternatives(outcome, deck)
+        deck.game_plan = build_game_plan(
+            format_name=deck.format,
+            mainboard=deck.mainboard,
+            sideboard=deck.sideboard,
+            commander=deck.commander,
+            tags=deck.playstyle_tags + deck.theme_tags,
+            archetypes=[a for a in self.repository.archetypes_for_format(deck.format)
+                        if deck.selected_archetype is None or a.name != deck.selected_archetype.name],
+            repository=self.repository,
+        )
         if deck.format == "commander":
             names = [ref.name for ref in deck.mainboard] + ([deck.commander] if deck.commander else [])
             deck.bracket = bracket_rules.assess(names, self.repository, target=user_request.bracket)

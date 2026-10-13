@@ -148,3 +148,22 @@ def test_bracket_three_allows_requested_game_changers_only():
     )
     assert set(deck["bracket"]["game_changers"]) <= {"Rhystic Study"}
     assert "Rhystic Study" in _names(deck)
+
+
+# ── A6: game plan ────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("fmt", ["standard", "modern", "commander"])
+def test_every_deck_gets_a_game_plan(fmt):
+    body = {"format": fmt, "colors": ["R", "G"], "playstyle_tags": ["aggro"]}
+    deck = _generate(**body)
+    plan = deck["game_plan"]
+    assert plan["summary"] and plan["win_conditions"] and plan["opening_hand"] and plan["mulligan"]
+    in_deck = _names(deck) | ({deck["commander"]} if deck["commander"] else set())
+    assert set(plan["win_conditions"]) <= in_deck
+    if fmt != "commander":
+        guided = {entry["card"] for entry in plan["sideboard_guide"]}
+        assert guided == _names(deck, "sideboard")
+        assert all(entry["take_out"] for entry in plan["sideboard_guide"])
+    else:
+        assert plan["commander_packages"]
