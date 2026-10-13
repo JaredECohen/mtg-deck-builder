@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections import Counter, defaultdict
 
 from app.rules import is_land_card
+from app.services.sideboard_classes import classify
 from app.models import (
     AnalyzeDeckRequest,
     DeckAdviceGroup,
@@ -19,13 +21,21 @@ from app.models import (
 from app.constants import ROLE_MAP
 from app.services.card_repository import CardRepository
 
+_DRAW_TEXT = re.compile(r"draw (?:a|two|three|\w+) cards?|investigate|look at the top", re.IGNORECASE)
+_REACH_TEXT = re.compile(r"damage to (?:any target|target player|each opponent|target opponent)", re.IGNORECASE)
+_RAMP_TEXT = re.compile(r"add \{|search your library for (?:a|up to \w+) (?:basic )?land", re.IGNORECASE)
+
 SIMILARITY_HIGH = 0.60
 SIMILARITY_MEDIUM = 0.35
 
 
 def _norm(s: str) -> str:
-    """Normalize card names for comparison: NFKD unicode + casefold handles Æ vs Ae etc."""
-    return unicodedata.normalize("NFKD", s).casefold()
+    """Normalize card names for comparison: accents stripped (NFKD then drop
+    combining marks, so "Lim-Dûl" == "Lim-Dul"), Æ → ae, casefolded. NFKD on
+    its own leaves the combining accent in place."""
+    text = s.replace("Æ", "Ae").replace("æ", "ae")
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
+    return text.casefold()
 from app.services.deck_validator import DeckValidator
 from app.services.llm_service import enrich_deck_analysis
 
@@ -281,10 +291,11 @@ class DeckAnalysisService:
         if role_counts.get("interaction", 0) < (8 if request.format == "commander" else 6):
             advice.add_more_of.append("Add more cheap interaction so the deck can survive to its core plan.")
             suggestions.append(self._suggest_package(request, "interaction", nearest_archetype, dominant_tags, colors))
-        if role_counts.get("mana development", 0) < (8 if request.format == "commander" else 2):
+        aggro = self._is_low_curve_aggro(request, dominant_tags)
+        if not aggro and role_counts.get("mana development", 0) < (8 if request.format == "commander" else 2):
             advice.add_more_of.append("Increase mana development or smoothing so the deck reaches its key turns more consistently.")
             suggestions.append(self._suggest_package(request, "ramp", nearest_archetype, dominant_tags, colors))
-        if role_counts.get("card advantage", 0) < (8 if request.format == "commander" else 4):
+        if role_counts.get("card advantage", 0) < (8 if request.format == "commander" else 2 if aggro else 4):
             advice.add_more_of.append("Add more card advantage so the deck does not run out of gas after the first exchange.")
             suggestions.append(self._suggest_package(request, "draw", nearest_archetype, dominant_tags, colors))
         if role_counts.get("threat", 0) < (18 if request.format == "commander" else 12):
@@ -441,7 +452,17 @@ class DeckAnalysisService:
             return "threat"
         type_line = card.type_line or ""
         if "Instant" in type_line or "Sorcery" in type_line:
-            return "interaction"
+            # From the card's text, not a blanket "interaction".
+            text = card.oracle_text or ""
+            if classify(card) is not None:
+                return "interaction"
+            if _DRAW_TEXT.search(text):
+                return "card advantage"
+            if _REACH_TEXT.search(text):
+                return "threat"
+            if _RAMP_TEXT.search(text):
+                return "mana development"
+            return "flex"
         if "Planeswalker" in type_line:
             return "threat"
         if "Artifact" in type_line or "Enchantment" in type_line:
@@ -454,8 +475,16 @@ class DeckAnalysisService:
             card = self.repository.get_card(ref.name)
             if not card or is_land_card(card):
                 continue
-            tag_counts.update(tag for tag in card.tags if tag not in {"land", "mana"})
-        threshold = max(2, len(refs) // 15)
+            for tag in card.tags:
+                if tag not in {"land", "mana"}:
+                    tag_counts[tag] += ref.quantity
+        # Weighted by copies, and scaled to the deck: a theme is dominant when
+        # roughly one in eight nonland cards carries it (60 and 100 cards alike).
+        nonland_cards = sum(
+            ref.quantity for ref in refs
+            if (card := self.repository.get_card(ref.name)) is not None and not is_land_card(card)
+        )
+        threshold = max(2, round(nonland_cards * 0.12))
         return [tag for tag, count in tag_counts.most_common(4) if count >= threshold]
 
     def _build_swap_recommendations(
@@ -489,7 +518,7 @@ class DeckAnalysisService:
                 used_cuts.add(cut_name)
                 used_adds.add(add_name)
 
-        role_needs = self._role_needs(request.format, role_counts, high_end)
+        role_needs = self._role_needs(request.format, role_counts, high_end, aggro=self._is_low_curve_aggro(request, dominant_tags))
         cut_candidates = self._rank_cut_candidates(
             request=request,
             role_counts=role_counts,
@@ -512,6 +541,7 @@ class DeckAnalysisService:
                 preferred_names=preferred_names,
                 limit=6,
             )
+            add_candidates = [item for item in add_candidates if self._fits_deck_colors(str(item["name"]), colors)]
             add_choice = next((item for item in add_candidates if item["name"] not in used_adds), None)
             cut_choice = next((item for item in cut_candidates if item["name"] not in used_cuts), None)
             if not add_choice or not cut_choice:
@@ -549,6 +579,10 @@ class DeckAnalysisService:
             card = self.repository.get_card(ref.name)
             if not card or is_land_card(card):
                 continue
+            # A 3-4-of is a deliberate core piece; the analysis used to
+            # suggest cutting a burn deck's Goblin Guides.
+            if request.format != "commander" and ref.quantity >= 3:
+                continue
             role = self._primary_role(card)
             score = 0.0
             reasons: list[str] = []
@@ -565,7 +599,7 @@ class DeckAnalysisService:
             if high_end >= (10 if request.format == "commander" else 8) and card.mana_value >= 5:
                 score += 4
                 reasons.append("adds to a top-heavy curve")
-            if request.format != "commander" and ref.quantity == 1 and ref.name.lower() not in off_plan:
+            if request.format != "commander" and ref.quantity == 1 and _norm(ref.name) not in off_plan:
                 score += 2
                 reasons.append("looks like a loose singleton rather than a core package piece")
             if score <= 0:
@@ -580,13 +614,17 @@ class DeckAnalysisService:
         candidates.sort(key=lambda item: float(item["score"]), reverse=True)
         return candidates
 
-    def _role_needs(self, format_name: str, role_counts: dict[str, int], high_end: int) -> list[tuple[str, str]]:
+    def _role_needs(
+        self, format_name: str, role_counts: dict[str, int], high_end: int, *, aggro: bool = False
+    ) -> list[tuple[str, str]]:
         needs: list[tuple[str, str]] = []
         if role_counts.get("interaction", 0) < self._role_target(format_name, "interaction"):
             needs.append(("interaction", "That swap improves the deck's ability to interact before it falls behind."))
-        if role_counts.get("mana development", 0) < self._role_target(format_name, "mana development"):
+        # Low-curve aggro doesn't want ramp, and wants less card draw.
+        if not aggro and role_counts.get("mana development", 0) < self._role_target(format_name, "mana development"):
             needs.append(("ramp", "That swap smooths the mana so the deck can reach its key turns more reliably."))
-        if role_counts.get("card advantage", 0) < self._role_target(format_name, "card advantage"):
+        draw_target = 2 if aggro else self._role_target(format_name, "card advantage")
+        if role_counts.get("card advantage", 0) < draw_target:
             needs.append(("draw", "That swap gives the list a better chance to keep seeing live cards."))
         if role_counts.get("threat", 0) < self._role_target(format_name, "threat") or high_end == 0:
             needs.append(("threat", "That swap gives the deck a cleaner way to convert its setup into actual pressure.")) 
@@ -603,6 +641,29 @@ class DeckAnalysisService:
             else:
                 lines.append(f"{ref.quantity}x {ref.name}")
         return "\n".join(lines)
+
+    def _is_low_curve_aggro(self, request: AnalyzeDeckRequest, dominant_tags: list[str]) -> bool:
+        if request.format == "commander":
+            return False
+        if set(dominant_tags) & {"aggro", "burn", "pressure", "prowess"}:
+            return True
+        spells = [
+            (card, ref.quantity) for ref in request.mainboard
+            if (card := self.repository.get_card(ref.name)) is not None and not is_land_card(card)
+        ]
+        count = sum(qty for _, qty in spells)
+        return bool(count) and sum(card.mana_value * qty for card, qty in spells) / count <= 2.2
+
+    def _fits_deck_colors(self, name: str, colors: list[str]) -> bool:
+        card = self.repository.get_card(name)
+        if card is None:
+            return False
+        identity = set(card.color_identity or card.colors)
+        if not identity:
+            # Colorless spells only when they're generic artifacts (Eldrazi
+            # cards like Kozilek's Command want their own shell).
+            return "Artifact" in card.type_line
+        return not colors or identity <= set(colors)
 
     @staticmethod
     def _role_target(format_name: str, role: str) -> int:

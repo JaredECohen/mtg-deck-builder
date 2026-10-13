@@ -265,3 +265,33 @@ def test_owned_cards_are_preferred_and_free_against_the_budget():
     assert deck["cost_to_complete_usd"] is not None
     assert deck["cost_to_complete_usd"] <= 40
     assert deck["constraints"]["owned_cards"] == owned
+
+
+# ── A15: analysis advice ─────────────────────────────────────────────────
+
+_BURN = [
+    {"name": n, "quantity": 4} for n in [
+        "Lightning Bolt", "Goblin Guide", "Monastery Swiftspear", "Lava Spike", "Rift Bolt",
+        "Skewer the Critics", "Boros Charm", "Eidolon of the Great Revel", "Searing Blaze", "Lightning Helix",
+    ]
+] + [{"name": "Mountain", "quantity": 12}, {"name": "Sacred Foundry", "quantity": 4}, {"name": "Inspiring Vantage", "quantity": 4}]
+
+
+def test_aggro_analysis_never_pushes_ramp_or_cuts_playsets_outside_shell_alignment():
+    response = client.post("/v1/decks/analyze", json={"format": "modern", "mainboard": _BURN, "deep_analysis": False})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert not any("mana development" in line.lower() for line in body["advice"]["add_more_of"])
+    for swap in body["swap_recommendations"]:
+        assert swap["category"] != "Ramp"
+        if swap["category"] != "Shell Alignment":
+            assert swap["cut_card"] not in {ref["name"] for ref in _BURN}
+        add = repository.get_card(swap["add_card"])
+        assert add is not None and set(add.color_identity) <= {"R", "W"}
+
+
+def test_analysis_name_normalization_folds_accents():
+    from app.services.deck_analysis import _norm
+
+    assert _norm("Lim-Dûl's Vault") == _norm("Lim-Dul's Vault")
+    assert _norm("Æther Vial") == _norm("Aether Vial")
