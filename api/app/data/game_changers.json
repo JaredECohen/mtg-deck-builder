@@ -1,0 +1,49 @@
+{
+  "_about": "Commander Brackets data. WotC revises the Game Changers list; 'as_of' records the version this file reflects. Verify against https://magic.wizards.com/en/news/announcements (Commander Brackets) before relying on it, and update as_of when you do.",
+  "as_of": "2025-04-22",
+  "game_changers": [
+    "Drannith Magistrate", "Enlightened Tutor", "Humility", "Serra's Sanctum", "Smothering Tithe", "Teferi's Protection",
+    "Cyclonic Rift", "Expropriate", "Force of Will", "Fierce Guardianship", "Gifts Ungiven", "Intuition",
+    "Jin-Gitaxias, Core Augur", "Mystical Tutor", "Narset, Parter of Veils", "Rhystic Study", "Sway of the Stars",
+    "Thassa's Oracle", "Urza, Lord High Artificer",
+    "Ad Nauseam", "Bolas's Citadel", "Braids, Cabal Minion", "Demonic Tutor", "Imperial Seal", "Necropotence",
+    "Opposition Agent", "Orcish Bowmasters", "Tergrid, God of Fright", "Vampiric Tutor",
+    "Deflecting Swat", "Gamble", "Jeska's Will", "Underworld Breach",
+    "Crop Rotation", "Food Chain", "Gaea's Cradle", "Natural Order", "Seedborn Muse", "Survival of the Fittest",
+    "Vorinclex, Voice of Hunger", "Worldly Tutor",
+    "Aura Shards", "Coalition Victory", "Grand Arbiter Augustin IV", "Kinnan, Bonder Prodigy", "Notion Thief",
+    "Winota, Joiner of Forces", "Yuriko, the Tiger's Shadow",
+    "Ancient Tomb", "Chrome Mox", "Field of the Dead", "Glacial Chasm", "Grim Monolith", "Lion's Eye Diamond",
+    "Mana Vault", "Mishra's Workshop", "Mox Diamond", "Panoptic Mirror", "The One Ring",
+    "The Tabernacle at Pendrell Vale"
+  ],
+  "mass_land_denial": [
+    "Armageddon", "Ravages of War", "Catastrophe", "Jokulhaups", "Obliterate", "Decree of Annihilation",
+    "Sunder", "Boom // Bust", "Impending Disaster", "Destructive Force", "Wildfire", "Ruination", "Epicenter",
+    "Global Ruin", "Winter Orb", "Static Orb", "Hokori, Dust Drinker", "Back to Basics", "Blood Moon",
+    "Magus of the Moon", "Contamination", "Death Cloud", "Myojin of Infinite Rage", "Apocalypse", "Devastation",
+    "Keldon Firebombers", "Tectonic Break", "Thoughts of Ruin", "Bearer of the Heavens"
+  ],
+  "commander_two_card_combos": [
+    ["Thassa's Oracle", "Demonic Consultation"],
+    ["Thassa's Oracle", "Tainted Pact"],
+    ["Dramatic Reversal", "Isochron Scepter"],
+    ["Exquisite Blood", "Sanguine Bond"],
+    ["Heliod, Sun-Crowned", "Walking Ballista"],
+    ["Kiki-Jiki, Mirror Breaker", "Zealous Conscripts"],
+    ["Kiki-Jiki, Mirror Breaker", "Pestermite"],
+    ["Splinter Twin", "Deceiver Exarch"],
+    ["Niv-Mizzet, Parun", "Curiosity"],
+    ["Basalt Monolith", "Rings of Brighthearth"],
+    ["Peregrine Drake", "Deadeye Navigator"],
+    ["Mikaeus, the Unhallowed", "Triskelion"],
+    ["Devoted Druid", "Vizier of Remedies"],
+    ["Painter's Servant", "Grindstone"],
+    ["Food Chain", "Squee, the Immortal"],
+    ["Worldgorger Dragon", "Animate Dead"],
+    ["Ghostly Flicker", "Archaeomancer"],
+    ["Bloom Tender", "Freed from the Real"],
+    ["Sword of the Meek", "Thopter Foundry"],
+    ["Underworld Breach", "Brain Freeze"]
+  ]
+}

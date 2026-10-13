@@ -112,3 +112,39 @@ def test_best_of_one_has_no_sideboard():
     deck = _generate(format="modern", colors=["R"], playstyle_tags=["aggro"], match_type="bo1")
     assert deck["sideboard"] == []
     assert deck["constraints"]["match_type"] == "bo1"
+
+
+# ── A7: Commander brackets ───────────────────────────────────────────────
+
+
+def test_bracket_assessment_reads_game_changers_combos_and_mld():
+    from app.services.brackets import assess
+
+    casual = assess(["Sol Ring", "Llanowar Elves", "Forest"], repository)
+    assert casual.estimated == 2 and not casual.game_changers
+    upgraded = assess(["Rhystic Study", "Smothering Tithe", "Forest"], repository)
+    assert upgraded.estimated == 3 and upgraded.game_changers == ["Rhystic Study", "Smothering Tithe"]
+    optimized = assess(["Armageddon", "Thassa's Oracle", "Demonic Consultation"], repository)
+    assert optimized.estimated == 4
+    assert optimized.mass_land_denial == ["Armageddon"]
+    assert ["Thassa's Oracle", "Demonic Consultation"] in optimized.two_card_combos
+    assert optimized.game_changers_as_of
+
+
+@pytest.mark.parametrize("bracket", [1, 2])
+def test_low_bracket_build_has_no_game_changers_or_combos(bracket):
+    deck = _generate(format="commander", colors=["U", "B"], playstyle_tags=["control"], bracket=bracket)
+    assert deck["bracket"] is not None
+    assert deck["bracket"]["target"] == bracket
+    assert deck["bracket"]["game_changers"] == []
+    assert deck["bracket"]["mass_land_denial"] == []
+    assert deck["bracket"]["two_card_combos"] == []
+
+
+def test_bracket_three_allows_requested_game_changers_only():
+    deck = _generate(
+        format="commander", colors=["U", "B"], playstyle_tags=["control"], bracket=3,
+        include_cards=["Rhystic Study"],
+    )
+    assert set(deck["bracket"]["game_changers"]) <= {"Rhystic Study"}
+    assert "Rhystic Study" in _names(deck)

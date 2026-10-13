@@ -50,6 +50,7 @@ from app.constants import (
 from app.config import DATA_DIR
 from app.rules import copy_limit, is_basic_land, is_land_card
 from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
+from app.services import brackets as bracket_rules
 from app.services.deck_diff import diff_decks
 from app.services.grounding import card_mentions, ground_text
 from app.services.builtin_archetypes import (
@@ -527,6 +528,14 @@ class DeckGenerator:
                 + ("…" if len(deck.unpriced_cards) > 5 else "")
             )
         deck.alternatives = self._alternatives(outcome, deck)
+        if deck.format == "commander":
+            names = [ref.name for ref in deck.mainboard] + ([deck.commander] if deck.commander else [])
+            deck.bracket = bracket_rules.assess(names, self.repository, target=user_request.bracket)
+            if user_request.bracket is not None and deck.bracket.estimated > max(user_request.bracket, 2):
+                deck.warnings.append(
+                    f"This list reads as bracket {deck.bracket.estimated}, above the requested bracket "
+                    f"{user_request.bracket}: " + "; ".join(deck.bracket.notes[:2])
+                )
         return deck
 
     def _color_sources(self, mainboard: list[CardRef], colors: list[str]) -> list[ColorSourcePoint]:
@@ -1467,6 +1476,9 @@ class DeckGenerator:
         def covers_request(identity: set[str]) -> bool:
             return requested_set.issubset(identity)
 
+        # Brackets 1-2 allow no Game Changers, the commander included.
+        banned = self._bracket_exclusions(request)
+        candidates = [c for c in candidates if not (c.commander and c.commander.lower() in banned)]
         if requested_set:
             candidates = [c for c in candidates if c.commander and identity_of(c.commander).issubset(requested_set)]
         elif colors and set(colors) == {"C"}:
@@ -1476,6 +1488,7 @@ class DeckGenerator:
         archetype_identity = identity_of(archetype.commander)
         archetype_commander_ok = (
             archetype_commander_card is not None
+            and archetype_commander_card.name.lower() not in banned
             and self.repository.is_legal_commander(archetype_commander_card)
             and (
                 not archetype_identity if colorless_only
@@ -1518,7 +1531,7 @@ class DeckGenerator:
                     f"Selected {candidate.commander} for color fit ({color_fit}), theme fit ({theme_fit}), "
                     f"support depth ({support_depth}), and commander package coherence ({mechanical_coherence:.0f})."
                 )
-        pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags)
+        pool_commander, pool_reason = self._best_card_pool_commander(colors, requested_tags, banned)
         if pool_commander is not None:
             pool_identity = identity_of(pool_commander)
             pool_score = 18 + len(requested_set & pool_identity) * 8
@@ -1630,7 +1643,7 @@ class DeckGenerator:
     ) -> list[CardRef]:
         counts = Counter[str]()
         commander_identity = self._commander_identity(commander, colors)
-        excluded = self._excluded_names(request.exclude_cards)
+        excluded = self._excluded_names(request.exclude_cards) | self._bracket_exclusions(request)
         # The commander is the 100th card, never one of the 99. Corpus
         # signature packages list it, so exclude it from every fill path.
         if commander:
@@ -1726,6 +1739,12 @@ class DeckGenerator:
         self._trim_to_size(counts, list(commander_identity), LAND_TARGET_COMMANDER, protected, requested, deck_size=COMMANDER_DECK_SIZE)
         while self._total_cards(counts) < COMMANDER_DECK_SIZE:
             self._add_basic_land(counts, list(commander_identity))
+        # Brackets 1-2: no two-card combos. Cut one piece of each and refill.
+        for victim in bracket_rules.combo_pieces_to_cut(set(counts) | {commander or ""}, request.bracket, requested | {commander or ""}):
+            if counts.pop(victim, 0):
+                excluded.add(victim.lower())
+                if not self._add_ranked_candidate(counts, ranked_nonlands, request.format, list(commander_identity), request.budget, excluded, commander_name=commander):
+                    self._add_basic_land(counts, list(commander_identity))
         self._enforce_total_budget(
             counts, request.budget, request.format, list(commander_identity), ranked_nonlands, excluded,
             requested | ({commander} if commander else set()), trace, fits=fits_identity,
@@ -2445,7 +2464,9 @@ class DeckGenerator:
             return True
         return False
 
-    def _best_card_pool_commander(self, colors: list[str], requested_tags: list[str]) -> tuple[str | None, str | None]:
+    def _best_card_pool_commander(
+        self, colors: list[str], requested_tags: list[str], banned: set[str] | None = None
+    ) -> tuple[str | None, str | None]:
         requested_color_set = set(colors)
         expanded_tags = set(requested_tags)
         for tag in requested_tags:
@@ -2455,7 +2476,7 @@ class DeckGenerator:
         # (covers every requested color, score): see _select_commander.
         best_rank: tuple[bool, float] = (False, float("-inf"))
         for card in self.repository.all_cards():
-            if not self.repository.is_legal_commander(card):
+            if not self.repository.is_legal_commander(card) or (banned and card.name.lower() in banned):
                 continue
             identity = set(card.color_identity or card.colors)
             if requested_color_set == {"C"}:
@@ -2707,6 +2728,21 @@ class DeckGenerator:
             counts[card.name] += 1
             return
         self._add_basic_land(counts, colors)
+
+    @cached_property
+    def _bracket_pool(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Mass-land-denial and extra-turn card names in the pool (computed
+        once; oracle-text scans over 33k cards are too slow per request)."""
+        mld = frozenset(card.name for card in self.repository.all_cards() if bracket_rules.is_mass_land_denial(card))
+        extra = frozenset(card.name for card in self.repository.all_cards() if bracket_rules.is_extra_turn(card))
+        return mld, extra
+
+    def _bracket_exclusions(self, request: GenerateDeckRequest) -> set[str]:
+        if request.format != "commander" or request.bracket is None or request.bracket >= 4:
+            return set()
+        allow = {card.name for name in request.include_cards if (card := self.repository.get_card(name))}
+        mld, extra = self._bracket_pool
+        return bracket_rules.excluded_for_bracket(request.bracket, allow, mld, extra)
 
     def _excluded_names(self, names: list[str]) -> set[str]:
         """Lower-cased exclusions, plus each one's canonical card name, so

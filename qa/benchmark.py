@@ -232,7 +232,7 @@ METRIC_HELP = {
     "color_fidelity": "no card outside requested colors / commander identity, every requested color on a nonland card",
     "budget_adherence": "recomputed price (main + side + commander) <= requested budget",
     "sideboard_completeness": "constructed bo3 sideboard = 15, bo1 = 0",
-    "bracket_compliance": "bracket.estimated <= target, and no game changers when target <= 2",
+    "bracket_compliance": "bracket.estimated <= max(target, 2) (a list shows a floor of 2), and no game changers when target <= 2",
     "refine_success": "scripted refine drops the excluded card, adds the included one, keeps lands, stays legal",
     "prompt_fidelity": "prompt-only request honors the prompt's colors / price / commander",
 }
@@ -551,7 +551,9 @@ def run_scenario(client: Any, repository: Any, scenario: Scenario, timer: Timer)
         else:
             parts = []
             est = assessment.get("estimated")
-            if est is None or est > target:
+            # A list can only show a floor of bracket 2: bracket 1 (Exhibition)
+            # is about theme and table intent (see app/services/brackets.py).
+            if est is None or est > max(target, 2):
                 parts.append(f"estimated {est} > target {target}")
             gcs = assessment.get("game_changers") or []
             if target <= 2 and gcs:

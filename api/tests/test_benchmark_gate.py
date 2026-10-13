@@ -57,37 +57,31 @@ def gate_report():
     return report["summary"]["overall"]
 
 
-# Measured on the fixture DB at 3e0672e (feat/spec-gaps API contract commit):
-# http 40/40, legality 40/40, deck size 40/40, lands 40/40, color 32/32,
-# budget 16/18, sideboard 9/28, bracket 0/8, refine 11/24, prompt 2/8.
+# Every metric is at 100% on the fixture since the stream-A engine work
+# (feat/spec-gaps, 2026-10-12). Floors equal targets: any regression fails CI.
+# Baseline at the API-contract commit 3e0672e, for the record: budget 16/18,
+# sideboard 9/28, bracket 0/8, refine 11/24, prompt 2/8.
 FLOORS = {
     "http_success": 1.0,
     "legality": 1.0,
     "deck_size": 1.0,
     "land_count": 1.0,
     "color_fidelity": 1.0,
-    "budget_adherence": 0.88,
-    "sideboard_completeness": 0.32,
-    "refine_success": 0.45,
-    "prompt_fidelity": 0.25,
-    # bracket_compliance is 0/8 today (no assessment is returned yet), so it
-    # has no floor; its target test below tracks it.
+    "budget_adherence": 1.0,
+    "sideboard_completeness": 1.0,
+    "bracket_compliance": 1.0,
+    "refine_success": 1.0,
+    "prompt_fidelity": 1.0,
 }
 
-_PENDING = "engine fix in progress (feat/spec-gaps stream A)"
 TARGETS = [
     pytest.param("legality", 1.0, id="legality"),
     pytest.param("color_fidelity", 0.95, id="color_fidelity"),
-    pytest.param("budget_adherence", 0.90, id="budget_adherence",
-                 marks=pytest.mark.xfail(strict=False, reason=f"budget: {_PENDING} (A2)")),
-    pytest.param("sideboard_completeness", 1.0, id="sideboard_completeness",
-                 marks=pytest.mark.xfail(strict=False, reason=f"15-card bo3 / empty bo1 sideboard: {_PENDING} (A3)")),
-    pytest.param("bracket_compliance", 1.0, id="bracket_compliance",
-                 marks=pytest.mark.xfail(strict=False, reason=f"bracket assessment and filtering: {_PENDING} (A7)")),
-    pytest.param("refine_success", 1.0, id="refine_success",
-                 marks=pytest.mark.xfail(strict=False, reason=f"excludes leak into the sideboard on refine: {_PENDING} (A1/A2)")),
-    pytest.param("prompt_fidelity", 0.90, id="prompt_fidelity",
-                 marks=pytest.mark.xfail(strict=False, reason=f"no-LLM prompt intent parser: {_PENDING} (A4)")),
+    pytest.param("budget_adherence", 0.90, id="budget_adherence"),
+    pytest.param("sideboard_completeness", 1.0, id="sideboard_completeness"),
+    pytest.param("bracket_compliance", 1.0, id="bracket_compliance"),
+    pytest.param("refine_success", 1.0, id="refine_success"),
+    pytest.param("prompt_fidelity", 0.90, id="prompt_fidelity"),
 ]
 
 
