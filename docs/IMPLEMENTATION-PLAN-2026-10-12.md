@@ -253,3 +253,59 @@ Each item lists files, approach and tests. The ID is the review's ID, or the spe
 - The backend suite and benchmark gate are green on the fixture, and the suite is green on the full DB.
 - `next build` and lint are clean.
 - Live QA of generate (all 5 formats), Commander with a bracket, refine/chat apply, save → share link → hydrate, export (all targets) and mobile width.
+
+---
+
+## 5. Status (end of 2026-10-12)
+
+All work is on `feat/spec-gaps`, which is stacked on `fix/review-quick-wins`; neither is merged or pushed.
+
+Results:
+- 456 backend tests pass on the fixture DB, and ruff is clean.
+- `tsc`, `next lint` and `next build` are clean.
+- `qa/benchmark.py` passes 100% of its 108 scenarios on all 10 metrics, on both the fixture and the full local DB ([qa/BENCHMARK.md](../qa/BENCHMARK.md), [qa/BENCHMARK-full-db.md](../qa/BENCHMARK-full-db.md)). The CI gate's floors are now 100%.
+- Live browser QA passed for:
+  - generate, with the progress stages, game plan, charts, "Why?" and alternatives;
+  - Commander at bracket 2;
+  - refine and revision history;
+  - save, then share link, then the `?deck=` link opening in Analyze;
+  - mobile at 375 px, with no console errors.
+
+| Item | Status |
+|---|---|
+| A1 constraint persistence and refine diff | Done |
+| A2 includes, excludes, budget, unpriced cards, substitutions, total-budget pass | Done |
+| A3 15-card sideboards and Bo1 | Done |
+| A4 deterministic brief and refine parsing | Done, including commander names and "add 4x X / cut Y / swap A for B" |
+| A5 explanation grounding | Done |
+| A6 game plan | Done |
+| A7 Commander brackets | Done. The Game Changers list is versioned as of 2025-04-22; **verify it against WotC's current list** |
+| A8 modes | Done. Fast-competitive and constraint-aware can pick the same shell when the best theme match is also the most played |
+| A9 alternatives / `archetype_name` | Done |
+| A10 retrieval and titles | Done: titles name the colors played, and curated seeds are preferred over borrowed shells. Recency weighting has `last_seen` stored, but the synthetic corpus has one date, so it has no effect yet |
+| A11 corpus honesty | Done. `var/` was rebuilt; the backup is at `var/mtg_deck_builder.backup-2026-10-12.db` |
+| A12 optimizer default path | Done. It is safe but seldom finds an improvement, and is slow (7–28 s); it stays opt-in |
+| A13 name lookup | Done |
+| A14 MDFC counting | Done |
+| A15 analysis advice | Done |
+| A16 land ranges | Done (curve-aware) |
+| A17 collection-aware | Done |
+| A18 meta `as_of` / matchups | Done. Matchup notes are in `game_plan` |
+| A19 similar filters, Archidekt, Arena | Done |
+| A20 data freshness | Done. The local data is 87 days old, so decks carry a "stale" note until `ingest_scryfall` is rerun |
+| A21 cache, stage logs, warm-up | Done |
+| A22 gating, limits, proxies, affiliate | Done |
+| A23 tooling | Done |
+| B1–B12 frontend | Done (agent stream, merged) |
+| C1–C3 evaluation harness and gate | Done (agent stream, merged) |
+
+Deferred, each with a reason:
+- **Real observed tournament and Commander lists.** These need licensed data; the import path exists.
+- **A learned embedding model.** Budget stand-ins are only as good as the feature-hash similarity.
+- **Multi-tenant auth.** Spec phase 4.
+- **Alembic migrations.** The one known schema drift is handled at startup.
+- **Price coverage.** About 22% of cards have no price. This is a data issue: they are surfaced, not guessed.
+- **`set_type` backfill.** The script needs network access to Scryfall.
+- **Human-review rubric (§21).** This is not automatable.
+- **Mono-color requests whose playstyle has no matching seed.** Mono-blue control, for example, still borrows a broader shell's name; the cards stay on-color.
+- **Analysis provenance banner.** It shows "fallback" next to a retrieved shell; this is cosmetic.
