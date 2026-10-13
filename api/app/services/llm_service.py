@@ -227,10 +227,20 @@ Rules:
 
 
 def interpret_generate_prompt(prompt: str) -> GeneratePromptIntent:
-    """Extract structured deck constraints from a free-text generation prompt."""
-    client = _get_client()
-    if not client or not prompt.strip():
+    """Extract structured deck constraints from a free-text generation prompt.
+
+    Without an LLM (no key, or the call fails) the deterministic parser in
+    ``prompt_intent`` recovers what the brief states outright, so colors and
+    budgets are never silently dropped (spec §25 deterministic fallback).
+    """
+    from app.services.prompt_intent import parse_brief
+
+    if not prompt.strip():
         return GeneratePromptIntent()
+    fallback = GeneratePromptIntent.model_validate(parse_brief(prompt))
+    client = _get_client()
+    if not client:
+        return fallback
     try:
         response = client.messages.create(
             model=_FAST_MODEL,
@@ -240,10 +250,16 @@ def interpret_generate_prompt(prompt: str) -> GeneratePromptIntent:
         )
         log_usage("interpret_generate_prompt", _FAST_MODEL, getattr(response, "usage", None))
         data: dict[str, Any] = _extract_json(response)
-        return GeneratePromptIntent.model_validate(data)
+        intent = GeneratePromptIntent.model_validate(data)
+        # A number the brief states outright beats an LLM omission.
+        if intent.budget is None and fallback.budget is not None:
+            intent.budget = fallback.budget
+        if not intent.colors and fallback.colors:
+            intent.colors = fallback.colors
+        return intent
     except Exception:
-        logger.warning("LLM generate prompt interpretation failed; ignoring prompt", exc_info=True)
-        return GeneratePromptIntent()
+        logger.warning("LLM generate prompt interpretation failed; using the deterministic parser", exc_info=True)
+        return fallback
 
 
 # ── Deck analysis enrichment ───────────────────────────────────────────────────

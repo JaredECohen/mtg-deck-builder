@@ -51,6 +51,7 @@ from app.config import DATA_DIR
 from app.rules import copy_limit, is_basic_land, is_land_card
 from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
 from app.services.deck_diff import diff_decks
+from app.services.grounding import ground_text
 from app.services.builtin_archetypes import (
     BuiltinArchetype,
     blend_archetypes,
@@ -126,10 +127,6 @@ class DeckGenerator:
         self.validator = validator
 
     def generate(self, request: GenerateDeckRequest) -> DeckResponse:
-        # The caller's own constraints, before prompt parsing and seed
-        # anchors are merged in. Persisted on the response so a refine keeps
-        # them (budget, excludes, ...).
-        user_request = request
         trace = _BuildTrace()
         if request.prompt:
             intent = interpret_generate_prompt(request.prompt)
@@ -142,6 +139,11 @@ class DeckGenerator:
                 "include_cards": list(dict.fromkeys(request.include_cards + intent.include_cards)),
                 "exclude_cards": list(dict.fromkeys(request.exclude_cards + intent.exclude_cards)),
             })
+
+        # The user's constraints (explicit fields plus what the brief stated),
+        # before archetype anchors are merged in. Persisted on the response so
+        # a refine keeps them (budget, excludes, ...).
+        user_request = request
 
         # Built-in archetype seeds: when the brief names known shell(s) that
         # the tournament corpus doesn't cover (Burn, Tron, Yawgmoth, ...), we
@@ -385,6 +387,18 @@ class DeckGenerator:
         else:
             title = self._build_title(request, base, commander)
             strategy_summary = base.strategy
+
+        # Prose must describe the deck that was built: drop sentences that
+        # name cards filtering or the LLM left out of the final list.
+        in_deck = {ref.name for ref in mainboard + sideboard} | ({commander} if commander else set())
+        grounded, removed = ground_text(strategy_summary, in_deck, self.repository)
+        if removed:
+            strategy_summary = grounded or (
+                f"{title}: built from the {base.name} shell and filled from the {request.format} card pool."
+            )
+            provenance.notes.append(
+                f"Removed {len(removed)} summary sentence(s) that named cards not in this list."
+            )
 
         deck = DeckResponse(
             format=request.format,
