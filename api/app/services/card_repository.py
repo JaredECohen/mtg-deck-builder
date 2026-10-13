@@ -481,8 +481,9 @@ class CardRepository:
 
         evidence_count = sum(max(0, archetype.source_count) for archetype in archetypes)
         confidence = min(0.95, 0.55 + math.log1p(evidence_count) * 0.08)
+        template = all(archetype.metadata.evidence == "template" for archetype in archetypes)
         return DeckProvenance(
-            source_type="corpus",
+            source_type="template" if template else "corpus",
             confidence=round(confidence, 3),
             evidence_count=evidence_count,
             retrieved_from=[archetype.name for archetype in archetypes[:5]],

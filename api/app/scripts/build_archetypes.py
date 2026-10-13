@@ -437,7 +437,18 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
         reverse=True,
     )[:5]
     archetype_type = "commander" if rep.commander else "constructed"
+    event_dates = [str(deck.event_date)[:10] for deck in decks if deck.event_date]
+    # Template evidence: every source deck was synthesized from a curated
+    # builtin or is bundled sample data, so the archetype encodes a shape,
+    # not observed tournament results.
+    evidence = (
+        "template"
+        if all((deck.source or "").startswith("synthesized") or deck.source == "sample" for deck in decks)
+        else "observed"
+    )
     metadata_json: dict[str, object] = {
+        "last_seen": max(event_dates) if event_dates else None,
+        "evidence": evidence,
         "signature_sample": build_signature(repository, rep),
         "source_event_names": sorted({deck.event_name for deck in decks}),
         "sample_deck_ids": [deck.id for deck in decks[:5]],

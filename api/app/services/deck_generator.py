@@ -897,7 +897,7 @@ class DeckGenerator:
             return _RetrievalOutcome(
                 base=base,
                 candidates=candidates,
-                source_type="corpus",
+                source_type="template" if base.metadata.evidence == "template" else "corpus",
                 confidence=confidence,
                 evidence_count=evidence,
                 retrieved_from=[archetype.name for archetype in candidates[:3]],
@@ -977,7 +977,7 @@ class DeckGenerator:
             outcome = _RetrievalOutcome(
                 base=archetype,
                 candidates=[archetype],
-                source_type="corpus",
+                source_type="template" if archetype.metadata.evidence == "template" else "corpus",
                 confidence=min(1.0, 0.55 + 0.05 * min(8, archetype.source_count)),
                 evidence_count=max(archetype.source_count, 1),
                 retrieved_from=[archetype.name],
@@ -1002,7 +1002,7 @@ class DeckGenerator:
             outcome = _RetrievalOutcome(
                 base=selected,
                 candidates=exact_matches,
-                source_type="corpus",
+                source_type="template" if selected.metadata.evidence == "template" else "corpus",
                 confidence=confidence,
                 evidence_count=sum(max(1, archetype.source_count) for archetype in exact_matches),
                 retrieved_from=[archetype.name for archetype in exact_matches[:3]],
@@ -1925,6 +1925,7 @@ class DeckGenerator:
             "fallback": f"No matching corpus shell was found — the deck was assembled from the legal card pool using deterministic role and color filters (low confidence: {outcome.confidence:.2f}).",
             "hybrid": f"Started from the {archetype.name} shell but most slots were filled by deterministic fallbacks (mixed confidence: {outcome.confidence:.2f}).",
             "builtin": f"Assembled from the curated {archetype.name} seed your brief matched, then filled from the legal card pool.",
+            "template": f"Started from the {archetype.name} template — a curated archetype shape, not observed tournament results — and filled from the legal card pool.",
         }[outcome.source_type]
         notes = [
             provenance_blurb,
@@ -1957,6 +1958,7 @@ class DeckGenerator:
             "fallback": f"No matching corpus shell — assembled from card pool. Confidence {outcome.confidence:.2f}.",
             "hybrid": f"Hybrid of corpus shell and card-pool fallback. Confidence {outcome.confidence:.2f}.",
             "builtin": f"Built from the curated {archetype.name} seed. Confidence {outcome.confidence:.2f}.",
+            "template": f"Template shell (curated, not observed results). Confidence {outcome.confidence:.2f}.",
         }[outcome.source_type]
         sections = [
             DeckSectionSummary(
@@ -2155,6 +2157,9 @@ class DeckGenerator:
         source_bias = {
             "builtin": 0.65,
             "corpus": 0.50,
+            # Synthesized-from-template shells: the shape is curated, the
+            # "evidence" is not observed play.
+            "template": 0.45,
             "hybrid": 0.35,
             "fallback": 0.20,
         }.get(outcome.source_type, 0.25)

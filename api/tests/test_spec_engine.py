@@ -212,3 +212,19 @@ def test_no_llm_refine_adds_the_requested_copies():
     refined = response.json()
     assert sum(r["quantity"] for r in refined["mainboard"] if r["name"] == "Burst Lightning") == 4
     assert refined["changes"]["summary"]["total_changes"] > 0
+
+
+# ── A11: corpus honesty ──────────────────────────────────────────────────
+
+
+def test_no_archetype_claims_an_absurd_land_package():
+    for archetype in repository.all_archetypes():
+        for package in archetype.metadata.land_packages:
+            assert (package.average_quantity or 0) <= 40, (archetype.name, package.name, package.average_quantity)
+
+
+def test_synthesized_shells_are_labelled_template():
+    deck = _generate(format="commander", colors=["B"], playstyle_tags=["sacrifice"])
+    assert deck["provenance"]["source_type"] in {"template", "hybrid", "fallback", "builtin"}
+    if deck["provenance"]["source_type"] == "template":
+        assert "not observed" in " ".join(deck["explanation"]).lower() or deck["sections"]

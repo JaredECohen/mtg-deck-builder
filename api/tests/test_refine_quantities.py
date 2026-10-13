@@ -45,10 +45,15 @@ def test_intent_parses_quantities_leniently():
     assert RefinementIntent.model_validate({"include_quantities": ["not", "a", "dict"]}).include_quantities == {}
 
 
-# A card the sample pool has but the generated shell does not carry, so only the
-# refinement can put it in the deck (Lightning Bolt is a core card of the shell
-# and the archetype packages would re-add it regardless of the intent).
-ADDED = "Lava Dart"
+# U/R, Modern-legal cards; each test uses the first one the generated shell
+# doesn't already run, so only the refinement can put it in the deck. (A fixed
+# card broke whenever the corpus changed what the shell carries.)
+_CANDIDATES = ("Lava Dart", "Fire // Ice", "Electrolyze", "Burst Lightning", "Spell Pierce", "Thought Scour", "Opt")
+
+
+def _absent_card(deck: dict) -> str:
+    present = {ref["name"] for ref in deck["mainboard"] + deck["sideboard"]}
+    return next(name for name in _CANDIDATES if name not in present)
 
 
 def _total(deck: dict) -> int:
@@ -67,7 +72,7 @@ def _with_one_copy(deck: dict, name: str) -> dict:
 
 def test_stated_count_becomes_the_number_of_copies(monkeypatch):
     deck = _generated_deck()
-    assert _count(deck, ADDED) == 0
+    ADDED = _absent_card(deck)
     refined = _refine_with(monkeypatch, deck, RefinementIntent(
         include_cards=[ADDED], include_quantities={ADDED: 4},
     ))
@@ -76,7 +81,9 @@ def test_stated_count_becomes_the_number_of_copies(monkeypatch):
 
 
 def test_stated_count_raises_an_existing_lower_count(monkeypatch):
-    deck = _with_one_copy(_generated_deck(), ADDED)
+    generated = _generated_deck()
+    ADDED = _absent_card(generated)
+    deck = _with_one_copy(generated, ADDED)
     refined = _refine_with(monkeypatch, deck, RefinementIntent(
         include_cards=[ADDED], include_quantities={ADDED: 3},
     ))
@@ -86,6 +93,7 @@ def test_stated_count_raises_an_existing_lower_count(monkeypatch):
 
 def test_a_card_named_without_a_count_still_seeds_one_copy(monkeypatch):
     deck = _generated_deck()
+    ADDED = _absent_card(deck)
     refined = _refine_with(monkeypatch, deck, RefinementIntent(include_cards=[ADDED]))
     assert _count(refined, ADDED) == 1
     assert _total(refined) == 60

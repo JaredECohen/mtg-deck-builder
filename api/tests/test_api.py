@@ -228,7 +228,7 @@ def test_commander_search_and_detail_endpoints() -> None:
     search_payload = search_response.json()
     assert search_payload["commanders"]
     search_provenance = search_payload["commanders"][0]["provenance"]
-    assert search_provenance["source_type"] in {"corpus", "fallback"}
+    assert search_provenance["source_type"] in {"corpus", "template", "fallback"}
     assert 0 <= search_provenance["confidence"] <= 1
     assert isinstance(search_provenance["retrieved_from"], list)
 
@@ -238,7 +238,7 @@ def test_commander_search_and_detail_endpoints() -> None:
     detail_payload = detail_response.json()["commander"]
     assert detail_payload["card"]["name"] == commander_name
     assert "strategy_summary" in detail_payload
-    assert detail_payload["provenance"]["source_type"] in {"corpus", "fallback"}
+    assert detail_payload["provenance"]["source_type"] in {"corpus", "template", "fallback"}
     assert detail_payload["provenance"]["evidence_count"] >= 0
 
 
@@ -530,7 +530,7 @@ def test_provenance_corpus_path_for_format_with_archetypes() -> None:
     )
     assert response.status_code == 200
     provenance = response.json()["provenance"]
-    assert provenance["source_type"] in {"corpus", "hybrid"}
+    assert provenance["source_type"] in {"corpus", "template", "hybrid"}
     assert provenance["fallback_used"] is False
     assert provenance["confidence"] >= 0.4
     assert provenance["evidence_count"] >= 1
