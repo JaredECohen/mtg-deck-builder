@@ -35,6 +35,7 @@ _FIXTURE = Path(__file__).parent / "fixtures" / "cards.db.gz"
 def _use_test_database() -> None:
     # Runs at conftest import, before any test module imports ``app``:
     # app.config reads DATABASE_URL once at import time.
+    os.environ.setdefault("MTG_WARM_CACHES", "0")
     override = os.getenv("MTG_TEST_DATABASE_URL")
     if override:
         os.environ["DATABASE_URL"] = override

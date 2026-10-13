@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
@@ -131,6 +132,7 @@ class DeckGenerator:
 
     def generate(self, request: GenerateDeckRequest) -> DeckResponse:
         trace = _BuildTrace()
+        started = time.perf_counter()
         if request.prompt:
             intent = interpret_generate_prompt(request.prompt)
             request = request.model_copy(update={
@@ -287,9 +289,11 @@ class DeckGenerator:
             sideboard = self._build_sideboard(base, request, colors, requested_tags, mainboard, trace=trace)
             commander_identity = set(colors)
 
+        built = time.perf_counter()
         validation = self.validator.validate(
             ValidateDeckRequest(format=request.format, mainboard=mainboard, sideboard=sideboard, commander=commander)
         )
+        validated = time.perf_counter()
         if request.format == "commander" and not validation.is_legal:
             details = "; ".join(validation.errors) or "unknown commander legality failure"
             raise ValueError(
@@ -458,7 +462,17 @@ class DeckGenerator:
             theme_tags=request.theme_tags,
             card_types=self.repository.card_types_for(mainboard + sideboard, commander),
         )
-        return self._enrich_response(deck, user_request=user_request, outcome=outcome)
+        enriched = self._enrich_response(deck, user_request=user_request, outcome=outcome)
+        done = time.perf_counter()
+        # One line per generation (spec §24/25 auditability): where the time
+        # went and what the result was built from.
+        logger.info(
+            "gen_stages format=%s source=%s retrieve_build_ms=%.0f validate_ms=%.0f explain_ms=%.0f total_ms=%.0f "
+            "legal=%s llm=%s",
+            request.format, outcome.source_type, (built - started) * 1000, (validated - built) * 1000,
+            (done - validated) * 1000, (done - started) * 1000, enriched.is_legal, bool(trace.llm_anchor_names),
+        )
+        return enriched
 
     # ── Commander named in a brief ───────────────────────────────────────
 
@@ -2970,6 +2984,19 @@ class DeckGenerator:
         shift = int(hashlib.sha1(key.encode("utf-8")).hexdigest(), 16) % len(head)
         shift = max(shift, len(head) // 3)
         return head[shift:] + head[:shift] + tail
+
+    def warm_caches(self) -> None:
+        """Precompute the lazily built pools (safe to call from a thread)."""
+        started = time.perf_counter()
+        try:
+            for format_name in ("standard", "pioneer", "modern", "legacy", "commander"):
+                self._sideboard_class_pools(format_name)
+            _ = self._bracket_pool
+            _ = self._commanders_by_first_name
+        except Exception:  # noqa: BLE001 - warming is best-effort
+            logger.warning("cache warm-up failed", exc_info=True)
+            return
+        logger.info("caches warmed in %.1fs", time.perf_counter() - started)
 
     def _owned_names(self, request: GenerateDeckRequest) -> frozenset[str]:
         return frozenset(card.name for name in request.owned_cards if (card := self.repository.get_card(name)))

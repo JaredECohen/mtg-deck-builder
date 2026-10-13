@@ -176,6 +176,11 @@ async def _lifespan(app: FastAPI):
     except Exception:
         logger.warning("card_profile coverage check failed", exc_info=True)
     card_refresh_service.start()
+    # Build the per-format sideboard pools and the bracket scans (oracle-text
+    # passes over the whole card pool) off the request path; the first
+    # generation otherwise pays ~10 s for them on the full dataset.
+    if os.getenv("MTG_WARM_CACHES", "1").lower() not in {"0", "false", "no"}:
+        threading.Thread(target=generator.warm_caches, name="warm-caches", daemon=True).start()
     try:
         yield
     finally:
