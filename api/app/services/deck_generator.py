@@ -340,7 +340,7 @@ class DeckGenerator:
         role_summary = self._build_role_summary(mainboard)
         sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
         mana_curve = self._build_mana_curve(mainboard)
-        card_notes = self._build_card_notes(mainboard, base, request, requested_tags)
+        card_notes = self._build_card_notes(mainboard, base, request, requested_tags, commander)
         # Queue sim validation for blends (2+ archetypes merged) so the
         # frontend can show a "validated by simulator" badge once the
         # optimizer finishes. Best-effort — any failure is swallowed so the
@@ -2150,6 +2150,63 @@ class DeckGenerator:
         "Escape", "Landfall", "Storm", "Affinity", "Infect", "Undying", "Persist",
     )
 
+    # Mechanics a commander can care about, read from oracle text. A card
+    # that shares one with its commander gets a note naming it. The ingest
+    # tags are too coarse for this: Korvold has no "sacrifice" tag.
+    _COMMANDER_MECHANICS: tuple[tuple[str, re.Pattern[str]], ...] = (
+        ("sacrifice", re.compile(r"\bsacrific", re.IGNORECASE)),
+        ("+1/+1 counters", re.compile(r"\+1/\+1 counter", re.IGNORECASE)),
+        ("tokens", re.compile(r"\bcreate\b[^.]*\btokens?\b", re.IGNORECASE)),
+        ("dies triggers", re.compile(r"\bdies\b", re.IGNORECASE)),
+        ("the graveyard", re.compile(r"\bgraveyard\b", re.IGNORECASE)),
+        ("lifegain", re.compile(r"\bgains? (?:\d+ |x |that much )?life\b|\blifelink\b", re.IGNORECASE)),
+        ("landfall", re.compile(r"\blands? (?:you control )?enters?\b|\blandfall\b", re.IGNORECASE)),
+        ("artifacts", re.compile(r"\bartifacts?\b", re.IGNORECASE)),
+        ("enchantments", re.compile(r"\benchantments?\b", re.IGNORECASE)),
+        ("instants and sorceries", re.compile(r"\binstant or sorcery\b|\binstant and sorcery\b", re.IGNORECASE)),
+        ("attacking", re.compile(r"\bwhenever [^.]*attacks\b|\battacking creatures?\b", re.IGNORECASE)),
+    )
+
+    @staticmethod
+    def _oracle_text(card: CardRecord) -> str:
+        return card.oracle_text or " ".join(face.oracle_text or "" for face in card.faces)
+
+    def _shared_mechanic(self, card: CardRecord, commander: CardRecord) -> str | None:
+        card_text = self._oracle_text(card)
+        commander_text = self._oracle_text(commander)
+        for label, pattern in self._COMMANDER_MECHANICS:
+            if pattern.search(commander_text) and pattern.search(card_text):
+                return label
+        return None
+
+    def _commander_provenance(
+        self,
+        card: CardRecord,
+        base: ArchetypeRecord | None,
+        commander: CardRecord,
+        role: str,
+    ) -> str | None:
+        """Commander-specific reasons, in the order the 99 are assembled."""
+        name = card.name.lower()
+        if any(name == staple.lower() for staple, _ in self._COMMANDER_BASELINE):
+            return "A Commander staple that almost every deck in these colors runs."
+        package = base.metadata.commander_package if base is not None else None
+        if package is not None:
+            for packages, label in (
+                (package.signature_cards, f"A signature card in {commander.name} decks."),
+                (package.synergy_packages, f"Part of {commander.name}'s synergy package."),
+                (package.ramp_package, f"Picked for {commander.name}'s ramp package."),
+                (package.draw_package, f"Picked for {commander.name}'s card-draw package."),
+                (package.interaction_package, f"Picked for {commander.name}'s interaction package."),
+                (package.land_package, f"A land from {commander.name}'s mana base package."),
+            ):
+                if any(p.name.lower() == name for p in packages):
+                    return label
+        mechanic = self._shared_mechanic(card, commander)
+        if mechanic:
+            return f"Works with {commander.name}: both care about {mechanic}."
+        return None
+
     def _card_summary(self, card: CardRecord) -> str:
         """What the card is, from its own data: "a 1-mana creature with haste"."""
         type_line = card.type_line or ""
@@ -2174,12 +2231,17 @@ class DeckGenerator:
         request: GenerateDeckRequest,
         requested_tags: list[str],
         role: str,
+        commander: CardRecord | None = None,
     ) -> str:
         """Why this card is in the deck, in the order the builder decides it."""
         name = card.name.lower()
         if any(name == included.lower() for included in request.include_cards):
             return "You asked for this card."
-        if base is not None:
+        if commander is not None:
+            reason = self._commander_provenance(card, base, commander, role)
+            if reason:
+                return reason
+        if base is not None and commander is None:
             metadata = base.metadata
             # Quote frequencies only when they come from real tournament
             # results. The curated templates are one synthesized list each,
@@ -2204,6 +2266,10 @@ class DeckGenerator:
         matched = [tag for tag in requested_tags if tag in card.tags]
         if matched:
             return f"Added as a {role} that fits the {matched[0]} plan you asked for."
+        if commander is not None:
+            if role == "mana base":
+                return f"A land that fits {commander.name}'s colors."
+            return f"One of the top-ranked {role} picks in {commander.name}'s colors."
         return f"Added to round out the deck's {role} slots."
 
     def _build_card_notes(
@@ -2212,15 +2278,20 @@ class DeckGenerator:
         base: ArchetypeRecord | None = None,
         request: GenerateDeckRequest | None = None,
         requested_tags: list[str] | None = None,
+        commander: str | None = None,
     ) -> list[DeckCardExplanation]:
         notes: list[DeckCardExplanation] = []
         request = request or GenerateDeckRequest(format="modern")
+        commander_card = self.repository.get_card(commander) if commander else None
+        if commander_card is not None and " // " in commander_card.name:
+            # Double-faced commanders read by their front face in prose.
+            commander_card = commander_card.model_copy(update={"name": commander_card.name.split(" // ")[0]})
         for ref in refs:
             card = self.repository.get_card(ref.name)
             if not card or is_basic_land(card):
                 continue
             role = self._primary_role(card)
-            why = self._card_provenance(card, base, request, requested_tags or [], role)
+            why = self._card_provenance(card, base, request, requested_tags or [], role, commander_card)
             what = self._card_summary(card)
             copies = f" Running {ref.quantity} copies." if ref.quantity > 1 else ""
             if what == "a land":

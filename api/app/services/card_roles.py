@@ -60,5 +60,10 @@ def primary_role(card: CardRecord | None) -> str:
     if is_spell:
         return _spell_role(card)
     if "Artifact" in type_line or "Enchantment" in type_line:
+        text = card.oracle_text or ""
+        if _RAMP_TEXT.search(text):
+            return "mana development"
+        if _DRAW_TEXT.search(text):
+            return "card advantage"
         return "engine"
     return "flex slot"

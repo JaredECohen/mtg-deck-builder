@@ -20,7 +20,7 @@ import { useDeckGenerator } from "@/hooks/use-deck-generator";
 import { useDeckRationale } from "@/hooks/use-deck-rationale";
 import { useExperienceMode } from "@/hooks/use-experience-mode";
 import type { GenerateDeckInput } from "@/lib/api";
-import { DEFAULT_BRIEFS, parseCardNameLines } from "@/lib/briefs";
+import { parseCardNameLines } from "@/lib/briefs";
 import { cardCount, diffCardLists } from "@/lib/deck-diff";
 import { loadRefineDraft, saveRefineDraft } from "@/lib/manual-draft";
 import { activeTags, parseBudgetInput, type StrategyId } from "@/lib/strategies";
@@ -46,11 +46,11 @@ type Props = {
 
 export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
   const [format, setFormat] = useState<FormatName>("modern");
-  const [colors, setColors] = useState<string[]>(["U", "R"]);
-  const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>(["aggro", "spellslinger"]);
-  const [prompt, setPrompt] = useState(DEFAULT_BRIEFS.modern);
-  // Until the user types their own brief, the brief follows the format.
-  const [promptEdited, setPromptEdited] = useState(false);
+  // Nothing is preselected: colors, strategies and the brief start empty so
+  // the first deck reflects only what the user chose.
+  const [colors, setColors] = useState<string[]>([]);
+  const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
+  const [prompt, setPrompt] = useState("");
   const [refinePrompt, setRefinePrompt] = useState(DEFAULT_REFINE_PROMPT);
   const [refineDraftLoaded, setRefineDraftLoaded] = useState(false);
   const [expertSettings, setExpertSettings] = useState<ExpertSettings>(DEFAULT_EXPERT_SETTINGS);
@@ -114,7 +114,6 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
 
   function handleFormatChange(next: FormatName) {
     setFormat(next);
-    if (!promptEdited) setPrompt(DEFAULT_BRIEFS[next]);
   }
 
   /** Builds the request from the form. Beginners send no expert fields at all. */
@@ -234,10 +233,7 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
           expertSettings={expertSettings}
           onExpertSettingsChange={setExpertSettings}
           prompt={prompt}
-          onPromptChange={(value, edited) => {
-            setPrompt(value);
-            setPromptEdited(edited && value.trim().length > 0);
-          }}
+          onPromptChange={(value) => setPrompt(value)}
           onSubmit={() => void handleGenerate()}
           loading={generator.loading}
         />
