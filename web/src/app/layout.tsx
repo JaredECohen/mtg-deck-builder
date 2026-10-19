@@ -4,11 +4,14 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { ADSENSE_CLIENT } from "@/lib/ads";
 
 export const metadata: Metadata = {
-  title: "MTG Deck Builder",
-  description: "Generate Magic: The Gathering decks with transparent reasoning.",
+  metadataBase: new URL("https://mtgdecklab.app"),
+  title: "MTG Deck Lab: Free Magic: The Gathering Deck Builder",
+  description:
+    "Build legal Magic: The Gathering decks for Standard, Pioneer, Modern, Legacy and Commander, with a reason for every card, a mana curve and a price.",
   // AdSense site verification reads this tag.
   ...(ADSENSE_CLIENT ? { other: { "google-adsense-account": ADSENSE_CLIENT } } : {}),
 };
@@ -29,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         ) : null}
       </head>
       <body>
+        <SiteHeader />
         {children}
         <SiteFooter />
       </body>

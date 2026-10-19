@@ -159,6 +159,16 @@ publisher ID is set:
    the UK and Switzerland. Google requires a certified consent tool there,
    and its own needs no code.
 
+## Guides (blog)
+
+Articles are MDX files in `web/content/blog/`. The README there is the style
+guide. Every `/blog` route, `sitemap.xml` and `/blog/rss.xml` are generated
+at build time, so publishing means merging a new `.mdx` file; Vercel deploys
+it. After the first deploy, submit `https://mtgdecklab.app/sitemap.xml` in
+Google Search Console. Set `NEXT_PUBLIC_ADSENSE_SLOT_IN_ARTICLE` to a display
+unit's slot ID to fill the `<InArticleAd />` breaks; without it, Auto ads
+decides placement.
+
 ## Operations
 
 | Task | Command |
