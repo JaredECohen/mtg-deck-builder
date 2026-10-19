@@ -141,6 +141,24 @@ public site still lets anyone spend your tokens. So:
 - To turn LLM calls off completely, unset the provider keys:
   `fly secrets unset ANTHROPIC_API_KEY OPENAI_API_KEY`.
 
+## Google AdSense
+
+The site is ready for AdSense, but nothing ad-related is served until the
+publisher ID is set:
+
+1. Sign up at adsense.google.com and add the site (the custom domain, not
+   `*.vercel.app`; AdSense doesn't approve shared hosting subdomains).
+2. In Vercel, set `NEXT_PUBLIC_ADSENSE_CLIENT` to the `ca-pub-...` ID and
+   `NEXT_PUBLIC_CONTACT_EMAIL`, then redeploy. That serves the AdSense script,
+   the `google-adsense-account` verification tag, `/ads.txt`, and the ads
+   section of `/privacy`.
+3. Request review in AdSense. Approval can take days to weeks.
+4. Once approved, turn on Auto ads, or create a display unit and set
+   `NEXT_PUBLIC_ADSENSE_SLOT_FOOTER` to its slot ID for the footer placement.
+5. Under Privacy & messaging, publish Google's consent message for the EEA,
+   the UK and Switzerland. Google requires a certified consent tool there,
+   and its own needs no code.
+
 ## Operations
 
 | Task | Command |

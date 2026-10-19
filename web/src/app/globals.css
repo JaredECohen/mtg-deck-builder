@@ -1894,3 +1894,60 @@ ul.chips {
     width: 100%;
   }
 }
+
+/* ── Site footer, privacy page ─────────────────────────────────────────── */
+
+.site-footer {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.site-footer-ad {
+  min-height: 90px;
+}
+
+.site-footer-links {
+  display: flex;
+  gap: 16px;
+}
+
+.site-footer-links a {
+  color: var(--text);
+}
+
+.site-footer-legal {
+  margin: 0;
+  max-width: 80ch;
+  line-height: 1.5;
+}
+
+.legal-page {
+  max-width: 760px;
+  line-height: 1.6;
+  gap: 4px;
+}
+
+.legal-page h2 {
+  margin: 24px 0 4px;
+  font-size: 1.15rem;
+}
+
+.legal-page ul {
+  padding-left: 20px;
+}
+
+.legal-page a {
+  color: var(--accent-2);
+}
+
+.legal-updated {
+  color: var(--muted);
+  margin-top: 0;
+}
