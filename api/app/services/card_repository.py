@@ -5,7 +5,7 @@ import logging
 import math
 import unicodedata
 from datetime import date
-from functools import cached_property
+from app.services.locked_cache import locked_cached_property
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select
@@ -116,7 +116,7 @@ class CardRepository:
             return identity_set.issubset(requested_colored)
         return identity_set.issubset(requested)
 
-    @cached_property
+    @locked_cached_property
     def _sample_cards(self) -> dict[str, CardRecord]:
         with CARD_CACHE_PATH.open() as handle:
             raw_cards = json.load(handle)
@@ -129,7 +129,7 @@ class CardRepository:
             cards[self._normalize_name(record.name)] = record
         return cards
 
-    @cached_property
+    @locked_cached_property
     def _sample_archetypes(self) -> list[ArchetypeRecord]:
         with ARCHETYPE_PATH.open() as handle:
             raw_archetypes = json.load(handle)
@@ -139,7 +139,7 @@ class CardRepository:
     # Both cards and archetypes are loaded once from the database (or sample
     # JSON) on first access.  Subsequent calls are O(1) dict/list lookups.
 
-    @cached_property
+    @locked_cached_property
     def _all_archetypes_cache(self) -> list[ArchetypeRecord]:
         try:
             with session_scope() as session:
@@ -150,7 +150,7 @@ class CardRepository:
             logger.warning("Database unavailable for archetypes, falling back to sample data: %s", exc)
         return sorted(self._sample_archetypes, key=lambda row: (row.format, row.name))
 
-    @cached_property
+    @locked_cached_property
     def _all_cards_cache(self) -> list[CardRecord]:
         try:
             with session_scope() as session:
@@ -161,7 +161,7 @@ class CardRepository:
             logger.warning("Database unavailable for cards, falling back to sample data: %s", exc)
         return sorted(self._sample_cards.values(), key=lambda card: card.name)
 
-    @cached_property
+    @locked_cached_property
     def _cards_by_name(self) -> dict[str, CardRecord]:
         return {self._normalize_name(card.name): card for card in self._all_cards_cache}
 
@@ -175,7 +175,7 @@ class CardRepository:
         text = "".join(ch for ch in text if not unicodedata.combining(ch))
         return " ".join(text.lower().split())
 
-    @cached_property
+    @locked_cached_property
     def _cards_by_folded_name(self) -> dict[str, CardRecord]:
         """Fallback lookup: folded full names plus each face of a multi-face
         card ("Fable of the Mirror-Breaker" → the DFC). Full names win over

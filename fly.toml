@@ -1,6 +1,10 @@
 # Fly.io app for the API (docs/DEPLOY.md). Set `app` to your Fly app name.
 app = "mtg-deck-lab-api"
 primary_region = "iad"
+# Must stay top-level: below a [section] header TOML scopes it to that table and
+# Fly silently ignores it. Headroom on the 1 GB machine: uvicorn settles at
+# ~650 MB (measured on Fly), and ingest runs before the server, never alongside.
+swap_size_mb = 512
 
 [build]
   dockerfile = "api/Dockerfile"
@@ -30,8 +34,8 @@ primary_region = "iad"
     hard_limit = 40
 
   [[http_service.checks]]
-    # First boot builds the database (~1-2 min: Scryfall download + profiles)
-    # before the server listens; a card refresh restart takes about as long.
+    # First boot builds the database (10-15 min on a shared CPU; profiling is
+    # the slow step). Fly keeps the machine running while checks fail.
     grace_period = "180s"
     interval = "30s"
     timeout = "10s"
@@ -42,8 +46,3 @@ primary_region = "iad"
   memory = "1gb"
   cpu_kind = "shared"
   cpus = 1
-
-# Headroom on the 1 GB machine (steady state ~620 MB; ingest runs before the
-# server starts, never alongside it). Bump [[vm]] memory to "2gb" if OOMs show
-# up in `fly logs`.
-swap_size_mb = 512
