@@ -19,3 +19,4 @@ qa/artifacts
 .claude/memory/
 # safety net: a stray root MEMORY.md from an older session must stay invisible too
 MEMORY.md
+.gstack/
