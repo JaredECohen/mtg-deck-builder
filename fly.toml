@@ -2,8 +2,8 @@
 app = "mtg-deck-lab-api"
 primary_region = "iad"
 # Must stay top-level: below a [section] header TOML scopes it to that table and
-# Fly silently ignores it. 1 GB was not enough on Fly: uvicorn reached ~880 MB
-# during warm-up on the throttled shared CPU and was OOM-killed even with swap.
+# Fly silently ignores it. Headroom on the 1 GB machine: uvicorn settles at
+# ~650 MB (measured on Fly), and ingest runs before the server, never alongside.
 swap_size_mb = 512
 
 [build]
@@ -43,6 +43,6 @@ swap_size_mb = 512
     path = "/api/health"
 
 [[vm]]
-  memory = "2gb"
+  memory = "1gb"
   cpu_kind = "shared"
   cpus = 1

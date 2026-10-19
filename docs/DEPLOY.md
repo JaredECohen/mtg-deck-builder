@@ -152,12 +152,17 @@ public site still lets anyone spend your tokens. So:
 | Back up the DB | `fly ssh sftp get /data/mtg_deck_builder.db --app mtg-deck-lab-api` |
 | Rebuild the DB from scratch | `fly ssh console -C "rm /data/mtg_deck_builder.db"`, then `fly apps restart` |
 
-**Memory.** The machine settles at about 620 MB. First boot and refresh boots
-peak at about 840 MB, including page cache. In local runs at 1 GB under
-Docker with no swap, all of them passed once `start.sh` flushed the ingest's
-writes with `sync`. On Fly, `swap_size_mb = 512` adds headroom. If `fly logs`
-ever shows an OOM, set `[[vm]] memory = "2gb"` in `fly.toml` (about $5/month
-more) and run `fly deploy`.
+**Memory.** On Fly, uvicorn settles at about 650 MB on the 1 GB machine.
+The bootstrap runs before the server starts and exits before it, so the two
+never compete for memory. `swap_size_mb = 512` adds headroom, but only while
+it stays above the first `[section]` header in `fly.toml`. If `fly logs` ever
+shows an OOM, check `cat /proc/swaps` over `fly ssh console` first. Then set
+`[[vm]] memory = "2gb"` (about $5/month more) and run `fly deploy`.
+
+The first deploy needed 1.85 GB. The cause was concurrent cache builds during
+the slow warm-up, now fixed with `app/services/locked_cache.py`. If memory is
+well above 650 MB again, look for a new lazily built cache that doesn't use
+`locked_cached_property`.
 
 **Saved decks and history** live in the same SQLite file, so they survive
 deploys and restarts. Fly snapshots volumes daily and keeps 5 days of them
