@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CommanderPicker, type CommanderMode } from "./commander-picker";
@@ -19,7 +20,7 @@ import { useDeckEvaluation } from "@/hooks/use-deck-evaluation";
 import { useDeckGenerator } from "@/hooks/use-deck-generator";
 import { useDeckRationale } from "@/hooks/use-deck-rationale";
 import { useExperienceMode } from "@/hooks/use-experience-mode";
-import type { GenerateDeckInput } from "@/lib/api";
+import { MAX_PROMPT_CHARS, type GenerateDeckInput } from "@/lib/api";
 import { parseCardNameLines } from "@/lib/briefs";
 import { cardCount, diffCardLists } from "@/lib/deck-diff";
 import { loadRefineDraft, saveRefineDraft } from "@/lib/manual-draft";
@@ -51,6 +52,17 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
   const [colors, setColors] = useState<string[]>([]);
   const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
   const [prompt, setPrompt] = useState("");
+  const searchParams = useSearchParams();
+
+  // Guide links open the builder pre-filled: /?format=commander&brief=...
+  useEffect(() => {
+    const linkedFormat = searchParams.get("format");
+    if (linkedFormat && linkedFormat in FORMAT_LABEL) setFormat(linkedFormat as FormatName);
+    const linkedBrief = searchParams.get("brief");
+    if (linkedBrief) setPrompt(linkedBrief.slice(0, MAX_PROMPT_CHARS));
+    // Only on arrival: later edits belong to the user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [refinePrompt, setRefinePrompt] = useState(DEFAULT_REFINE_PROMPT);
   const [refineDraftLoaded, setRefineDraftLoaded] = useState(false);
   const [expertSettings, setExpertSettings] = useState<ExpertSettings>(DEFAULT_EXPERT_SETTINGS);

@@ -14,6 +14,11 @@ export const ADSENSE_FOOTER_SLOT = /^\d{6,20}$/.test(process.env.NEXT_PUBLIC_ADS
   ? (process.env.NEXT_PUBLIC_ADSENSE_SLOT_FOOTER as string)
   : "";
 
+// Optional manual unit placed inside guide articles (<InArticleAd /> in MDX).
+export const ADSENSE_IN_ARTICLE_SLOT = /^\d{6,20}$/.test(process.env.NEXT_PUBLIC_ADSENSE_SLOT_IN_ARTICLE ?? "")
+  ? (process.env.NEXT_PUBLIC_ADSENSE_SLOT_IN_ARTICLE as string)
+  : "";
+
 // ads.txt line authorizing Google to sell this site's inventory. The
 // certification authority ID f08c47fec0942fa0 is Google's, the same for
 // every publisher.

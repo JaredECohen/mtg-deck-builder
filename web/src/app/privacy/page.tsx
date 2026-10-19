@@ -6,6 +6,7 @@ import { ADSENSE_CLIENT } from "@/lib/ads";
 export const metadata: Metadata = {
   title: "Privacy | MTG Deck Lab",
   description: "What MTG Deck Lab stores, what it shares, and the cookies used by advertising.",
+  alternates: { canonical: "/privacy" },
 };
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
