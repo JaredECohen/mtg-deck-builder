@@ -43,11 +43,11 @@ from app.constants import (
     LAND_TARGET_COMMANDER,
     LAND_TARGET_DEFAULT,
     LAND_TARGET_RAMP,
-    ROLE_MAP,
     SIDEBOARD_SIZE,
     THEME_TO_TAGS,
 )
 from app.config import DATA_DIR
+from app.services.card_roles import primary_role
 from app.services.locked_cache import locked_cached_property
 from app.rules import copy_limit, is_basic_land, is_land_card
 from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
@@ -340,7 +340,7 @@ class DeckGenerator:
         role_summary = self._build_role_summary(mainboard)
         sections = self._build_sections(base, request, mainboard, sideboard, commander, warnings, commander_reason, outcome)
         mana_curve = self._build_mana_curve(mainboard)
-        card_notes = self._build_card_notes(mainboard)
+        card_notes = self._build_card_notes(mainboard, base, request, requested_tags)
         # Queue sim validation for blends (2+ archetypes merged) so the
         # frontend can show a "validated by simulator" badge once the
         # optimizer finishes. Best-effort — any failure is swallowed so the
@@ -2143,22 +2143,93 @@ class DeckGenerator:
             buckets[min(6, int(card.mana_value))] += ref.quantity
         return [ManaCurvePoint(mana_value=value, card_count=buckets[value]) for value in range(0, 7)]
 
-    def _build_card_notes(self, refs: list[CardRef]) -> list[DeckCardExplanation]:
+    # Keywords worth naming in a card's one-line summary, most telling first.
+    _NOTE_KEYWORDS: tuple[str, ...] = (
+        "Haste", "Flash", "Flying", "Trample", "Deathtouch", "Lifelink", "Hexproof", "Ward", "Menace",
+        "First strike", "Double strike", "Vigilance", "Prowess", "Cascade", "Convoke", "Delve", "Flashback",
+        "Escape", "Landfall", "Storm", "Affinity", "Infect", "Undying", "Persist",
+    )
+
+    def _card_summary(self, card: CardRecord) -> str:
+        """What the card is, from its own data: "a 1-mana creature with haste"."""
+        type_line = card.type_line or ""
+        kind = next(
+            (t.lower() for t in ("Creature", "Planeswalker", "Instant", "Sorcery", "Artifact", "Enchantment", "Battle", "Land")
+             if t in type_line),
+            "card",
+        )
+        if kind == "land":
+            return "a land"
+        keywords = [k.lower() for k in self._NOTE_KEYWORDS if k in card.keywords][:2]
+        mana_value = int(card.mana_value)
+        summary = f"a {mana_value}-mana {kind}"
+        if keywords:
+            summary += " with " + " and ".join(keywords)
+        return summary
+
+    def _card_provenance(
+        self,
+        card: CardRecord,
+        base: ArchetypeRecord | None,
+        request: GenerateDeckRequest,
+        requested_tags: list[str],
+        role: str,
+    ) -> str:
+        """Why this card is in the deck, in the order the builder decides it."""
+        name = card.name.lower()
+        if any(name == included.lower() for included in request.include_cards):
+            return "You asked for this card."
+        if base is not None:
+            metadata = base.metadata
+            # Quote frequencies only when they come from real tournament
+            # results. The curated templates are one synthesized list each,
+            # so their inclusion rates are always 100% and say nothing.
+            observed = metadata.evidence == "observed" and base.source_count >= 3
+            for packages, label in ((metadata.core_cards, "core"), (metadata.flex_cards, "flex")):
+                package = next((p for p in packages if p.name.lower() == name), None)
+                if package is None:
+                    continue
+                if observed and package.inclusion_rate is not None:
+                    return (
+                        f"A {label} card of {base.name}: it appears in {package.inclusion_rate:.0%} of the "
+                        f"{base.source_count} tournament lists this deck is modeled on."
+                    )
+                if label == "core":
+                    return f"A core card of the {base.name} list this deck is built from."
+                return f"A flex slot in the {base.name} list this deck is built from."
+            if any(ref.name.lower() == name for ref in base.mainboard):
+                return f"Part of the {base.name} list this deck is built from."
+        if any(name == seed.name.lower() for seed in request.seed_cards):
+            return "A signature card of the strategy you picked."
+        matched = [tag for tag in requested_tags if tag in card.tags]
+        if matched:
+            return f"Added as a {role} that fits the {matched[0]} plan you asked for."
+        return f"Added to round out the deck's {role} slots."
+
+    def _build_card_notes(
+        self,
+        refs: list[CardRef],
+        base: ArchetypeRecord | None = None,
+        request: GenerateDeckRequest | None = None,
+        requested_tags: list[str] | None = None,
+    ) -> list[DeckCardExplanation]:
         notes: list[DeckCardExplanation] = []
+        request = request or GenerateDeckRequest(format="modern")
         for ref in refs:
             card = self.repository.get_card(ref.name)
             if not card or is_basic_land(card):
                 continue
             role = self._primary_role(card)
-            notes.append(
-                DeckCardExplanation(
-                    name=card.name,
-                    role=role,
-                    reason=f"{card.name} is included as a {role} from the retrieved shell or package set.",
-                )
-            )
-            if len(notes) >= 15:
-                break
+            why = self._card_provenance(card, base, request, requested_tags or [], role)
+            what = self._card_summary(card)
+            copies = f" Running {ref.quantity} copies." if ref.quantity > 1 else ""
+            if what == "a land":
+                does = f"{card.name} is a land in the mana base."
+            elif role == "flex slot":
+                does = f"{card.name} is {what}, filling a flex slot."
+            else:
+                does = f"{card.name} is {what}, playing the {role} role."
+            notes.append(DeckCardExplanation(name=card.name, role=role, reason=f"{why} {does}{copies}"))
         return notes
 
     @staticmethod
@@ -3024,16 +3095,7 @@ class DeckGenerator:
         return out
 
     def _primary_role(self, card: CardRecord | None) -> str:
-        if not card:
-            return "flex slot"
-        for tag in card.tags:
-            if tag in ROLE_MAP:
-                return ROLE_MAP[tag]
-        if is_land_card(card):
-            return "mana base"
-        if "Creature" in card.type_line:
-            return "threat"
-        return "flex slot"
+        return primary_role(card)
 
     @staticmethod
     def _counts_to_refs(counts: Counter[str]) -> list[CardRef]:

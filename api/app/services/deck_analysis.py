@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import re
 import unicodedata
 from collections import Counter, defaultdict
 
 from app.rules import is_land_card
-from app.services.sideboard_classes import classify
+from app.services.card_roles import primary_role
 from app.models import (
     AnalyzeDeckRequest,
     DeckAdviceGroup,
@@ -18,12 +17,8 @@ from app.models import (
     ManaCurvePoint,
     NearestShellComparison,
 )
-from app.constants import ROLE_MAP
 from app.services.card_repository import CardRepository
 
-_DRAW_TEXT = re.compile(r"draw (?:a|two|three|\w+) cards?|investigate|look at the top", re.IGNORECASE)
-_REACH_TEXT = re.compile(r"damage to (?:any target|target player|each opponent|target opponent)", re.IGNORECASE)
-_RAMP_TEXT = re.compile(r"add \{|search your library for (?:a|up to \w+) (?:basic )?land", re.IGNORECASE)
 
 SIMILARITY_HIGH = 0.60
 SIMILARITY_MEDIUM = 0.35
@@ -457,31 +452,7 @@ class DeckAnalysisService:
         return notes
 
     def _primary_role(self, card) -> str:
-        for tag in card.tags:
-            if tag in ROLE_MAP:
-                return ROLE_MAP[tag]
-        if is_land_card(card):
-            return "mana base"
-        if "Creature" in card.type_line:
-            return "threat"
-        type_line = card.type_line or ""
-        if "Instant" in type_line or "Sorcery" in type_line:
-            # From the card's text, not a blanket "interaction".
-            text = card.oracle_text or ""
-            if classify(card) is not None:
-                return "interaction"
-            if _DRAW_TEXT.search(text):
-                return "card advantage"
-            if _REACH_TEXT.search(text):
-                return "threat"
-            if _RAMP_TEXT.search(text):
-                return "mana development"
-            return "flex"
-        if "Planeswalker" in type_line:
-            return "threat"
-        if "Artifact" in type_line or "Enchantment" in type_line:
-            return "engine"
-        return "flex"
+        return primary_role(card)
 
     def _dominant_tags(self, refs: list) -> list[str]:
         tag_counts = Counter[str]()
