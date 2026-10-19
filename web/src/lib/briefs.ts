@@ -1,14 +1,5 @@
 import type { FormatName, GenerationMode } from "@/lib/types";
 
-/** The brief pre-filled for each format until the user writes their own. */
-export const DEFAULT_BRIEFS: Record<FormatName, string> = {
-  modern: "Build me a strong Modern prowess deck that feels explosive and is still friendly to a newer player.",
-  standard: "Build a Standard midrange deck with efficient threats and enough removal to handle aggro.",
-  pioneer: "Build a Pioneer aggro deck that pressures early and finishes games quickly.",
-  legacy: "Build a Legacy tempo deck with cheap threats, Brainstorm-style card selection and free interaction.",
-  commander: "Build a casual-but-focused Commander deck with a clear game plan, solid ramp, card draw and removal."
-};
-
 /** One-click example briefs, per format. */
 export const EXAMPLE_BRIEFS: Record<FormatName, string[]> = {
   modern: [
@@ -42,10 +33,6 @@ export const EXAMPLE_BRIEFS: Record<FormatName, string[]> = {
     "Budget artifact tokens under $100"
   ]
 };
-
-export function isDefaultBrief(prompt: string): boolean {
-  return Object.values(DEFAULT_BRIEFS).includes(prompt);
-}
 
 export const MODE_OPTIONS: { value: GenerationMode; label: string; description: string }[] = [
   {
