@@ -26,3 +26,19 @@ def test_notes_explain_each_card_specifically() -> None:
     assert notes["Lightning Bolt"].startswith("You asked for this card.")
     assert all("retrieved shell or package set" not in reason for reason in notes.values())
     assert all("mana" in reason for reason in notes.values())
+
+
+def test_mana_rocks_are_mana_development() -> None:
+    assert primary_role(repository.get_card("Sol Ring")) == "mana development"
+
+
+def test_commander_notes_name_the_commander_and_staples() -> None:
+    deck = generator.generate(GenerateDeckRequest(format="commander", colors=["B", "G"]))
+    reasons = [note.reason for note in deck.card_notes]
+    assert len(reasons) >= 30
+    front_face = deck.commander.split(" // ")[0]
+    assert all("round out the deck" not in reason for reason in reasons)
+    assert any(front_face in reason for reason in reasons)
+    assert all(" // " not in reason.split(".")[0] for reason in reasons), "commander named by its front face"
+    staples = [note for note in deck.card_notes if note.name == "Sol Ring"]
+    assert staples and staples[0].reason.startswith("A Commander staple")
