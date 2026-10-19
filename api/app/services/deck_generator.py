@@ -8,7 +8,7 @@ import re
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ from app.constants import (
     THEME_TO_TAGS,
 )
 from app.config import DATA_DIR
+from app.services.locked_cache import locked_cached_property
 from app.rules import copy_limit, is_basic_land, is_land_card
 from app.services.sideboard_classes import SIDEBOARD_CLASSES, classify
 from app.services import brackets as bracket_rules
@@ -486,7 +487,7 @@ class DeckGenerator:
 
     # ── Commander named in a brief ───────────────────────────────────────
 
-    @cached_property
+    @locked_cached_property
     def _commanders_by_first_name(self) -> dict[str, list[CardRecord]]:
         """"krenko" → [Krenko, Mob Boss; Krenko, Tin Street Kingpin]: legal
         commanders keyed by the part of the name before the comma."""
@@ -2323,7 +2324,7 @@ class DeckGenerator:
             return alt
         return None
 
-    @cached_property
+    @locked_cached_property
     def _retriever(self):
         from app.services.vector_retrieval import CardVectorRetriever
 
@@ -2944,7 +2945,7 @@ class DeckGenerator:
             return
         self._add_basic_land(counts, colors)
 
-    @cached_property
+    @locked_cached_property
     def _bracket_pool(self) -> tuple[frozenset[str], frozenset[str]]:
         """Mass-land-denial and extra-turn card names in the pool (computed
         once; oracle-text scans over 33k cards are too slow per request)."""

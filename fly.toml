@@ -1,6 +1,10 @@
 # Fly.io app for the API (docs/DEPLOY.md). Set `app` to your Fly app name.
 app = "mtg-deck-lab-api"
 primary_region = "iad"
+# Must stay top-level: below a [section] header TOML scopes it to that table and
+# Fly silently ignores it. 1 GB was not enough on Fly: uvicorn reached ~880 MB
+# during warm-up on the throttled shared CPU and was OOM-killed even with swap.
+swap_size_mb = 512
 
 [build]
   dockerfile = "api/Dockerfile"
@@ -39,11 +43,6 @@ primary_region = "iad"
     path = "/api/health"
 
 [[vm]]
-  memory = "1gb"
+  memory = "2gb"
   cpu_kind = "shared"
   cpus = 1
-
-# Headroom on the 1 GB machine (steady state ~620 MB; ingest runs before the
-# server starts, never alongside it). Bump [[vm]] memory to "2gb" if OOMs show
-# up in `fly logs`.
-swap_size_mb = 512
