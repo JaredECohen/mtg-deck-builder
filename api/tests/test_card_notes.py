@@ -42,3 +42,8 @@ def test_commander_notes_name_the_commander_and_staples() -> None:
     assert all(" // " not in reason.split(".")[0] for reason in reasons), "commander named by its front face"
     staples = [note for note in deck.card_notes if note.name == "Sol Ring"]
     assert staples and staples[0].reason.startswith("A Commander staple")
+
+
+def test_impulse_draw_is_card_advantage_and_walkers_are_threats() -> None:
+    assert primary_role(repository.get_card("Light Up the Stage")) == "card advantage"
+    assert primary_role(repository.get_card("Chandra, Torch of Defiance")) == "threat"

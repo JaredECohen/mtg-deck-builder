@@ -17,7 +17,13 @@ from app.models import CardRecord
 from app.rules import is_land_card
 from app.services.sideboard_classes import classify
 
-_DRAW_TEXT = re.compile(r"draw (?:a|two|three|\w+) cards?|investigate|look at the top", re.IGNORECASE)
+# Includes impulse draw: exile the top cards, then you may play them
+# (Light Up the Stage, Reckless Impulse).
+_DRAW_TEXT = re.compile(
+    r"draw (?:a|two|three|\w+) cards?|investigate|look at the top"
+    r"|exile the top (?:\w+ )?cards? of your library[^.]*\.[^.]*you may (?:play|cast)",
+    re.IGNORECASE,
+)
 # Damage that can hit creatures is removal first; player-only damage is reach.
 _REMOVAL_DAMAGE_TEXT = re.compile(r"damage to (?:any target|target creature|each creature)", re.IGNORECASE)
 _REACH_TEXT = re.compile(r"damage to (?:target player|each opponent|target opponent)", re.IGNORECASE)
@@ -46,6 +52,10 @@ def primary_role(card: CardRecord | None) -> str:
     if is_land_card(card):
         return "mana base"
     type_line = card.type_line or ""
+    # A planeswalker is a threat even when one ability ramps or draws
+    # (Chandra, Torch of Defiance).
+    if "Planeswalker" in type_line:
+        return "threat"
     is_spell = "Instant" in type_line or "Sorcery" in type_line
     can_attack = "Creature" in type_line or "Planeswalker" in type_line
     for tag in card.tags:
