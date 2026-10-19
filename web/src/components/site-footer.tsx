@@ -8,7 +8,10 @@ export function SiteFooter() {
     <footer className="site-footer">
       <AdSlot slot={ADSENSE_FOOTER_SLOT} className="site-footer-ad" />
       <nav className="site-footer-links" aria-label="Site">
-        <Link href="/">Deck Lab</Link>
+        <Link href="/">Deck Builder</Link>
+        <Link href="/blog">Guides</Link>
+        <Link href="/about">About</Link>
+        <Link href="/contact">Contact</Link>
         <Link href="/privacy">Privacy</Link>
       </nav>
       <p className="site-footer-legal">
