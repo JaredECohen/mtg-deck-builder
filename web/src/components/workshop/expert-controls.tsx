@@ -30,7 +30,7 @@ export const DEFAULT_EXPERT_SETTINGS: ExpertSettings = {
 };
 
 type Props = {
-  format: FormatName;
+  format: FormatName | null;
   settings: ExpertSettings;
   onChange: (next: ExpertSettings) => void;
 };

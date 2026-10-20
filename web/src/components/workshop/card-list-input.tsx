@@ -9,7 +9,7 @@ import type { FormatName } from "@/lib/types";
 type Props = {
   label: string;
   help?: string;
-  format: FormatName;
+  format: FormatName | null;
   values: string[];
   onChange: (values: string[]) => void;
   /** Used in accessible names, e.g. "include" → "Remove Lightning Bolt from include list". */

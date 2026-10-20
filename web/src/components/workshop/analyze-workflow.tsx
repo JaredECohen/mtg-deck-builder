@@ -21,7 +21,7 @@ type Props = {
   sharedToken: string | null;
 };
 
-type Snapshot = { format: FormatName; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
+type Snapshot = { format: FormatName | null; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
 
 function snapshotKey(snapshot: Snapshot): string {
   const list = (cards: CardRef[]) =>
@@ -33,13 +33,13 @@ function snapshotKey(snapshot: Snapshot): string {
 }
 
 export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) {
-  const [format, setFormat] = useState<FormatName>("modern");
+  const [format, setFormat] = useState<FormatName | null>(null);
   const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
   const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
   const [manualCommander, setManualCommander] = useState("");
   const [manualNotes, setManualNotes] = useState(DEFAULT_NOTES);
   const [manualImportText, setManualImportText] = useState("");
-  const [deepAnalysis, setDeepAnalysis] = useState(true);
+  const [deepAnalysis, setDeepAnalysis] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   // The list the current analysis was run on; edits after that mark it stale.
   const [analyzedKey, setAnalyzedKey] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
   useEffect(() => {
     if (!draftHydrated) return;
     saveManualDraft({
-      format,
+      format: format ?? undefined,
       mainboard: manualMainboard,
       sideboard: manualSideboard,
       commander: manualCommander,
@@ -106,7 +106,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
         setAnalyzedKey(snapshotKey(snapshot));
         // Heuristic analysis only: opening a public link should not spend LLM tokens.
         void analyze({
-          format: snapshot.format,
+          format: saved.format,
           commander: snapshot.commander || undefined,
           mainboard: snapshot.mainboard,
           sideboard: snapshot.sideboard,
@@ -156,6 +156,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
   }
 
   async function handleImport() {
+    if (!format) return;
     const parsed = await analyzer.importText(format, manualImportText);
     if (!parsed) return;
     setManualMainboard(parsed.mainboard);
@@ -176,6 +177,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
   }
 
   function handleAnalyze() {
+    if (!format) return;
     const snapshot: Snapshot = {
       format,
       mainboard: manualMainboard,
@@ -193,7 +195,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
     });
   }
 
-  const openCard = (name: string) => onOpenCard(name, { format });
+  const openCard = (name: string) => onOpenCard(name, { format: format ?? undefined });
 
   return (
     <div className="builder workflow-layout">

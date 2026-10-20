@@ -8,7 +8,7 @@ import type { CardRef, FormatName } from "@/lib/types";
 export type ManualZone = "mainboard" | "sideboard";
 
 type Props = {
-  format: FormatName;
+  format: FormatName | null;
   manualMainboard: CardRef[];
   manualSideboard: CardRef[];
   manualCommander: string;
@@ -172,7 +172,7 @@ export function AnalyzeForm(props: Props) {
           placeholder={"Commander\n1 Aminatou, the Fateshifter\n\nMainboard\n1 Sol Ring\n1 Arcane Signet\n...\n\nSideboard\n2 Spell Pierce"}
         />
         <div className="export-row" style={{ marginTop: 12 }}>
-          <button type="button" className="button secondary" onClick={onImport} disabled={loading}>Import Deck</button>
+          <button type="button" className="button secondary" onClick={onImport} disabled={loading || !format}>Import Deck</button>
           <button type="button" className="button secondary" onClick={onClearDraft}>Clear Draft</button>
         </div>
       </div>
@@ -215,7 +215,8 @@ export function AnalyzeForm(props: Props) {
         </span>
       </div>
 
-      <button type="button" className="button" onClick={onAnalyze} disabled={loading}>
+      {!format ? <p className="muted field-help">Choose the deck&apos;s format above to import or analyze it.</p> : null}
+      <button type="button" className="button" onClick={onAnalyze} disabled={loading || !format}>
         {loading ? "Analyzing deck..." : "Analyze My Deck"}
       </button>
     </>

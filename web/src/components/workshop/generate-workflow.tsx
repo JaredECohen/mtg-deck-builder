@@ -46,7 +46,7 @@ type Props = {
 };
 
 export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
-  const [format, setFormat] = useState<FormatName>("modern");
+  const [format, setFormat] = useState<FormatName | null>(null);
   // Nothing is preselected: colors, strategies and the brief start empty so
   // the first deck reflects only what the user chose.
   const [colors, setColors] = useState<string[]>([]);
@@ -130,6 +130,7 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
 
   /** Builds the request from the form. Beginners send no expert fields at all. */
   function buildInput(): GenerateDeckInput | string {
+    if (!format) return "Choose a format to build a deck.";
     const base: GenerateDeckInput = {
       format,
       colors,
@@ -215,7 +216,7 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
     current?.kind === "refine" ? current.deck.changes ?? (previous ? diffCardLists(previous.deck.mainboard, current.deck.mainboard) : null) : null;
 
   const openDeckCard = (name: string) =>
-    onOpenCard(name, deck ? { format: deck.format, colors: deck.colors } : { format });
+    onOpenCard(name, deck ? { format: deck.format, colors: deck.colors } : { format: format ?? undefined });
 
   return (
     <div className="builder workflow-layout">
