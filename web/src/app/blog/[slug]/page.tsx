@@ -23,7 +23,8 @@ import {
 
 // One dynamic segment serves both /blog/<category> hubs and /blog/<article>.
 // Category ids and article slugs never collide (articles carry keywords).
-type Params = { params: { slug: string } };
+// Next 15 passes route params as a Promise.
+type Params = { params: Promise<{ slug: string }> };
 
 export const dynamicParams = false;
 
@@ -31,16 +32,17 @@ export function generateStaticParams() {
   return [...Object.keys(CATEGORIES), ...allPosts().map((post) => post.slug)].map((slug) => ({ slug }));
 }
 
-export function generateMetadata({ params }: Params): Metadata {
-  if (isCategory(params.slug)) {
-    const category = CATEGORIES[params.slug];
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { slug } = await params;
+  if (isCategory(slug)) {
+    const category = CATEGORIES[slug];
     return {
       title: `${category.label}: MTG Guides | ${SITE_NAME}`,
       description: category.description,
-      alternates: { canonical: `/blog/${params.slug}` },
+      alternates: { canonical: `/blog/${slug}` },
     };
   }
-  const post = getPost(params.slug);
+  const post = getPost(slug);
   if (!post) return {};
   return {
     title: `${post.title} | ${SITE_NAME}`,
@@ -62,9 +64,10 @@ export function generateMetadata({ params }: Params): Metadata {
   };
 }
 
-export default function BlogSlugPage({ params }: Params) {
-  if (isCategory(params.slug)) return <CategoryHub category={params.slug} />;
-  const post = getPost(params.slug);
+export default async function BlogSlugPage({ params }: Params) {
+  const { slug } = await params;
+  if (isCategory(slug)) return <CategoryHub category={slug} />;
+  const post = getPost(slug);
   if (!post) notFound();
   return <Article post={post} />;
 }
