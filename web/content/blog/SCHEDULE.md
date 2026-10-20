@@ -41,38 +41,38 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-11-22 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
 | 2026-11-23 | `when-to-attack-mtg` | strategy | When to Attack in MTG | written |
 | 2026-11-24 | `cedh-competitive-commander-guide` | formats | cEDH: Competitive Commander Explained | written |
-| 2026-11-25 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | planned |
-| 2026-11-26 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | planned |
-| 2026-11-27 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | planned |
-| 2026-11-28 | `two-headed-giant-mtg` | formats | Two-Headed Giant Format Guide | planned |
-| 2026-11-29 | `mtg-counters-explained` | learn-to-play | Counters in MTG Explained | planned |
-| 2026-11-30 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | planned |
-| 2026-12-01 | `bluffing-in-mtg` | strategy | Bluffing in MTG | planned |
-| 2026-12-02 | `mtg-brawl-format-guide` | formats | Brawl Format Guide | planned |
-| 2026-12-03 | `mtg-triggered-abilities-explained` | learn-to-play | Triggered Abilities Explained | planned |
-| 2026-12-04 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | planned |
-| 2026-12-05 | `how-to-playtest-a-deck` | strategy | How to Playtest an MTG Deck | planned |
-| 2026-12-06 | `mtg-cube-draft-guide` | formats | Cube Draft Explained | planned |
-| 2026-12-07 | `activated-vs-static-abilities` | learn-to-play | Activated, Static and Triggered Abilities | planned |
-| 2026-12-08 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | planned |
-| 2026-12-09 | `mtg-sequencing-guide` | strategy | Sequencing Your Plays in MTG | planned |
-| 2026-12-10 | `mtg-ban-list-explained` | formats | Why Cards Get Banned in MTG | planned |
-| 2026-12-11 | `mtg-graveyard-and-exile-zones` | learn-to-play | The Graveyard and Exile Explained | planned |
-| 2026-12-12 | `lifegain-deck-guide` | deck-archetypes | Lifegain Decks Explained | planned |
-| 2026-12-13 | `mana-flood-and-screw-explained` | strategy | Mana Flood and Mana Screw | planned |
-| 2026-12-14 | `mtg-rotation-explained` | formats | Standard Rotation Explained | planned |
-| 2026-12-15 | `instant-speed-explained` | learn-to-play | What Does Instant Speed Mean? | planned |
-| 2026-12-16 | `plus-one-counters-deck-guide` | deck-archetypes | +1/+1 Counters Decks Explained | planned |
-| 2026-12-17 | `how-to-practice-and-improve-at-mtg` | strategy | How to Get Better at Magic | planned |
-| 2026-12-18 | `commander-rule-zero-guide` | formats | Rule Zero in Commander | planned |
-| 2026-12-19 | `how-to-win-magic-the-gathering` | learn-to-play | All the Ways to Win at Magic | planned |
-| 2026-12-20 | `landfall-deck-guide` | deck-archetypes | Landfall Decks Explained | planned |
-| 2026-12-21 | `how-to-draft-mtg-signals` | strategy | Reading Signals in Booster Draft | planned |
-| 2026-12-22 | `mtg-sealed-prerelease-guide` | formats | Your First Prerelease: A Sealed Guide | planned |
-| 2026-12-23 | `mtg-legendary-rule-explained` | learn-to-play | The Legend Rule Explained | planned |
-| 2026-12-24 | `artifact-deck-guide` | deck-archetypes | Artifact Decks Explained | planned |
-| 2026-12-25 | `sealed-deck-building-guide` | strategy | How to Build a Sealed Deck | planned |
-| 2026-12-26 | `best-of-one-vs-best-of-three` | formats | Best-of-One vs Best-of-Three | planned |
+| 2026-11-25 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | written |
+| 2026-11-26 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | written |
+| 2026-11-27 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | written |
+| 2026-11-28 | `two-headed-giant-mtg` | formats | Two-Headed Giant Format Guide | written |
+| 2026-11-29 | `mtg-counters-explained` | learn-to-play | Counters in MTG Explained | written |
+| 2026-11-30 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | written |
+| 2026-12-01 | `bluffing-in-mtg` | strategy | Bluffing in MTG | written |
+| 2026-12-02 | `mtg-brawl-format-guide` | formats | Brawl Format Guide | written |
+| 2026-12-03 | `mtg-triggered-abilities-explained` | learn-to-play | Triggered Abilities Explained | written |
+| 2026-12-04 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | written |
+| 2026-12-05 | `how-to-playtest-a-deck` | strategy | How to Playtest an MTG Deck | written |
+| 2026-12-06 | `mtg-cube-draft-guide` | formats | Cube Draft Explained | written |
+| 2026-12-07 | `activated-vs-static-abilities` | learn-to-play | Activated, Static and Triggered Abilities | written |
+| 2026-12-08 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | written |
+| 2026-12-09 | `mtg-sequencing-guide` | strategy | Sequencing Your Plays in MTG | written |
+| 2026-12-10 | `mtg-ban-list-explained` | formats | Why Cards Get Banned in MTG | written |
+| 2026-12-11 | `mtg-graveyard-and-exile-zones` | learn-to-play | The Graveyard and Exile Explained | written |
+| 2026-12-12 | `lifegain-deck-guide` | deck-archetypes | Lifegain Decks Explained | written |
+| 2026-12-13 | `mana-flood-and-screw-explained` | strategy | Mana Flood and Mana Screw | written |
+| 2026-12-14 | `mtg-rotation-explained` | formats | Standard Rotation Explained | written |
+| 2026-12-15 | `instant-speed-explained` | learn-to-play | What Does Instant Speed Mean? | written |
+| 2026-12-16 | `plus-one-counters-deck-guide` | deck-archetypes | +1/+1 Counters Decks Explained | written |
+| 2026-12-17 | `how-to-practice-and-improve-at-mtg` | strategy | How to Get Better at Magic | written |
+| 2026-12-18 | `commander-rule-zero-guide` | formats | Rule Zero in Commander | written |
+| 2026-12-19 | `how-to-win-magic-the-gathering` | learn-to-play | All the Ways to Win at Magic | written |
+| 2026-12-20 | `landfall-deck-guide` | deck-archetypes | Landfall Decks Explained | written |
+| 2026-12-21 | `how-to-draft-mtg-signals` | strategy | Reading Signals in Booster Draft | written |
+| 2026-12-22 | `mtg-sealed-prerelease-guide` | formats | Your First Prerelease: A Sealed Guide | written |
+| 2026-12-23 | `mtg-legendary-rule-explained` | learn-to-play | The Legend Rule Explained | written |
+| 2026-12-24 | `artifact-deck-guide` | deck-archetypes | Artifact Decks Explained | written |
+| 2026-12-25 | `sealed-deck-building-guide` | strategy | How to Build a Sealed Deck | written |
+| 2026-12-26 | `best-of-one-vs-best-of-three` | formats | Best-of-One vs Best-of-Three | written |
 | 2026-12-27 | `double-faced-cards-explained` | learn-to-play | Double-Faced Cards Explained | planned |
 | 2026-12-28 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | planned |
 | 2026-12-29 | `limited-combat-math` | strategy | Combat Math in Limited | planned |
