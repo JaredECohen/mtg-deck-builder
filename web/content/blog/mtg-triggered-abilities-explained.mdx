@@ -1,0 +1,136 @@
+---
+title: "MTG Triggered Abilities Explained: When, Whenever, At and the Stack"
+description: "MTG triggered abilities explained: when, whenever and at triggers, how they use the stack, ordering simultaneous triggers (APNAP) and intervening if clauses."
+date: 2026-12-03
+category: learn-to-play
+keywords: ["mtg triggered abilities", "triggered abilities explained", "apnap order mtg", "intervening if clause", "missed triggers mtg"]
+related: ["how-the-stack-works-mtg", "mtg-turn-structure-phases", "how-to-read-a-magic-card", "mtg-combat-explained"]
+draft: false
+---
+
+A triggered ability is an ability that happens automatically when a specific event occurs or a condition becomes true. You can spot one by its first word: it starts with "When," "Whenever" or "At." When the event happens, the ability triggers, goes on the stack the next time a player would get priority, and resolves like a spell, so players can respond to it.
+
+This guide explains how to read triggers, how they use the stack, what to do when several trigger at once, how "intervening if" clauses work, and what happens when someone forgets one.
+
+## The three kinds of abilities
+
+Magic cards have three kinds of abilities, and it helps to tell them apart:
+
+- **Static abilities** are always on. A creature with flying simply has flying. Nothing goes on the stack.
+- **Activated abilities** are ones you choose to use by paying a cost. They're written as "cost: effect," with a colon. Tapping a land for mana is an activated ability.
+- **Triggered abilities** happen on their own when their trigger event occurs. You don't pay a cost to start them, and you can't choose to activate them at a different time.
+
+If you're still getting comfortable with how a card's text box is laid out, [how to read a Magic card](/blog/how-to-read-a-magic-card) covers the basics.
+
+## When, whenever and at
+
+Every triggered ability starts with one of three words. Each describes a slightly different kind of event.
+
+### "When"
+
+"When" usually describes something that happens once to an object. The most common examples are entering and leaving the battlefield. Elvish Visionary draws you a card when it enters the battlefield. Ravenous Chupacabra destroys target creature an opponent controls when it enters. These are often called ETB triggers, short for "enters the battlefield."
+
+### "Whenever"
+
+"Whenever" usually describes an event that can happen over and over. Blood Artist triggers whenever it or another creature dies, which can happen many times in a turn. Each time the event happens, the ability triggers again.
+
+The difference between "when" and "whenever" is mostly a writing convention. The rules treat them the same way. Wizards uses "whenever" to signal that you should expect repeated triggers.
+
+### "At"
+
+"At" triggers are tied to a specific step or phase of the turn. Phyrexian Arena says that at the beginning of your upkeep, you draw a card and lose 1 life. These triggers happen once each time that step begins. Common timing words include "at the beginning of your upkeep," "at the beginning of combat," and "at the beginning of the end step."
+
+To know exactly when those moments happen, it helps to know the turn's structure. The [turn structure guide](/blog/mtg-turn-structure-phases) walks through each phase and step.
+
+<InArticleAd />
+
+## How triggers use the stack
+
+When a trigger event happens, the ability doesn't resolve right away. Here's what actually happens:
+
+1. **The event occurs.** A creature enters, a player attacks, a step begins.
+2. **The ability triggers.** The game notes that it needs to go on the stack.
+3. **It goes on the stack the next time a player would receive priority.** If a spell is in the middle of resolving, the trigger waits until the spell finishes.
+4. **Its controller chooses targets and other choices.** This happens as it's put on the stack, not when it resolves.
+5. **Players get priority.** Both players can respond with instants or abilities, just as they could respond to a spell.
+6. **It resolves.** If nobody responds, or after the responses resolve, the trigger's effect happens.
+
+That's the same structure a spell follows. The [guide to the stack](/blog/how-the-stack-works-mtg) explains priority and responding in full, so the key point here is simply that triggers are not instant. They sit on the stack and can be responded to.
+
+### Triggers aren't spells
+
+A triggered ability on the stack is not a spell. A card like Counterspell, which counters target spell, can't stop it. To counter an ability you need a card that specifically says so, such as Stifle, which counters target activated or triggered ability.
+
+Removing the source of a trigger usually doesn't stop the trigger either. Once an ability is on the stack, it exists independently of the card that created it. If Ravenous Chupacabra's enters trigger is on the stack and you destroy the Chupacabra in response, the trigger still resolves and still destroys its target.
+
+### Targets and illegal targets
+
+If a triggered ability has targets, they're chosen as it goes on the stack. If there are no legal targets at that moment, the ability is simply removed from the stack and does nothing. If every target becomes illegal by the time it tries to resolve, for example because the target creature left the battlefield, the ability doesn't resolve.
+
+### "May" triggers
+
+Some triggers say "you may." Those still trigger and go on the stack every time. You make the choice about whether to do the optional part when the ability resolves.
+
+## Ordering simultaneous triggers: APNAP
+
+Sometimes several abilities trigger at the same time. A board wipe destroys a dozen creatures, and three different "whenever a creature dies" abilities trigger for each one. The game needs a rule to decide what goes on the stack first.
+
+That rule is called APNAP, which stands for active player, nonactive player.
+
+1. **The active player** (the player whose turn it is) puts all of their triggered abilities on the stack first, in any order they choose.
+2. **Then the nonactive player** puts all of theirs on the stack, in any order they choose.
+
+In a multiplayer game, this continues in turn order around the table.
+
+Because the stack resolves last in, first out, the result is that **the nonactive player's triggers resolve first**, and the active player's triggers resolve after. This matters more than it sounds. If both players have an ability that triggers at the beginning of the upkeep, the nonactive player's ability resolves before the active player's.
+
+### Ordering your own triggers
+
+Within your own group of triggers, you choose the order. This is often an important choice. If you control a trigger that draws a card and another that makes you discard a card, putting the discard trigger on the stack first means the draw resolves first. Then you can discard the worst card, including the one you just drew.
+
+A good habit: when several of your triggers happen at once, pause and decide which one you want to resolve last, and put that one on the stack first.
+
+<InArticleAd />
+
+## Intervening "if" clauses
+
+Some triggered abilities have a condition written right after the trigger event, in the form "When/Whenever/At [event], if [condition], [effect]." That condition is called an intervening "if" clause, and it changes how the trigger works.
+
+An intervening "if" is checked twice:
+
+1. **When the event happens.** If the condition isn't true, the ability doesn't trigger at all.
+2. **When the ability tries to resolve.** If the condition is no longer true, the ability does nothing.
+
+Felidar Sovereign is the classic example. At the beginning of your upkeep, if you have 40 or more life, you win the game. If you have 39 life when your upkeep starts, nothing triggers. If you have 40 life when it triggers, your opponent can respond by making you lose life. If your life drops below 40 before the ability resolves, the ability does nothing.
+
+The placement of "if" matters. A condition that appears later in the ability, such as "... draw a card. If you do, ...," isn't an intervening "if." It only affects what happens during resolution, and the ability triggers normally.
+
+## Leaves-the-battlefield and "look back" triggers
+
+Abilities that trigger when a permanent leaves the battlefield, including dies triggers, are a little unusual. The game "looks back in time" to check whether they trigger, using the state of the game just before the event.
+
+That's why Blood Artist triggers for itself when it dies alongside other creatures in a board wipe. The game checks what was on the battlefield just before the wipe, sees Blood Artist there, and triggers it for each creature that died, including Blood Artist.
+
+## Missed triggers and etiquette
+
+Triggers happen automatically under the rules, but in a real game of paper Magic, the players have to remember them. Forgetting a trigger is one of the most common mistakes at any table. On MTG Arena and Magic Online, the software handles them for you.
+
+### Casual play
+
+In casual games, the friendly approach is to remind each other of triggers and, if one was missed recently, to go back and resolve it when it's easy to do so. Many tables are flexible about this, especially with newer players. Agree on expectations with your group, and be consistent: don't remind opponents only when it benefits you.
+
+### Competitive play
+
+At sanctioned events, the rules are more specific. Each player is responsible for their own triggers. Your opponent generally isn't required to point out your triggers for you, but they can't lie about the game state or take actions to hide what happened. The details of how a missed trigger is handled are in the Magic Tournament Rules and the related judging documents. If a trigger is missed and you're not sure what to do, call a judge rather than trying to fix it yourselves.
+
+### Good habits
+
+- **Announce triggers out loud.** Saying "Phyrexian Arena trigger" before you draw makes it clear you remembered.
+- **Use reminders.** A die or a token next to a card with an upkeep trigger makes it hard to forget.
+- **Slow down when several things trigger.** Name each trigger and choose the order before resolving any of them.
+
+## The takeaway
+
+Triggered abilities start with "when," "whenever" or "at," trigger automatically, and use the stack like spells, so players can respond to them. When several trigger at once, the active player stacks theirs first and the nonactive player's resolve first. Intervening "if" clauses are checked on trigger and on resolution. Remember your triggers, announce them clearly, and order your own with purpose.
+
+<DeckLabCTA format="commander" brief="Death-trigger aristocrats deck with Blood Artist and sacrifice outlets" />

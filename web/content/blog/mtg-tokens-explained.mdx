@@ -1,0 +1,124 @@
+---
+title: "How Tokens Work in MTG: Creature Tokens, Treasure, Clues and Copies"
+description: "How tokens work in MTG: what a token is, creature and artifact tokens like Treasure, Clue and Food, why tokens vanish when they leave play, and token copies."
+date: 2026-11-25
+category: learn-to-play
+keywords: ["how tokens work mtg", "mtg tokens explained", "treasure token mtg", "token copy rules mtg"]
+related: ["mtg-tokens-deck-guide", "mtg-card-types-explained", "how-to-read-a-magic-card", "mtg-counters-explained"]
+draft: false
+---
+
+A token is a permanent on the battlefield that isn't represented by a card. Spells and abilities create tokens, and the effect that creates one tells you everything about it: its name or type, color, power and toughness, and any abilities. Tokens act like any other permanent while they're on the battlefield, but the moment one leaves, it's gone for good.
+
+This guide covers the rules: what tokens are, the common creature and non-creature tokens, what happens when tokens leave the battlefield, and how token copies work. If you want to build a deck around making lots of tokens, the [token deck guide](/blog/mtg-tokens-deck-guide) covers that strategy.
+
+## What a token is
+
+When a card says "create" a token, you put a new object onto the battlefield that has no physical card behind it. Raise the Alarm, a classic instant, creates two 1/1 white Soldier creature tokens. Those Soldiers are real creatures in every sense the rules care about. They can attack, block, be targeted by removal, be sacrificed and be enchanted.
+
+Players usually represent tokens with printed token cards that come in booster packs, but you can use dice, coins or anything else that makes it clear what the token is and whether it's tapped. What matters is that everyone at the table can tell what each token is.
+
+A few key facts:
+
+- **The creating effect defines the token.** If a card says "create a 2/2 black Zombie creature token," that's exactly what you get: a black creature with the type Zombie and power and toughness 2/2. It has no abilities unless the effect gives it some.
+- **Tokens are permanents, not cards.** Effects that count cards in your hand, library or graveyard don't count tokens, because tokens never stay in those zones.
+- **Tokens usually have no mana cost.** A token without a mana cost has a mana value of 0. That matters for cards that care about mana value. The exception is a token that copies something, covered below.
+- **Creature tokens have summoning sickness.** A creature token can't attack or use abilities with the tap symbol on the turn it's created, unless it has haste. The [summoning sickness guide](/blog/summoning-sickness-explained) covers that rule in detail.
+
+### Who owns and controls a token
+
+The player who creates a token owns it and controls it, unless the effect says otherwise. Some cards create tokens for an opponent. Owner matters for effects like "return to its owner's hand," but as you'll see, a token that goes to a hand doesn't last there anyway.
+
+<InArticleAd />
+
+## Creature tokens
+
+Creature tokens are the most common kind. They range from tiny 1/1s to huge creatures with several abilities. Lingering Souls makes two 1/1 white Spirit creature tokens with flying, and its flashback cost lets you make two more from the graveyard. Other cards make a single big creature token.
+
+Creature tokens follow all the normal creature rules:
+
+- They count as creatures for anything that says "creature," including board wipes like Wrath of God.
+- They can be equipped, enchanted and given +1/+1 counters.
+- They have the creature types the effect gives them, so a Goblin token counts for cards that care about Goblins.
+- When a creature token is put into a graveyard from the battlefield, it **dies**. Abilities that say "whenever a creature dies" trigger for tokens just like they do for cards.
+
+That last point is why sacrifice decks love tokens. A token you sacrifice still triggers death abilities before it disappears.
+
+## Non-creature tokens: Treasure, Clue, Food and more
+
+Many tokens aren't creatures at all. The most common are colorless artifact tokens with a built-in ability you use by sacrificing them. Several of these have standard definitions, so a card can just say "create a Treasure token" and everyone knows what that means.
+
+| Token | What it does |
+| --- | --- |
+| Treasure | Tap and sacrifice it to add one mana of any color |
+| Clue | Pay two generic mana and sacrifice it to draw a card |
+| Food | Pay two generic mana, tap and sacrifice it to gain 3 life |
+| Blood | Pay one generic mana, tap, discard a card and sacrifice it to draw a card |
+
+A few things to know about these:
+
+- **They're artifacts.** Artifact removal can destroy them, and they count for cards that care about artifacts you control. Creature removal and creature board wipes don't touch them.
+- **They stay until you use them.** A Treasure doesn't vanish at the end of turn. You can save it for a later turn when you need the extra mana or a color you're missing.
+- **Treasure mana is quick.** Activating a Treasure is a mana ability, so it doesn't use the stack and you can do it whenever you're paying a cost, including in the middle of casting a spell.
+- **Clues and Food take mana to use.** Because you pay mana to crack them, they reward you for having spare mana at the end of an opponent's turn.
+
+There are other non-creature tokens too. Some effects make enchantment tokens, and some make tokens that are both artifacts and creatures. As always, read the effect that creates the token to know exactly what it is.
+
+<InArticleAd />
+
+## When tokens leave the battlefield
+
+This is the rule that surprises new players most. A token can exist only on the battlefield. If it moves anywhere else, it ceases to exist.
+
+Here's how that plays out:
+
+- **A token that dies** goes to the graveyard for a moment. That's long enough for death triggers to happen. Then it ceases to exist the next time the game checks state-based actions, which is almost immediately.
+- **A token that's returned to a hand** goes there briefly and then ceases to exist. Bounce spells are excellent removal against tokens for this reason.
+- **A token that's exiled** stops existing. If an effect exiles a token and says to return it to the battlefield, the token doesn't come back. A token that has left the battlefield can't move to another zone or return.
+- **A token that's shuffled into a library** stops existing the same way.
+
+So "flicker" effects, which exile a creature and return it, are a way to permanently remove an opponent's creature token. And recursion effects that return creature cards from your graveyard can't bring back a token, because the token is no longer there.
+
+<Callout title="Tip">A token that dies still counts as dying. Cards that trigger when a creature dies or is put into a graveyard see the token go there, even though it disappears right after.</Callout>
+
+## Token copies
+
+Some effects create a token that's a copy of another permanent. Kiki-Jiki, Mirror Breaker taps to make a token copy of a nonlegendary creature you control with haste, which is sacrificed at the beginning of the next end step. Cackling Counterpart makes a token copy of a creature you control that stays around.
+
+A token copy copies only the original's **copiable values**. In practice, that means:
+
+- **It copies what's printed on the card:** name, mana cost, color, types, abilities, power and toughness. It also copies the results of other copy effects.
+- **It doesn't copy counters.** If the original has three +1/+1 counters, the copy enters without them. See [counters in MTG explained](/blog/mtg-counters-explained) for more on how counters work.
+- **It doesn't copy temporary effects.** A pump spell or an Aura on the original doesn't carry over to the copy.
+- **It doesn't copy status.** If the original is tapped, the copy still enters untapped, unless the copy effect says otherwise.
+- **It does have a mana cost.** Because it copies the original's mana cost, a token copy has the same mana value as the card it copies, not 0.
+
+A copy is also a new object, so it has summoning sickness unless it has haste. And if you copy a legendary permanent, you now control two legendary permanents with the same name. The legend rule makes you choose one and put the other into its owner's graveyard. That's why many copy effects, including Kiki-Jiki's, are limited to nonlegendary creatures.
+
+### Copying a token
+
+If you copy a token, the new token copies the characteristics the original effect gave it. A copy of a 1/1 Soldier token is a 1/1 Soldier token. Any changes made to the original by counters or pump effects still aren't copied.
+
+## Effects that multiply tokens
+
+Some cards change how many tokens you get. Doubling Season and Anointed Procession both make effects that would create tokens under your control create twice that many instead. These replacement effects apply when the token is created, so Raise the Alarm with Anointed Procession on the battlefield makes four Soldiers.
+
+Doubling Season also doubles counters put on your permanents, which is why it shows up in both token and counter decks. Effects like these stack: with two token doublers, each one doubles the number again.
+
+## Common token questions
+
+**Can a token be my commander?** No. Your commander has to be a card in your deck.
+
+**Do tokens count toward deck size?** No. Tokens aren't part of your deck. Printed token cards are just markers and aren't included in your 60 or 100 cards.
+
+**Can I counter a token?** Not the token itself, since it's created directly on the battlefield and isn't cast. You can counter the spell that would create it.
+
+**Does a token have a color?** Only the colors the effect gives it. Treasure, Clue and Food tokens are colorless.
+
+**What does a token's card type mean for removal?** Treat it exactly like a card of that type. A creature token dies to creature removal, an artifact token to artifact removal.
+
+## The takeaway
+
+Tokens are permanents without cards behind them. The effect that makes one defines everything about it, and it behaves like any other permanent while it's on the battlefield. Once it leaves, whether it dies, gets bounced or gets exiled, it's gone for good, though dying still triggers death abilities. Token copies copy what's printed, not counters, damage or temporary boosts. Learn those few rules, and every token card becomes easy to read.
+
+<DeckLabCTA format="commander" brief="Go-wide token deck with Treasure and token doublers" />
