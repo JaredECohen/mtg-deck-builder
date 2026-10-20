@@ -1,0 +1,128 @@
+---
+title: "How to Build an MTG Mana Base: Colored Sources, Dual Lands and Basics"
+description: "How to build an MTG mana base: counting colored sources, how dual lands like taplands, shocklands and fetchlands behave, basics vs nonbasics and utility lands."
+date: 2027-01-13
+category: deck-archetypes
+keywords: ["mtg mana base", "how to build a mana base", "how many colored sources mtg", "mtg dual lands explained", "basics vs nonbasic lands"]
+related: ["mana-curve-explained", "mana-flood-and-screw-explained", "mtg-color-pie-guide", "commander-ramp-guide"]
+draft: false
+---
+
+A mana base is the set of lands (and other mana sources) that lets your deck cast its spells on time and in the right colors. Building one comes down to three questions: how many lands you need, how many of them produce each color, and which specific lands do that job with the fewest drawbacks. Get those right and most of your games will be decided by your choices, not by your draws.
+
+How many lands to play is mostly a question about your curve, and the [mana curve guide](/blog/mana-curve-explained) covers it in detail. This guide picks up from there: once you know your land count, how do you fill those slots?
+
+## Start by counting what your spells need
+
+Before choosing a single land, look at the colored mana symbols (often called pips) on your spells. Two things matter more than anything else.
+
+- **How early you need each color.** A one-drop that costs `{R}` needs red on turn one. A six-drop that costs `{4}{U}{U}` gives you six turns to find two blue sources.
+- **How many pips a card has.** Counterspell (`{U}{U}`) is far harder to cast on turn two than Mana Leak (`{1}{U}`), because it needs both of your first two lands to make blue.
+
+A quick way to see the shape of your deck is to tally pips by color, but weight the cheap cards more heavily. Ten red pips spread across two-drops put more pressure on your mana than ten blue pips on a pair of seven-drops.
+
+This tally tells you which color is your **main color** (the one you need early and often) and which is a **secondary color** or a **splash** (a color you play only a few cards of, usually more expensive ones).
+
+## Colored sources: rough guidance
+
+A **source** is anything that can produce a given color. A Mountain is one red source. A land that taps for red or blue counts as one red source and one blue source. A land that can fetch either color counts as a source for both, as long as the lands it can find are in your deck.
+
+The exact numbers come from probability math, and published analyses give detailed tables. You don't need the tables to build a good deck, though. For a 60-card deck, these rough figures are a sensible starting point:
+
+| What you want to cast | Rough sources of that color |
+| --- | --- |
+| A one-pip spell on turn one or two | 13-15 |
+| A two-pip spell (like `{1}{W}{W}`) on turn three | 16-18 |
+| A two-pip spell on turn two, or three pips early | 19 or more |
+| A splash card at four mana or more | 6-8 |
+
+Treat these as guidance, not law. They change with deck size, land count and how much card draw or filtering you run. For a 40-card Limited deck the numbers are smaller in absolute terms: a typical two-color draft deck with 17 lands splits them roughly 9 and 8, or 10 and 7 if one color clearly dominates.
+
+The table also shows why three-color decks are hard. You can't have 15 sources of three different colors with only basics, which is exactly the problem dual lands solve.
+
+<InArticleAd />
+
+## Dual lands, described by how they behave
+
+Magic has printed dozens of land cycles that produce two colors. Rather than memorizing names, it's more useful to know the handful of behaviors they fall into, because each one costs you something different.
+
+### Taplands
+
+A **tapland** produces two colors but enters the battlefield tapped. The Guildgates are the classic example. Some taplands add a small bonus, like gaining 1 life or scrying when they enter.
+
+The cost is tempo. A land that enters tapped on turn two means you can't cast a two-drop that turn. Slow decks that don't need to spend mana every turn can run several. Aggressive decks, which need to use all their mana from turn one, run as few as possible.
+
+### Shocklands
+
+A **shockland** asks you a question as it enters: pay 2 life and it enters untapped, or don't pay and it enters tapped. Hallowed Fountain (white and blue) is one example. Shocklands also carry two basic land types. Hallowed Fountain is a Plains Island, which matters because some cards search for lands by type.
+
+The cost here is life, and only when you need the land untapped right away. On a turn where you don't need the mana, you can let it enter tapped for free.
+
+### Fetchlands
+
+A **fetchland** doesn't produce mana itself. You tap it, pay 1 life and sacrifice it to search your library for a land with one of two basic land types and put it onto the battlefield. Polluted Delta, for instance, finds an Island or a Swamp. Because shocklands have basic land types, a fetchland can find a shockland as well as a basic, which lets one fetchland become any of several colors.
+
+Fetchlands also shuffle your library and put a land in your graveyard, which some decks care about. Their costs are a point of life (plus 2 more if you fetch a shockland and pay for it) and the fact that your fetch targets have to be in your deck. A fetchland with nothing left to find does nothing.
+
+A cheaper, slower cousin is Evolving Wilds, which finds any basic land but puts it onto the battlefield tapped.
+
+### Checklands
+
+A **checkland** enters untapped only if you already control a land of a particular basic type, and enters tapped otherwise. Glacial Fortress, for example, enters untapped if you control a Plains or an Island.
+
+Checklands are poor on turn one, when you control no lands, and usually fine afterward. They work best in decks with plenty of basics, or shocklands, of the right types.
+
+### Painlands and others
+
+A **painland** taps for colorless mana for free, or for one of two colors at the cost of 1 damage to you. Adarkar Wastes is the white-blue version. Beyond these, there are many cycles with their own conditions: lands that enter untapped only early in the game, only if you control two or more other lands, or only if you reveal a card of the right type. The way to judge any of them is the same. Ask what it costs (tempo, life or a condition) and on which turns that cost actually hurts your deck.
+
+<InArticleAd />
+
+## Choosing between them
+
+The right mix depends on what your deck is doing on turns one through three.
+
+- **Aggro** wants every land untapped early. It favors basics, shocklands and fetchlands, accepts the life cost, and avoids taplands.
+- **Midrange** can afford a tapped land or two on turns where it has nothing to cast, and benefits from checklands and other conditional lands.
+- **Control** often has nothing to do on turn one, so taplands and lands with a small bonus are easy to fit, and saving life matters against aggressive opponents.
+
+A useful exercise is to lay out your opening hand's likely first three lands and see whether you can still cast your curve. If two taplands in a row would cost you your key three-drop every game, you have too many.
+
+## Basics vs nonbasics
+
+It's tempting to replace every basic land with a dual. That isn't always right.
+
+**Reasons to keep basics:**
+
+- **Nonbasic hate.** Some cards punish nonbasic lands. Blood Moon turns every nonbasic land into a Mountain, and Wasteland destroys a nonbasic land. A mana base with no basics can be crippled by them.
+- **Basic land search.** Cards like Rampant Growth, Cultivate and Evolving Wilds find basic lands only. If you rely on them, you need basics to find.
+- **Some removal gives the opponent a basic.** Path to Exile lets the exiled creature's controller search for a basic land. Against a deck with no basics, that search finds nothing.
+- **No drawback.** A basic land always enters untapped and never costs life.
+
+**Reasons to play nonbasics:** they let one land produce two colors, which is the only way to support a demanding three-color deck, and some offer extra effects. In a mono-colored deck you rarely need more than a few nonbasics, and those few are usually utility lands.
+
+## Utility lands
+
+A **utility land** does something beyond producing mana. Mutavault can become a 2/2 creature until end of turn. Ghost Quarter can destroy another land. Bojuka Bog exiles a player's graveyard when it enters.
+
+Utility lands are powerful because they take up a land slot instead of a spell slot. They come with a catch, though: most of them produce only colorless mana, or enter tapped. Each one you add is effectively a land that doesn't help cast your colored spells. A two-color deck with heavy color requirements can usually support only a couple. A mono-colored deck can support more.
+
+## Common mana base mistakes
+
+1. **Counting lands but not sources.** Twenty-four lands don't help if only eight make the color your two-drops need.
+2. **Too many tapped lands in a fast deck.** Each one is a turn where you can't use your mana fully.
+3. **A splash with too few sources.** Three dual lands and one basic is not enough for a splash card you need to cast in most games.
+4. **Too many utility lands.** Every colorless land makes your colored spells less reliable.
+5. **Blaming the shuffle for a mana problem.** Some mana trouble is just variance, as the [mana flood and screw guide](/blog/mana-flood-and-screw-explained) explains, but repeated color screw is usually a sign that your source counts are off.
+
+## Mana bases in Commander
+
+The same principles apply to 100-card Commander decks, scaled up. Command Tower produces any color in your commander's color identity, and many decks also lean on mana rocks and land ramp to fix colors. Because you're playing a single copy of each land, a three- or four-color Commander deck needs a high share of lands that produce more than one color. The [Commander ramp guide](/blog/commander-ramp-guide) covers how ramp and fixing work together in that format.
+
+## The takeaway
+
+Start with your spells, not your lands. Work out which color you need earliest and most, give it the most sources, and keep splashes small and late. Pick dual lands by their behavior: taplands cost tempo, shocklands and fetchlands cost life, checklands cost reliability on turn one. Keep enough basics to survive nonbasic hate and fuel basic land search, and add utility lands only where your colors can afford it. Then playtest and adjust the counts if you keep missing a color.
+
+To see a balanced land count and color split for your own idea, try the [Deck Lab builder](/).
+
+<DeckLabCTA format="modern" brief="Two-color midrange deck with a careful mana base of shocklands, fetchlands and basics" />

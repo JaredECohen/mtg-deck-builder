@@ -1,0 +1,147 @@
+---
+title: "Combat Math in Limited: Counting Races, Lethal, Blocks and Board Stalls"
+description: "Combat math for MTG Limited: count the clock in a race, check for lethal, plan around tricks, make the right block and break board stalls, with worked examples."
+date: 2026-12-29
+category: strategy
+keywords: ["mtg combat math", "limited combat math", "mtg racing math", "how to block in mtg limited", "mtg board stall"]
+related: ["mtg-combat-explained", "blocking-strategy-mtg", "combat-tricks-guide", "when-to-attack-mtg"]
+draft: false
+---
+
+Combat math in Limited comes down to three counts you make every turn: how many turns until each player dies (the clock), whether you have lethal damage this turn, and what each possible block costs both sides, including the trick your opponent might be holding. Limited games are decided on the battlefield far more often than Constructed games, so doing this arithmetic carefully, every turn, wins more games than almost any other habit.
+
+This guide assumes you know how combat works. If you need a refresher on the steps, damage and multiple blockers, read [MTG combat explained](/blog/mtg-combat-explained) first. Here we focus on the numbers.
+
+## Counting the clock
+
+Your clock is the number of your turns it takes to kill the opponent if nothing changes. The formula is simple:
+
+**Turns to kill = opponent's life ÷ damage you deal per turn, rounded up.**
+
+Do it for both players. Whoever needs fewer turns is winning the race, and if the counts are equal, whoever attacks first wins.
+
+### Worked example: an even race
+
+You have a 3/3 and a 2/2 (5 power). Your opponent has a 4/4 and a 2/2 (6 power). Neither player wants to block, because every block is a bad trade. You're at 16 life, they're at 13, and it's your turn.
+
+- Your clock: 13 ÷ 5 = 2.6, rounded up to 3 turns.
+- Their clock: 16 ÷ 6 = 2.67, rounded up to 3 turns.
+
+Both clocks are three turns, and you attack first. The sequence: you hit them to 8, they hit you to 10, you hit them to 3, they hit you to 4, you hit them to −2. You win with 4 life to spare.
+
+Now change one number. If you were at 12 instead of 16, their clock drops to 12 ÷ 6 = 2 turns. You hit them to 8, they hit you to 6, you hit them to 3, they hit you to 0. You lose. Four points of life flipped the entire race. That's why life gained or lost in the early turns matters so much more than it looks, and why the [blocking guide](/blog/blocking-strategy-mtg) treats life as a resource to spend carefully.
+
+### What changes a clock
+
+Recount whenever any of these happen:
+
+- A creature enters or leaves either side.
+- A player gains or loses life outside combat.
+- A blocker shows up that will eat one attacker every turn. A single chump blocker can add a full turn to a race.
+- Evasion appears. A 2/2 flier the opponent can't block adds 2 damage to every turn's count.
+
+When you're behind in the race, stop racing. Start blocking, trade creatures, and turn the game into something else. When you're ahead, keep attacking and only block if it doesn't slow your own clock.
+
+<InArticleAd />
+
+## Checking for lethal
+
+Before you attack, ask whether this attack can win the game. Count it assuming your opponent makes the best possible blocks, not the blocks you hope for.
+
+**Worst-case damage = your total attacking power minus the power of the attackers they can block.**
+
+With one untapped blocker, assume they block your biggest attacker. With two, assume your two biggest. If they have a deathtouch or first-strike creature, assume it blocks wherever it hurts you most.
+
+### Worked example: lethal with a trick
+
+Your opponent is at 6 with one untapped 2/2. You have two 3/3s and a 2/2, a total of 8 power, and you're holding a pump spell that gives +2/+2.
+
+- If they block a 3/3, the other two attackers deal 3 + 2 = 5. That leaves them at 1. Not lethal.
+- If they block the 2/2, the two 3/3s deal 6. That's exactly lethal.
+
+So they'll block a 3/3. But after blocks, you cast the pump spell on an unblocked creature: 5 + 2 = 7 damage, and they're dead. The trick is lethal no matter which creature they block. Counting both cases before you attack is what tells you that you can commit everything.
+
+### The crack-back
+
+If the attack isn't lethal, count what happens next. Creatures that attack without vigilance stay tapped through your opponent's turn, so they can't block. The question is whether you survive their counterattack, usually called the crack-back.
+
+Say you're at 4, they're at 10, and they have a 4/4 and a 2/2. You attack with a 3/3, a 3/3 and a 2/2. Even if they don't block at all, they drop to 2. Then their 4/4 and 2/2 attack into your tapped board for 6, and you're dead.
+
+Hold back one creature and recount. If you attack with just the two 3/3s, the best you can do is 6 damage, putting them at 4. On their turn, your untapped 2/2 can block the 4/4, so you take only 2 and survive at 2. You're still in the game, and you've used the turn to get them low. Most of the time in Limited, survival beats a big attack that only gets them close.
+
+<InArticleAd />
+
+## Planning around combat tricks
+
+Open mana on the other side of the table changes every calculation. The [combat tricks guide](/blog/combat-tricks-guide) covers tricks in depth. For combat math, the habit is simple: run each important block or attack twice, once with no trick and once with the most common trick their colors can play, and see whether you can live with the bad result.
+
+### Worked example: the double block
+
+Their 4/4 attacks. You have a 2/2 and a 3/3, and they have three mana open.
+
+**No trick.** You double block. Your creatures deal 2 + 3 = 5 damage, which kills the 4/4. The attacker deals 4 damage, split however its controller likes. They can put 3 on the 3/3 and 1 on the 2/2, killing the 3/3, or 2 on the 2/2 and 2 on the 3/3, killing the 2/2. Either way, you lose one creature and they lose their 4/4. That's a good trade for you.
+
+**With a +3/+3 trick.** The 4/4 becomes a 7/7. Your 5 damage doesn't kill it, and it deals 7 damage: 3 to the 3/3 and 2 to the 2/2 kills both, with 2 left over. You lose two creatures, and they spend one card. That's a two-for-one in their favor.
+
+**The alternatives.** Blocking with just the 3/3 is the worst choice: your 3/3 dies and the 4/4 survives with 3 damage. Not blocking costs 4 life.
+
+The right answer depends on the race. If 4 life puts you within one hit of dying, take the double block and accept the risk. If you're healthy, taking 4 and keeping both creatures is often the safer line.
+
+## Making the right block
+
+Every block is one of a few types. Know what you're getting before you commit:
+
+| Block | What happens | When it's right |
+| --- | --- | --- |
+| Good block | Your creature kills the attacker and survives | Almost always, unless you fear a trick |
+| Trade | Both creatures die | When their creature matters more, or you're behind in the race |
+| Chump block | Your creature dies, the attacker survives | When the damage would kill you or lose you the race |
+| Double block | Two creatures gang up on one attacker | When you can afford to lose one creature and they have no likely trick |
+| No block | You take the damage | When you're ahead on the clock and life isn't urgent |
+
+### Worked example: which creature to chump
+
+You're at 5 with a single 1/1. They attack with a 5/5 and a 2/2. Unblocked, that's 7 damage, which kills you.
+
+- Chump the 2/2: you take 5 and die.
+- Chump the 5/5: you take 2 and survive at 3.
+
+Obvious when it's written out, but the same principle applies in subtler spots. Always block where the block prevents the most damage that matters, not where it kills the most creatures.
+
+### First strike and toughness thresholds
+
+First strike changes block math because the first striker deals damage before the other creature does. A 3/2 first striker blocked by a 2/3 deals 3 damage first, killing the blocker before it can strike back, so the first striker takes no damage at all. Without first strike, the same fight is a trade. Check which creatures have first strike, deathtouch and trample before every block. The [deathtouch, trample and first strike guide](/blog/mtg-deathtouch-trample-first-strike) works through how these keywords combine.
+
+Also count toughness thresholds. A deck full of 2-power creatures can't profitably attack into a 1/4 or a 2/3. Knowing which of your creatures beat which of theirs is the fastest way to see who can attack.
+
+## Evaluating a board stall
+
+A board stall is when neither player can attack without losing creatures for nothing. Stalls are common in Limited, and they're broken by one of three things:
+
+1. **Evasion.** A flier, a creature with menace or an unblockable creature gets through when nothing else can. In a stall, a 2/2 flier against a player at 12 is a six-turn clock, and that may be all you need.
+2. **A card that changes the math.** A big creature, a removal spell on their best blocker, or a pump effect for the whole team can make every attack profitable at once.
+3. **Inevitability.** Whoever has the better late game, more card draw or bigger spells, benefits from the stall continuing.
+
+When you're in a stall, ask which of you is helped by waiting. If it's you, don't attack into bad blocks just because nothing is happening. If it's them, look for the attack that forces them to make blocks they don't want to, or start trading to clear the way for your evasive creatures.
+
+### Worked example: alpha strike or wait?
+
+You have five creatures and they have four blockers. They're at 9. Your total power is 14, and your two biggest are a 4/4 and a 3/3. If they block your four biggest attackers, only your smallest, a 2/2, gets through. That's 2 damage. Not lethal, and likely costs you several creatures.
+
+Now say you draw a card that gives your team +1/+1 until end of turn. Recount: five attackers, each one point bigger, 19 total power. They still block four, so the unblocked creature is now a 3/3, worth 3 damage. Still not lethal. The team pump is better saved for a turn when more of your creatures go unblocked, for example after a removal spell takes out a blocker or when they've tapped creatures to attack you. This is the core of breaking stalls: wait until the numbers actually work, then commit.
+
+## Habits that make combat math automatic
+
+- **Count every turn,** even when nothing seems to have changed.
+- **Assume their best blocks and their likely trick.**
+- **Count the crack-back** before every attack that isn't lethal.
+- **Write down life totals** clearly so the clock is always accurate.
+- **Take your time on the big turns.** A minute of counting is cheaper than a lost game.
+
+When to attack in the first place is its own skill, covered in [when to attack](/blog/when-to-attack-mtg).
+
+## The takeaway
+
+Count your clock and theirs every turn, assume the worst-case block when checking for lethal, and always count the crack-back. Run important combats with and without the trick their mana represents, block where it prevents the damage that matters, and in a stall, let whoever benefits from waiting decide the pace. The arithmetic is simple. Doing it every single turn is what wins Limited games.
+
+<DeckLabCTA format="standard" brief="Aggressive creature deck with efficient attackers, evasive fliers and a few combat tricks" />
