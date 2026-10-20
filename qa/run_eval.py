@@ -22,7 +22,9 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = ROOT / "qa" / "REPORT.md"
 DEFAULT_API_BASE = os.getenv("MTG_API_BASE")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_EVAL_MODEL", "gpt-4.1-mini")
+# gpt-4.1-mini retires 2027-01-14 (OpenAI deprecations); GPT-5 models take the
+# reasoning/verbosity settings below.
+OPENAI_MODEL = os.getenv("OPENAI_EVAL_MODEL", "gpt-5-mini")
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 LLM_BATCH_SIZE = int(os.getenv("OPENAI_BATCH_SIZE", "5"))

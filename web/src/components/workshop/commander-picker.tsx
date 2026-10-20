@@ -8,7 +8,7 @@ import type { CommanderProfile, FormatName } from "@/lib/types";
 export type CommanderMode = "recommend" | "selected";
 
 type Props = {
-  format: FormatName;
+  format: FormatName | null;
   colors: string[];
   playstyleTags: string[];
   themeTags: string[];
@@ -41,7 +41,8 @@ export function CommanderPicker({
   onProfileChange
 }: Props) {
   const { commanders, loading, error } = useCommanderSearch({
-    format,
+    // Only enabled for Commander, so the fallback is never queried.
+    format: format ?? "commander",
     colors,
     playstyleTags,
     themeTags,

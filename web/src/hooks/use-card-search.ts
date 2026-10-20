@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { searchCards } from "@/lib/api";
 import type { CardSearchResult, FormatName } from "@/lib/types";
 
-export function useCardSearch(query: string, format: FormatName, enabled: boolean) {
+export function useCardSearch(query: string, format: FormatName | null, enabled: boolean) {
   const [results, setResults] = useState<CardSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 

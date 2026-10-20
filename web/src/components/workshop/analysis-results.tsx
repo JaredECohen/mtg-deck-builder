@@ -6,7 +6,7 @@ import type { CardRef, DeckAnalysisResponse, FormatName } from "@/lib/types";
 
 type Props = {
   analysis: DeckAnalysisResponse;
-  format: FormatName;
+  format: FormatName | null;
   manualMainboard: CardRef[];
   manualSideboard: CardRef[];
   manualCommander: string;

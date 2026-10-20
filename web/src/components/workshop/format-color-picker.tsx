@@ -6,7 +6,8 @@ import { COLORS, toggleValue } from "@/lib/strategies";
 import type { FormatName } from "@/lib/types";
 
 type Props = {
-  format: FormatName;
+  /** null until the user picks one: nothing is preselected. */
+  format: FormatName | null;
   colors: string[];
   onFormatChange: (format: FormatName) => void;
   onColorsChange: (colors: string[]) => void;
@@ -21,7 +22,17 @@ export function FormatColorPicker({ format, colors, onFormatChange, onColorsChan
     <>
       <div className="panel form-card panel-strong">
         <label className="label" htmlFor={formatId}>Format</label>
-        <select id={formatId} className="select" value={format} onChange={(event) => onFormatChange(event.target.value as FormatName)}>
+        <select
+          id={formatId}
+          className="select"
+          value={format ?? ""}
+          onChange={(event) => {
+            if (event.target.value) onFormatChange(event.target.value as FormatName);
+          }}
+        >
+          <option value="" disabled>
+            Choose a format
+          </option>
           <option value="standard">Standard</option>
           <option value="modern">Modern</option>
           <option value="pioneer">Pioneer</option>

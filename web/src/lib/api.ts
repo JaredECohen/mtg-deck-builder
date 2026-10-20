@@ -258,8 +258,9 @@ export async function parseDeckText(format: FormatName, deck_text: string, signa
   return jsonOrThrow<ParsedDecklistResponse>(response, "Deck import failed");
 }
 
-export async function searchCards(query: string, format: FormatName, signal?: AbortSignal): Promise<CardSearchResponse> {
-  const params = new URLSearchParams({ query: query.trim(), format });
+export async function searchCards(query: string, format: FormatName | null, signal?: AbortSignal): Promise<CardSearchResponse> {
+  // No format yet: search the whole card pool.
+  const params = new URLSearchParams({ query: query.trim(), ...(format ? { format } : {}) });
   const response = await fetch(`${API_BASE}/v1/cards?${params.toString()}`, { signal });
   return jsonOrThrow<CardSearchResponse>(response, "Card search failed");
 }

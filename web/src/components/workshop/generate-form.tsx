@@ -6,7 +6,7 @@ import { EXAMPLE_BRIEFS } from "@/lib/briefs";
 import type { FormatName } from "@/lib/types";
 
 type Props = {
-  format: FormatName;
+  format: FormatName | null;
   expertMode: boolean;
   onExpertModeChange: (value: boolean) => void;
   expertSettings: ExpertSettings;
@@ -59,6 +59,7 @@ export function GenerateForm({
           onChange={(event) => onPromptChange(event.target.value, true)}
           placeholder="Describe the deck you want. e.g. 'Modern burn, mono-red, aggressive damage to face' or 'Standard control with planeswalker finishers'."
         />
+        {format ? (
         <div className="example-briefs">
           <span className="muted field-help" id="example-briefs-label">Try an example:</span>
           <ul className="chips" aria-labelledby="example-briefs-label">
@@ -76,6 +77,7 @@ export function GenerateForm({
             ))}
           </ul>
         </div>
+        ) : null}
       </div>
 
       <button type="button" className="button" onClick={onSubmit} disabled={loading}>
