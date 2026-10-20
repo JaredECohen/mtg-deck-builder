@@ -11,36 +11,36 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-10-23 | `draft-vs-sealed-limited-guide` | formats | Draft vs Sealed | written |
 | 2026-10-24 | `how-to-evaluate-cards-limited` | strategy | How to Evaluate Cards | written |
 | 2026-10-25 | `commander-threat-assessment` | strategy | Commander Threat Assessment | written |
-| 2026-10-26 | `mtg-card-types-explained` | learn-to-play | MTG Card Types Explained | planned |
-| 2026-10-27 | `mtg-burn-deck-guide` | deck-archetypes | How to Build and Play a Burn Deck | planned |
-| 2026-10-28 | `card-advantage-explained` | strategy | Card Advantage Explained | planned |
-| 2026-10-29 | `mtg-standard-format-guide` | formats | Standard Format Guide | planned |
-| 2026-10-30 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | planned |
-| 2026-10-31 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | planned |
-| 2026-11-01 | `how-to-play-against-aggro` | strategy | How to Beat Aggro Decks | planned |
-| 2026-11-02 | `mtg-combat-explained` | learn-to-play | MTG Combat Explained Step by Step | planned |
-| 2026-11-03 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | planned |
-| 2026-11-04 | `mtg-pioneer-format-guide` | formats | Pioneer Format Guide | planned |
-| 2026-11-05 | `how-to-play-against-control` | strategy | How to Beat Control Decks | planned |
-| 2026-11-06 | `mtg-turn-structure-phases` | learn-to-play | MTG Turn Structure: Every Phase and Step | planned |
-| 2026-11-07 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | planned |
-| 2026-11-08 | `how-to-play-against-combo` | strategy | How to Beat Combo Decks | planned |
-| 2026-11-09 | `mtg-modern-format-guide` | formats | Modern Format Guide | planned |
-| 2026-11-10 | `summoning-sickness-explained` | learn-to-play | Summoning Sickness Explained | planned |
-| 2026-11-11 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | planned |
-| 2026-11-12 | `tempo-explained-mtg` | strategy | What Is Tempo in MTG? | planned |
-| 2026-11-13 | `mtg-color-pie-guide` | learn-to-play | The MTG Color Pie Explained | planned |
-| 2026-11-14 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | planned |
-| 2026-11-15 | `whos-the-beatdown-mtg` | strategy | Who's the Beatdown? Role Assignment in MTG | planned |
-| 2026-11-16 | `mtg-legacy-format-guide` | formats | Legacy Format Guide | planned |
-| 2026-11-17 | `mtg-planeswalkers-explained` | learn-to-play | How Planeswalkers Work | planned |
-| 2026-11-18 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | planned |
-| 2026-11-19 | `combat-tricks-guide` | strategy | How to Use Combat Tricks | planned |
-| 2026-11-20 | `mtg-vintage-format-guide` | formats | Vintage Format Guide | planned |
-| 2026-11-21 | `mtg-mana-symbols-explained` | learn-to-play | MTG Mana Symbols and Costs Explained | planned |
-| 2026-11-22 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | planned |
-| 2026-11-23 | `when-to-attack-mtg` | strategy | When to Attack in MTG | planned |
-| 2026-11-24 | `cedh-competitive-commander-guide` | formats | cEDH: Competitive Commander Explained | planned |
+| 2026-10-26 | `mtg-card-types-explained` | learn-to-play | MTG Card Types Explained | written |
+| 2026-10-27 | `mtg-burn-deck-guide` | deck-archetypes | How to Build and Play a Burn Deck | written |
+| 2026-10-28 | `card-advantage-explained` | strategy | Card Advantage Explained | written |
+| 2026-10-29 | `mtg-standard-format-guide` | formats | Standard Format Guide | written |
+| 2026-10-30 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | written |
+| 2026-10-31 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | written |
+| 2026-11-01 | `how-to-play-against-aggro` | strategy | How to Beat Aggro Decks | written |
+| 2026-11-02 | `mtg-combat-explained` | learn-to-play | MTG Combat Explained Step by Step | written |
+| 2026-11-03 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | written |
+| 2026-11-04 | `mtg-pioneer-format-guide` | formats | Pioneer Format Guide | written |
+| 2026-11-05 | `how-to-play-against-control` | strategy | How to Beat Control Decks | written |
+| 2026-11-06 | `mtg-turn-structure-phases` | learn-to-play | MTG Turn Structure: Every Phase and Step | written |
+| 2026-11-07 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | written |
+| 2026-11-08 | `how-to-play-against-combo` | strategy | How to Beat Combo Decks | written |
+| 2026-11-09 | `mtg-modern-format-guide` | formats | Modern Format Guide | written |
+| 2026-11-10 | `summoning-sickness-explained` | learn-to-play | Summoning Sickness Explained | written |
+| 2026-11-11 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | written |
+| 2026-11-12 | `tempo-explained-mtg` | strategy | What Is Tempo in MTG? | written |
+| 2026-11-13 | `mtg-color-pie-guide` | learn-to-play | The MTG Color Pie Explained | written |
+| 2026-11-14 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | written |
+| 2026-11-15 | `whos-the-beatdown-mtg` | strategy | Who's the Beatdown? Role Assignment in MTG | written |
+| 2026-11-16 | `mtg-legacy-format-guide` | formats | Legacy Format Guide | written |
+| 2026-11-17 | `mtg-planeswalkers-explained` | learn-to-play | How Planeswalkers Work | written |
+| 2026-11-18 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | written |
+| 2026-11-19 | `combat-tricks-guide` | strategy | How to Use Combat Tricks | written |
+| 2026-11-20 | `mtg-vintage-format-guide` | formats | Vintage Format Guide | written |
+| 2026-11-21 | `mtg-mana-symbols-explained` | learn-to-play | MTG Mana Symbols and Costs Explained | written |
+| 2026-11-22 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
+| 2026-11-23 | `when-to-attack-mtg` | strategy | When to Attack in MTG | written |
+| 2026-11-24 | `cedh-competitive-commander-guide` | formats | cEDH: Competitive Commander Explained | written |
 | 2026-11-25 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | planned |
 | 2026-11-26 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | planned |
 | 2026-11-27 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | planned |

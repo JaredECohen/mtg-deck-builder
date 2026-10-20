@@ -1,0 +1,129 @@
+---
+title: "How the Stack Works in MTG: Priority, Responses and Last In, First Out"
+description: "How the stack works in MTG: casting spells, priority, responding, last-in-first-out resolution and triggered abilities, with Lightning Bolt and Counterspell."
+date: 2026-10-30
+category: learn-to-play
+keywords: ["how the stack works mtg", "mtg stack explained", "mtg priority", "last in first out mtg", "responding to spells mtg"]
+related: ["how-to-play-magic-the-gathering", "mtg-card-types-explained", "how-to-read-a-magic-card"]
+draft: false
+---
+
+The stack is the zone where spells and abilities wait to resolve. When you cast a spell, it doesn't happen right away: it goes on the stack, and every player gets a chance to respond. Responses go on top, and the stack resolves from the top down, so the last thing added happens first. That "last in, first out" order is the core of how Magic handles interaction.
+
+Once you understand the stack, a lot of confusing moments become simple: why your opponent can kill a creature before your pump spell lands, how counterspells work, and why an enters-the-battlefield ability still happens even after the creature dies. This guide walks through each piece, then ties it together with examples using Lightning Bolt and Counterspell.
+
+## What goes on the stack
+
+These things use the stack:
+
+- **Spells** of every type when you cast them: creatures, instants, sorceries, artifacts, enchantments, planeswalkers and battles. (Not sure what each type does? See [MTG card types explained](/blog/mtg-card-types-explained).)
+- **Activated abilities**, the ones written as "cost: effect," like Prodigal Sorcerer's tap ability to deal 1 damage to any target.
+- **Triggered abilities**, the ones that start with "when," "whenever" or "at."
+
+These things don't use the stack, so nobody can respond to them directly:
+
+- **Playing a land.** It just goes onto the battlefield.
+- **Mana abilities,** like tapping a Forest or Llanowar Elves for mana. They resolve immediately.
+- **Static abilities,** like "creatures you control get +1/+1." They're always on; they never get cast or triggered.
+- **Special actions** and game rules like turning a face-down creature face up, or combat damage itself.
+
+## Casting a spell, step by step
+
+When you cast a spell, you announce it, move it to the stack, choose any modes and targets, and pay its costs. Once it's cast, it sits on the stack. It hasn't done anything yet.
+
+At this point the rules give players a chance to respond. That's where priority comes in.
+
+<InArticleAd />
+
+## Priority: who gets to act
+
+**Priority** is the right to cast a spell or activate an ability. Only the player with priority can do those things, and it passes back and forth in a specific way:
+
+1. The active player (the player whose turn it is) receives priority at the start of each step and phase, except the untap step and usually the cleanup step.
+2. After you cast a spell or activate an ability, you receive priority again. You can add more to the stack or pass.
+3. When a player passes, priority goes to the next player in turn order.
+4. **If all players pass in succession without doing anything,** one of two things happens:
+   - If the stack has something on it, the top object resolves. Then the active player gets priority again, and the process repeats.
+   - If the stack is empty, the current step or phase ends and the game moves on.
+
+The key detail is in point 4: the stack resolves only one object at a time, and everyone gets another chance to respond after each object resolves. In casual play, players compress all of this into phrases like "in response" and "okay, that resolves," but the underlying structure is always the same.
+
+### Instant speed vs sorcery speed
+
+Instants and abilities can be used any time you have priority, including when the stack already has things on it. That's what "instant speed" means.
+
+Most other spells, such as creatures and sorceries, can only be cast during your main phase, on your turn, when the stack is empty. That's "sorcery speed." It means you can't respond to an opponent's spell with a creature or a sorcery unless a card specifically allows it (flash, for example).
+
+## Last in, first out
+
+Think of the stack as a pile of plates. You add plates to the top and take plates off the top. The first spell cast is at the bottom; each response goes above it; the top one resolves first.
+
+Here's the simplest example, using two real cards:
+
+- **Lightning Bolt:** `{R}`, instant, deals 3 damage to any target.
+- **Giant Growth:** `{G}`, instant, target creature gets +3/+3 until end of turn.
+
+You attack with a 2/2 creature. Your opponent casts Lightning Bolt targeting it. Bolt goes on the stack.
+
+You respond with Giant Growth on your creature. Giant Growth goes on the stack above the Bolt.
+
+Both players pass. The top of the stack, Giant Growth, resolves first: your creature becomes 5/5. Both players pass again, and Lightning Bolt resolves: it deals 3 damage to a 5/5. Your creature survives.
+
+If the order were reversed, and you cast Giant Growth first and your opponent responded with Bolt, the Bolt would resolve first and kill your 2/2 before Giant Growth ever resolved. The order of the stack decides the outcome.
+
+## Countering spells
+
+A counterspell is just a spell that targets another spell on the stack. **Counterspell** (`{U}{U}`, instant) counters target spell. When it resolves, the targeted spell is removed from the stack and put into its owner's graveyard without doing anything.
+
+Because Counterspell has to target something on the stack, you can only cast it while the spell you want to stop is waiting to resolve. Once a spell has resolved, it's too late to counter it.
+
+### Worked example: a counter war
+
+Let's build a bigger stack. Your opponent controls a 3/3 creature. You have Lightning Bolt and Counterspell in hand and plenty of mana. Your opponent also has a Counterspell.
+
+1. You cast **Lightning Bolt** targeting their 3/3. The stack: Bolt.
+2. Your opponent responds with **Counterspell** targeting your Bolt. The stack, top to bottom: their Counterspell, Bolt.
+3. You respond with your own **Counterspell** targeting their Counterspell. The stack, top to bottom: your Counterspell, their Counterspell, Bolt.
+4. Both players pass. Your Counterspell resolves and counters theirs. Their Counterspell goes to the graveyard. The stack: Bolt.
+5. Both players get priority again. If neither does anything, Bolt resolves and deals 3 damage to the 3/3, which dies.
+
+Notice step 5. After each resolution, both players get another chance to act. If your opponent had a second Counterspell, they could cast it now, targeting the Bolt again.
+
+<InArticleAd />
+
+## Targets are checked again on resolution
+
+When a spell or ability resolves, the game checks whether its targets are still legal. If **all** of its targets have become illegal, it doesn't resolve at all. Players often call this "fizzling."
+
+Example: you cast Lightning Bolt targeting an opposing creature. In response, your opponent sacrifices that creature to some effect of their own. When Bolt tries to resolve, its only target is gone, so Bolt does nothing and goes to your graveyard. You can't redirect it.
+
+This is also why a response can "save" a creature by moving it, returning it to hand or giving it protection from the spell's color: the spell finds its target illegal and doesn't resolve.
+
+## Triggered abilities on the stack
+
+Triggered abilities use the stack just like spells. When a trigger condition happens, the ability waits until the next time a player would receive priority, and then its controller puts it on the stack. Players can respond to it like any spell.
+
+An important point: **once a triggered ability is on the stack, it exists independently of its source.** Take Mulldrifter, a creature that draws you two cards when it enters. If your opponent responds to that trigger by killing Mulldrifter with Lightning Bolt, the trigger still resolves and you still draw two cards. Killing the creature doesn't remove the ability already waiting on the stack.
+
+### Multiple triggers at once
+
+If several abilities trigger at the same time:
+
+- If they're all yours, you choose the order you put them on the stack. The one you put on last resolves first.
+- If both players have triggers, the active player puts all of theirs on the stack first, in any order they choose, and then the other player puts theirs on top. That means the non-active player's triggers resolve first.
+
+This ordering rarely matters in simple games, but it can be decisive when triggers interact, such as one ability that draws a card and another that cares about how many cards are in your hand.
+
+## Common stack mistakes
+
+1. **Thinking a response "cancels" a spell.** Responding only puts something on top. The original spell still resolves afterward unless it's countered or loses its targets.
+2. **Casting into open counter mana without a plan.** If your opponent leaves `{U}{U}` open, ask what you're happy to have countered first.
+3. **Forgetting triggers survive their source.** Killing a creature in response to its enters trigger doesn't stop the trigger.
+4. **Rushing past priority.** Give your opponent a chance to respond before you assume something resolved. In tournaments, saying clearly when you pass helps avoid disputes.
+5. **Responding to a land drop or mana ability.** Those never use the stack, so there's nothing to respond to.
+
+## The takeaway
+
+The stack is a pile: spells and abilities go on top, players take turns getting priority, and the top object resolves first, one at a time. Respond when you want your effect to happen first; wait when you want to see what happens. Master that and combat tricks, counterspells and triggered abilities all follow the same simple pattern. If you're still learning the rest of a turn, [how to play Magic](/blog/how-to-play-magic-the-gathering) covers the full game from the start.
+
+<DeckLabCTA format="pioneer" brief="Blue-red instant-speed deck with counterspells and burn" />
