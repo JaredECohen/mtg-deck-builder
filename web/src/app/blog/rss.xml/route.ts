@@ -1,6 +1,6 @@
 import { CATEGORIES, SITE_NAME, SITE_URL, allPosts } from "@/lib/blog";
 
-export const dynamic = "force-static";
+export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS: scheduled posts appear hourly
 
 function escapeXml(value: string): string {
   return value.replace(/[<>&'"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[ch] as string);

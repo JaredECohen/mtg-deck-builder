@@ -3,7 +3,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_IN_ARTICLE_SLOT } from "@/lib/ads";
-import { slugify } from "@/lib/blog";
+import { getPost, isCategory, slugify } from "@/lib/blog";
 import type { FormatName } from "@/lib/types";
 
 const FORMATS: FormatName[] = ["standard", "modern", "pioneer", "legacy", "commander"];
@@ -77,6 +77,10 @@ function Heading3(props: ComponentPropsWithoutRef<"h3">) {
 }
 
 function Anchor({ href = "", ...props }: ComponentPropsWithoutRef<"a">) {
+  // A link to a guide that hasn't published yet (scheduled for a later day)
+  // renders as plain text, and becomes a link once that guide is live.
+  const guide = href.match(/^\/blog\/([a-z0-9-]+)/)?.[1];
+  if (guide && !isCategory(guide) && !getPost(guide)) return <span>{props.children}</span>;
   if (href.startsWith("/")) return <Link href={href} {...props} />;
   return <a href={href} target="_blank" rel="noopener noreferrer" {...props} />;
 }

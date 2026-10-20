@@ -26,7 +26,10 @@ import {
 // Next 15 passes route params as a Promise.
 type Params = { params: Promise<{ slug: string }> };
 
-export const dynamicParams = false;
+// Scheduled posts aren't in the build's static params; they render on first
+// request once their date arrives (getPost hides them until then).
+export const dynamicParams = true;
+export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS
 
 export function generateStaticParams() {
   return [...Object.keys(CATEGORIES), ...allPosts().map((post) => post.slug)].map((slug) => ({ slug }));

@@ -1,6 +1,10 @@
-// The guides section: MDX articles committed under web/content/blog, read at
-// build time. Every route under /blog is statically generated from these
-// files, so a new article ships by adding one .mdx file.
+// The guides section: MDX articles committed under web/content/blog.
+//
+// Publishing is scheduled by each article's `date`: a post is live once that
+// day has arrived in New York (America/New_York), and hidden everywhere
+// until then (index, hubs, related, sitemap, RSS, direct URL). Pages that
+// list posts revalidate hourly (BLOG_REVALIDATE_SECONDS), so a post dated
+// tomorrow appears tomorrow without a deploy.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -39,6 +43,17 @@ export type CategoryId = keyof typeof CATEGORIES;
 
 export function isCategory(value: string): value is CategoryId {
   return Object.prototype.hasOwnProperty.call(CATEGORIES, value);
+}
+
+/** Pages that list or render posts re-render at most this often. */
+export const BLOG_REVALIDATE_SECONDS = 3600;
+
+/** Today's date (YYYY-MM-DD) in New York, the publishing time zone. */
+export function publishingToday(now: Date = new Date()): string {
+  // Server-only override for previewing the schedule, e.g. GUIDES_TODAY=2026-11-01.
+  const override = process.env.GUIDES_TODAY;
+  if (override && /^\d{4}-\d{2}-\d{2}$/.test(override)) return override;
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
 }
 
 export type PostMeta = {
@@ -113,8 +128,8 @@ function readPost(file: string): Post | null {
 
 let cache: Post[] | null = null;
 
-/** Published posts, newest first. */
-export function allPosts(): Post[] {
+/** Every non-draft post, including scheduled ones, newest first. */
+export function allPostsIncludingScheduled(): Post[] {
   if (cache) return cache;
   const files = fs.existsSync(BLOG_DIR) ? fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith(".mdx")) : [];
   cache = files
@@ -122,6 +137,12 @@ export function allPosts(): Post[] {
     .filter((post): post is Post => post !== null)
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.title.localeCompare(b.title)));
   return cache;
+}
+
+/** Published posts (dated today or earlier in New York), newest first. */
+export function allPosts(): Post[] {
+  const today = publishingToday();
+  return allPostsIncludingScheduled().filter((post) => post.date <= today);
 }
 
 export function getPost(slug: string): Post | undefined {
