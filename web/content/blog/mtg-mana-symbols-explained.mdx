@@ -1,0 +1,163 @@
+---
+title: "MTG Mana Symbols Explained: Colored, Generic, Hybrid, Phyrexian, Colorless and X Costs"
+description: "MTG mana symbols explained: what each symbol means, how hybrid, Phyrexian, colorless, snow and X costs work, and how to read and pay any mana cost step by step."
+date: 2026-11-21
+category: learn-to-play
+keywords: ["mtg mana symbols", "mtg mana symbols explained", "hybrid mana", "phyrexian mana", "colorless mana", "mtg x cost"]
+related: ["how-to-read-a-magic-card", "mana-curve-explained", "mtg-color-pie-guide"]
+draft: false
+---
+
+A Magic mana cost is a row of symbols, and each symbol is one requirement you must pay. A colored symbol needs mana of that color, a number needs that much mana of any type, and special symbols like hybrid, Phyrexian, colorless and X each have their own simple rule. Once you know the handful of symbol types, you can read and pay any cost in the game.
+
+This guide goes through every common mana symbol, explains how each one affects a card's mana value and color, and walks through paying costs step by step. If you're brand new and want the tour of the whole card first, read [how to read a Magic card](/blog/how-to-read-a-magic-card), then come back here for the details.
+
+## How mana symbols are written
+
+On a card, mana symbols are small colored circles. Online, players write them in a text shorthand with braces, as this guide does:
+
+| Written as | Symbol | Meaning |
+| --- | --- | --- |
+| `{W}` | White sun | One white mana |
+| `{U}` | Blue water drop | One blue mana |
+| `{B}` | Black skull | One black mana |
+| `{R}` | Red fireball | One red mana |
+| `{G}` | Green tree | One green mana |
+| `{1}`, `{2}`, `{3}` | Gray circle with a number | That much generic mana |
+| `{C}` | Gray circle with a diamond | One colorless mana |
+| `{X}` | Gray circle with an X | A number you choose |
+
+Blue is `{U}` rather than B because black already uses B. Players often list the five colors in this order, WUBRG. The [color pie guide](/blog/mtg-color-pie-guide) explains what each color is good at.
+
+## Colored mana
+
+A colored mana symbol must be paid with mana of exactly that color. Lightning Bolt costs `{R}`, so you need one red mana. Counterspell costs `{U}{U}`, so you need two blue mana. No other color will do.
+
+Colored symbols also decide a card's **color**. A card is every color that appears in its mana cost. Counterspell is blue. A card with `{W}` and `{U}` in its cost is both white and blue, which makes it a multicolored card.
+
+Most lands make one color of mana: Plains make white, Islands make blue, Swamps make black, Mountains make red and Forests make green. Some nonbasic lands and artifacts can make more than one color, which is how two- and three-color decks cast all their spells.
+
+## Generic mana
+
+A number in a mana cost is **generic** mana. You can pay it with mana of any color, with colorless mana, or with any mix. Serra Angel costs `{3}{W}{W}`: two of those must be white, and the other three can be anything.
+
+Generic mana is the flexible part of a cost, which is why a card with only one colored symbol is easy to splash into a deck with a few sources of that color.
+
+### A cost of zero
+
+Some cards have a mana cost of `{0}`, such as Ornithopter and Memnite. You can cast them without spending any mana at all. That's different from a card with **no mana cost**. Lands have no mana cost, and a few spells are printed without one; a card with no mana cost can't be cast by paying its mana cost, because it doesn't have one to pay. Both kinds have a mana value of 0.
+
+<InArticleAd />
+
+## Colorless mana: the diamond symbol
+
+The `{C}` symbol, a diamond inside a circle, means **colorless mana specifically**. This is not the same as generic.
+
+- Generic (`{1}`) can be paid with any mana, colored or colorless.
+- Colorless (`{C}`) can be paid **only** with colorless mana. Colored mana won't work.
+
+Colorless mana comes from sources that don't produce a color. Sol Ring, for example, adds `{C}{C}`. The basic land Wastes taps for `{C}`. Many utility lands also tap for colorless mana.
+
+Thought-Knot Seer costs `{3}{C}`. You can pay the `{3}` with anything, but the `{C}` must come from a colorless source. A deck of only Islands and Forests could never cast it, no matter how many lands it had.
+
+The `{C}` symbol also appears in mana abilities to show that a source produces colorless mana. When you see "Add `{C}`" on a land, it means one colorless mana, not one mana of any color.
+
+## Hybrid mana
+
+A **hybrid** symbol is a circle split in two, written like `{W/U}`. You pay it with either of the two options shown. There are two kinds.
+
+### Two-color hybrid
+
+A two-color hybrid symbol such as `{R/W}` can be paid with either one red or one white mana. Kitchen Finks costs `{1}{G/W}{G/W}`: one generic, then two symbols that can each be paid with green or white. A mono-green deck can cast it, and so can a mono-white deck.
+
+Two key rules:
+
+- **Color.** A hybrid card is **both** colors, no matter how you pay for it. Kitchen Finks is green and white even if you cast it using only green mana.
+- **Mana value.** Each hybrid symbol counts as 1. Kitchen Finks has a mana value of 3.
+
+In Commander, a hybrid symbol counts toward a card's color identity in both colors, so Kitchen Finks can only go in a deck whose commander includes both green and white. [What is Commander](/blog/what-is-commander-edh) explains color identity if you haven't seen it before.
+
+### Monocolored hybrid
+
+A monocolored hybrid symbol is split between a color and the number 2, written like `{2/W}`. You can pay it with one mana of that color **or** with two generic mana. Spectral Procession costs `{2/W}{2/W}{2/W}`. A mono-white deck can cast it for three white mana, while a deck with only one white source can pay `{W}` plus four generic, or even six generic with no white at all.
+
+For mana value, each monocolored hybrid symbol counts as 2, the larger option. Spectral Procession has a mana value of 6, even though you'll often cast it for three mana. Keep that in mind when a card cares about mana value, like a counterspell that only counters spells with a certain mana value.
+
+## Phyrexian mana
+
+A **Phyrexian** mana symbol is a colored symbol with a small slash and a P, written like `{B/P}` or `{U/P}`. You may pay it with one mana of that color **or** with 2 life.
+
+Gitaxian Probe costs `{U/P}`, so you can cast it for one blue mana or for 2 life and no mana. Dismember costs `{1}{B/P}{B/P}`: you pay the `{1}`, then for each Phyrexian symbol you choose black mana or 2 life. That means any deck can cast Dismember for one mana and 4 life.
+
+The rules to remember:
+
+- **Color.** A card with Phyrexian symbols is the color shown, even if you pay life. Dismember is black.
+- **Mana value.** Each Phyrexian symbol counts as 1. Dismember has a mana value of 3.
+- **Commander.** Phyrexian symbols count toward color identity, so Dismember needs a commander that includes black.
+- **Life is a real cost.** You can't pay life you don't have. With 1 life left, you can't pay 2 life for a Phyrexian symbol.
+
+A few newer cards combine hybrid and Phyrexian into a single symbol. These follow the same logic: you choose which of the shown options to pay.
+
+<InArticleAd />
+
+## X costs
+
+An `{X}` in a cost means you choose a number when you cast the spell, then pay that much additional generic mana. Fireball costs `{X}{R}`. If you choose X = 4, you pay `{4}{R}`, five mana in total, and the card uses 4 wherever its text says X.
+
+A few things trip people up:
+
+- **Choose X before paying.** You announce X as part of casting, then pay.
+- **Double X.** Some costs have two X symbols, like Hangarback Walker's `{X}{X}`. You pay X twice. Choosing X = 2 means paying four mana.
+- **Mana value.** An X counts as 0 everywhere except while the spell is on the stack, where it counts as the chosen number. Fireball has a mana value of 1 in your hand or graveyard, and 5 on the stack if you chose X = 4.
+- **X can be 0.** Unless a card says otherwise, you can choose 0. That's rarely useful, but it's legal.
+
+For how X spells fit into a deck's curve, see [mana curve explained](/blog/mana-curve-explained).
+
+## Snow mana
+
+The snow symbol `{S}`, a snowflake, appears on a small number of cards. It can be paid with one mana of any type, as long as that mana came from a **snow** source, meaning a permanent with the snow supertype, such as Snow-Covered Forest or Snow-Covered Island. Mana from an ordinary Forest can't pay `{S}`.
+
+Snow is a niche mechanic from a few winter-themed sets, so most players can safely ignore it.
+
+## Symbols outside mana costs
+
+Mana symbols also appear in **activated ability** costs, the part before the colon in "Cost: Effect," alongside the tap symbol `{T}`. They work exactly as they do in a mana cost: "`{2}{R}`, `{T}`: Deal 1 damage" needs two generic, one red and tapping the permanent, every time you activate it.
+
+## How to read and pay a cost, step by step
+
+When you cast a spell, the rules have you announce it, make your choices, work out the total cost, then pay. In practice:
+
+1. **Announce the spell and any choices.** Put the card on the stack. Choose targets, modes and the value of X if the cost has one.
+2. **Work out the total cost.** Start from the mana cost. Add any additional costs, such as kicker you choose to pay. Apply any cost increases, then any reductions.
+3. **Decide how to pay flexible symbols.** For each hybrid symbol, pick which color. For each Phyrexian symbol, pick mana or 2 life. For monocolored hybrid, pick the color or two generic.
+4. **Activate mana abilities.** Tap lands and other mana sources to make the mana you need.
+5. **Pay.** Spend the right mana on each colored and colorless requirement first, then use whatever is left for generic.
+
+The real mistakes happen across a whole turn, not inside one payment. Say you control an Island and a Mountain and hold two spells: one costs `{1}`, the other `{U}`. If you tap the Island for the `{1}` spell first, you have only red mana left and can't cast the blue one. Before tapping anything, look at every spell you plan to cast this turn and save your colored sources for the colored symbols.
+
+### Cost reductions only touch generic
+
+Many cards say something like "spells you cast cost `{1}` less." Unless the reducing effect says otherwise, a reduction like this only lowers the generic part of a cost. It can't remove a colored requirement. A spell that costs `{U}{U}` stays `{U}{U}` under a generic reduction.
+
+### Mana empties between steps
+
+Mana you add sits in your mana pool only until the end of the current step or phase. If you tap a land during your main phase and don't use the mana, it's gone when you move to combat. Tap for mana when you're ready to spend it.
+
+## Quick reference
+
+| Symbol | Pay with | Counts toward mana value |
+| --- | --- | --- |
+| `{W}` `{U}` `{B}` `{R}` `{G}` | That color only | 1 each |
+| `{2}` (any number) | Any mana | The number |
+| `{C}` | Colorless mana only | 1 |
+| `{W/U}` (two-color hybrid) | Either color | 1 |
+| `{2/W}` (monocolored hybrid) | That color, or two generic | 2 |
+| `{B/P}` (Phyrexian) | That color, or 2 life | 1 |
+| `{X}` | Any mana, amount you choose | 0 except on the stack |
+| `{S}` (snow) | Mana from a snow source | 1 |
+
+## Takeaway
+
+Read a cost one symbol at a time. Colored symbols need their color, numbers take anything, `{C}` needs true colorless mana, hybrid lets you pick, Phyrexian lets you pay life, and X is your choice. Pay colored requirements first and generic last. Once that clicks, checking whether your deck can reliably cast its cards becomes a matter of counting sources, which the [Deck Lab builder](/) can do for you.
+
+<DeckLabCTA format="modern" brief="Mono-black midrange using Phyrexian mana spells like Dismember" />
