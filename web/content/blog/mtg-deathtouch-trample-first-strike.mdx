@@ -1,0 +1,130 @@
+---
+title: "Deathtouch, Trample and First Strike: How MTG Combat Keywords Combine"
+description: "How deathtouch, trample, first strike and double strike combine in MTG combat: what counts as lethal damage, how it's assigned, and worked examples of each."
+date: 2026-12-31
+category: learn-to-play
+keywords: ["deathtouch and trample", "deathtouch vs first strike", "double strike trample", "mtg lethal damage assignment", "mtg combat keywords"]
+related: ["mtg-combat-explained", "blocking-strategy-mtg", "combat-tricks-guide", "limited-combat-math"]
+draft: false
+---
+
+Deathtouch, trample, first strike and double strike each change one part of combat damage, and the interesting cases come from combining them. Deathtouch makes 1 damage count as lethal, so a deathtouch trampler only has to assign 1 damage to each blocker before the rest goes to the player. First strike lets a creature deal its damage in an earlier step, so a first striker can kill a deathtouch creature before it deals any damage at all. Double strike deals damage in both steps.
+
+This guide explains each keyword briefly, then works through the combinations with numbers. For the combat steps themselves, see [MTG combat explained](/blog/mtg-combat-explained).
+
+## The four keywords in one line each
+
+- **Deathtouch:** any nonzero amount of damage this creature deals to a creature is enough to destroy it.
+- **Trample:** when blocked, this creature can assign damage beyond what's lethal to its blockers to the player, planeswalker or battle it's attacking.
+- **First strike:** this creature deals combat damage in a separate, earlier damage step.
+- **Double strike:** this creature deals combat damage in both the first-strike step and the regular step.
+
+A few real cards to picture: Typhoid Rats is a one-mana 1/1 with deathtouch. Colossal Dreadmaw is a 6/6 with trample. White Knight has first strike. Boros Swiftblade is a 1/2 with double strike. Vampire Nighthawk combines flying, deathtouch and lifelink on a 2/3.
+
+## What "lethal damage" means
+
+Trample and damage assignment both rely on the idea of lethal damage. Lethal damage is the amount needed to destroy a creature, worked out like this:
+
+- Start with the creature's toughness.
+- Subtract any damage already marked on it this turn.
+- If the source dealing the damage has deathtouch, 1 damage is lethal, no matter how big the creature is.
+
+Two details catch people out. First, lethal damage counts damage already dealt this turn. A 5/5 that took 3 damage earlier in the turn needs only 2 more. Second, the calculation ignores things that would stop the damage from mattering. If a blocker has protection that will prevent the damage, or it's indestructible, the attacker still has to assign it lethal damage before trampling over. Damage assignment looks only at toughness, damage already marked, and deathtouch.
+
+<InArticleAd />
+
+## Deathtouch and trample
+
+This is the most famous combination. With trample, the attacker must assign lethal damage to every blocker before assigning any to the player. With deathtouch, lethal is 1. So a deathtouch trampler assigns 1 damage to each blocker and the rest to the player.
+
+**Example.** A 6/6 with deathtouch and trample attacks and is blocked by an 8/8. Without deathtouch, the attacker would need to assign all 6 damage to the 8/8 and nothing would get through. With deathtouch, it assigns 1 to the 8/8, which is lethal, and 5 to the player. The 8/8 is destroyed, the player takes 5, and the attacker takes 8 damage and dies, unless something saves it.
+
+**Example with two blockers.** The same 6/6 deathtouch trampler is blocked by a 3/3 and a 4/4. It assigns 1 to each blocker and 4 to the player. Both blockers are destroyed, and the player takes 4.
+
+You can always assign more than lethal to a blocker if you prefer, for example to make sure it dies even if the opponent has a trick that removes deathtouch. You just can't assign less than lethal to a blocker and send damage to the player.
+
+Equipment like Basilisk Collar, which grants deathtouch and lifelink, turns any trampler into this combination.
+
+## Deathtouch without trample
+
+Even without trample, deathtouch changes how an attacker divides damage among several blockers. The attacking player splits the damage however they like, and with deathtouch each point kills a creature.
+
+**Example.** A 3/3 with deathtouch is blocked by three 5/5s. It assigns 1 damage to each, destroying all three. It takes 15 damage and dies, but that's a three-for-one trade.
+
+This is also why deathtouch creatures are such good blockers. A 1/1 deathtouch creature trades with anything that attacks into it. The [blocking guide](/blog/blocking-strategy-mtg) covers how to use that defensively.
+
+<InArticleAd />
+
+## First strike against deathtouch
+
+First strike beats deathtouch, because deathtouch only works if the creature actually deals damage.
+
+**Example.** A 2/2 with first strike attacks and is blocked by Typhoid Rats, a 1/1 with deathtouch. In the first-strike damage step, the 2/2 deals 2 damage to the Rats, which dies. In the regular damage step, the Rats are gone and deal no damage. The 2/2 survives untouched.
+
+The same logic works in reverse. If the first striker doesn't deal lethal damage, the deathtouch creature survives to the regular step and destroys it. A 1/1 first striker blocked by a 1/3 deathtouch creature deals 1 damage first, the 1/3 survives with 1 damage marked, and then it deals 1 deathtouch damage to the first striker, destroying it.
+
+### First strike and deathtouch on the same creature
+
+Put both on one creature and it destroys any creature it deals damage to before that creature can deal damage back, unless the other creature also has first strike or double strike. Glissa, the Traitor is a 3/3 with first strike and deathtouch, and blocking it or being blocked by it without first strike of your own means losing your creature for nothing.
+
+If both creatures have first strike, they deal damage at the same time in the first-strike step, so a first striker with at least 3 power that blocks Glissa trades with it rather than dying for nothing.
+
+## Double strike
+
+A double striker deals damage in the first-strike step and again in the regular step. The second hit is where things get interesting.
+
+### Double strike without trample
+
+If the blocker dies in the first-strike step, the attacker is still blocked. It deals no damage in the regular step, because it has no creature to deal damage to and no trample.
+
+**Example.** Boros Swiftblade (1/2, double strike) attacks and is blocked by a 1/1. In the first step, it deals 1 to the 1/1, which dies. In the regular step, Swiftblade is still blocked and deals nothing. The defending player takes no damage.
+
+### Double strike with trample
+
+Trample has a special rule: if all the creatures blocking a trampler have been removed from combat, it assigns all of its damage to the player. Combined with double strike, that means the second hit goes entirely to the player once the blockers are gone.
+
+**Example.** A 4/4 with double strike and trample is blocked by a 2/2.
+
+- First-strike step: 2 to the 2/2 (lethal), 2 to the player. The 2/2 dies.
+- Regular step: no blockers remain, so all 4 damage goes to the player.
+- Total: the player takes 6.
+
+**Example where the blocker survives the first hit.** A 2/2 with double strike and trample is blocked by a 0/4.
+
+- First-strike step: lethal for the 0/4 is 4, and the attacker only has 2 power. It must assign all 2 to the blocker. Nothing goes through.
+- Regular step: the 0/4 has 2 damage marked, so lethal is now 2. The attacker assigns 2 to it and nothing to the player. The 0/4 dies.
+- Total: the player takes 0.
+
+### Double strike, deathtouch and trample
+
+The full combination is brutal. A 4/4 with all three keywords is blocked by a 5/5.
+
+- First-strike step: 1 to the 5/5 (lethal, thanks to deathtouch), 3 to the player. The 5/5 is destroyed.
+- Regular step: no blockers remain, so all 4 go to the player.
+- Total: the player takes 7, and the attacker takes no damage at all, because the 5/5 died before it could deal any.
+
+## Quick reference
+
+| Combination | Result |
+| --- | --- |
+| Deathtouch + trample | 1 damage to each blocker, the rest to the player |
+| First strike vs. deathtouch | First striker wins if it deals lethal damage first |
+| First strike + deathtouch | Destroys any non-first-striker it fights before taking damage |
+| Double strike, no trample | Second hit does nothing if the blocker died in the first |
+| Double strike + trample | Excess from the first hit, and the entire second hit if the blocker died, go to the player |
+| Deathtouch vs. indestructible | Lethal is still 1 for assignment, but the blocker isn't destroyed |
+
+## Common mistakes
+
+- **Thinking deathtouch needs to kill to "count" for trample.** Assignment only needs lethal damage as defined above. An indestructible blocker still only needs 1 from a deathtouch trampler.
+- **Forgetting damage already marked.** If a creature has already taken damage this turn, less is needed to finish it.
+- **Expecting a blocked double striker to hit the player after its blocker dies.** Without trample, it stays blocked and deals nothing.
+- **Granting first strike too late.** If you want your creature to strike first with a trick, it needs first strike before the combat damage step begins. Giving it first strike after first-strike damage has already been dealt does nothing useful: it just deals its damage in the regular step as usual. The [combat tricks guide](/blog/combat-tricks-guide) covers trick timing in detail.
+
+When you're counting attacks and blocks across a whole board, these interactions feed straight into [combat math](/blog/limited-combat-math).
+
+## The takeaway
+
+Deathtouch makes 1 damage lethal, trample sends the excess past lethal to the player, first strike lets a creature hit before others, and double strike hits twice. Combine them by working one damage step at a time: work out lethal for each blocker, assign it, send the rest through if the attacker tramples, then repeat for the regular step. Do that, and you'll never be surprised by how much damage a creature deals.
+
+<DeckLabCTA format="pioneer" brief="Golgari midrange with deathtouch creatures and trample threats" />

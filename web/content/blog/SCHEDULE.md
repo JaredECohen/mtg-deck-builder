@@ -73,35 +73,35 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-12-24 | `artifact-deck-guide` | deck-archetypes | Artifact Decks Explained | written |
 | 2026-12-25 | `sealed-deck-building-guide` | strategy | How to Build a Sealed Deck | written |
 | 2026-12-26 | `best-of-one-vs-best-of-three` | formats | Best-of-One vs Best-of-Three | written |
-| 2026-12-27 | `double-faced-cards-explained` | learn-to-play | Double-Faced Cards Explained | planned |
-| 2026-12-28 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | planned |
-| 2026-12-29 | `limited-combat-math` | strategy | Combat Math in Limited | planned |
-| 2026-12-30 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | planned |
-| 2026-12-31 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | planned |
-| 2027-01-01 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | planned |
-| 2027-01-02 | `metagame-explained-mtg` | strategy | What Is a Metagame? | planned |
-| 2027-01-03 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | planned |
-| 2027-01-04 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | planned |
-| 2027-01-05 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | planned |
-| 2027-01-06 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | planned |
-| 2027-01-07 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | planned |
-| 2027-01-08 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | planned |
-| 2027-01-09 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | planned |
-| 2027-01-10 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | planned |
-| 2027-01-11 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | planned |
-| 2027-01-12 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | planned |
-| 2027-01-13 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | planned |
-| 2027-01-14 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | planned |
-| 2027-01-15 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | planned |
-| 2027-01-16 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | planned |
-| 2027-01-17 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | planned |
-| 2027-01-18 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | planned |
-| 2027-01-19 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | planned |
-| 2027-01-20 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | planned |
-| 2027-01-21 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | planned |
-| 2027-01-22 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | planned |
-| 2027-01-23 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | planned |
-| 2027-01-24 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | planned |
-| 2027-01-25 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | planned |
-| 2027-01-26 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | planned |
-| 2027-01-27 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | planned |
+| 2026-12-27 | `double-faced-cards-explained` | learn-to-play | Double-Faced Cards Explained | written |
+| 2026-12-28 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | written |
+| 2026-12-29 | `limited-combat-math` | strategy | Combat Math in Limited | written |
+| 2026-12-30 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | written |
+| 2026-12-31 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | written |
+| 2027-01-01 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | written |
+| 2027-01-02 | `metagame-explained-mtg` | strategy | What Is a Metagame? | written |
+| 2027-01-03 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | written |
+| 2027-01-04 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | written |
+| 2027-01-05 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | written |
+| 2027-01-06 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | written |
+| 2027-01-07 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | written |
+| 2027-01-08 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | written |
+| 2027-01-09 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | written |
+| 2027-01-10 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | written |
+| 2027-01-11 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | written |
+| 2027-01-12 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | written |
+| 2027-01-13 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | written |
+| 2027-01-14 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | written |
+| 2027-01-15 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | written |
+| 2027-01-16 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | written |
+| 2027-01-17 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | written |
+| 2027-01-18 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | written |
+| 2027-01-19 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | written |
+| 2027-01-20 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | written |
+| 2027-01-21 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | written |
+| 2027-01-22 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | written |
+| 2027-01-23 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | written |
+| 2027-01-24 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | written |
+| 2027-01-25 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | written |
+| 2027-01-26 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | written |
+| 2027-01-27 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | written |

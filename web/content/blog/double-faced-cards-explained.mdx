@@ -1,0 +1,128 @@
+---
+title: "Double-Faced Cards Explained: Transforming DFCs, Modal DFCs and Mana Value"
+description: "Double-faced cards in MTG explained: how transforming and modal DFCs work, which face you can cast, the mana value of each face, and how to play them in paper."
+date: 2026-12-27
+category: learn-to-play
+keywords: ["double faced cards mtg", "mtg transform rules", "modal double faced cards", "mdfc mana value", "dfc checklist card"]
+related: ["mtg-card-types-explained", "how-to-read-a-magic-card", "mtg-planeswalkers-explained"]
+draft: false
+---
+
+A double-faced card (DFC) has a Magic card face printed on both sides instead of the usual card back. There are two main kinds. A transforming DFC is always cast front face up and later flips to its back face when something tells it to transform. A modal DFC (MDFC) lets you choose which face to cast or play, and it stays on that face. Outside the battlefield and the stack, every DFC is treated as only its front face, which is why the mana value questions trip people up.
+
+This guide covers both kinds, how mana value and color work for each face, and the practical side of playing them with paper cards. If any of the card types mentioned here are new to you, start with the [card types guide](/blog/mtg-card-types-explained).
+
+## The two kinds of double-faced cards
+
+Both kinds have a front face and a back face, and both use a small symbol in the top-left corner to show which side is which. The difference is what you're allowed to do with the back face.
+
+| | Transforming DFC | Modal DFC |
+| --- | --- | --- |
+| Which face can you cast? | Front face only | Either face |
+| Does it flip during play? | Yes, when told to transform | No, it stays on the face you chose |
+| Back face mana cost | None printed | Its own mana cost (or none, if it's a land) |
+| Typical example | Delver of Secrets | Emeria's Call |
+
+Transforming DFCs first appeared in the original Innistrad block and keep returning, especially in sets with werewolves. Modal DFCs arrived later and are best known for spells that double as lands.
+
+## How transforming double-faced cards work
+
+You cast a transforming DFC using its front face, it enters the battlefield front face up, and it stays that way until an effect instructs it to transform. When it transforms, you turn it over so the back face is showing. Some cards can transform back again; others are one-way.
+
+Delver of Secrets is the classic example. It's a one-mana 1/1 for blue with an upkeep trigger: you look at the top card of your library, and if you reveal an instant or sorcery card that way, Delver transforms into Insectile Aberration, a 3/2 flier. Nothing about the card's identity changes when it flips except its face.
+
+<InArticleAd />
+
+### What stays the same when a permanent transforms
+
+A transforming permanent is the same object before and after it flips. That has a few consequences that come up constantly:
+
+- **Counters stay.** A +1/+1 counter on the front face is still there on the back face.
+- **Auras and Equipment stay attached,** as long as the new face is still a legal thing for them to be attached to.
+- **It isn't a new permanent.** It doesn't "enter the battlefield" again, so enters-the-battlefield abilities on the back face don't trigger, and it doesn't get summoning sickness again. If it could attack before transforming, it still can.
+- **Damage stays marked.** If the front face had taken 2 damage this turn, the back face has that damage too, measured against its new toughness.
+
+### Werewolves, day and night
+
+Werewolves are the most famous transforming cards. Older werewolves transform at the beginning of each upkeep if no spells were cast during the previous turn, and transform back if a player cast two or more spells in a single turn. Huntmaster of the Fells, which becomes Ravager of the Fells, works this way.
+
+Newer werewolves use daybound and nightbound instead. The game tracks whether it is day or night: it becomes night if the active player casts no spells during their own turn, and it becomes day again if a player casts two or more spells during their turn. All daybound and nightbound permanents flip together to match. The idea is the same as the older werewolves, but it's tracked by the game rather than card by card.
+
+### Planeswalkers that transform
+
+A handful of legendary creatures transform into planeswalkers. Jace, Vryn's Prodigy is a two-mana creature that loots, and if you have five or more cards in your graveyard after it does, it exiles itself and returns transformed as the planeswalker Jace, Telepath Unbound. Because it returns as a new object, it can use a loyalty ability right away if you flipped it during your own main phase. The [planeswalkers guide](/blog/mtg-planeswalkers-explained) explains how loyalty works once it's on the other side.
+
+## How modal double-faced cards work
+
+A modal DFC gives you a choice each time you cast or play it: use the front face or the back face. You decide as you put it on the stack (or onto the battlefield, for a land), and only that face is used. Once it's a permanent, it stays on the face you chose. Modal DFCs don't transform unless a card specifically says so.
+
+The most played MDFCs are spells on the front and lands on the back. Emeria's Call is a seven-mana white sorcery that creates two 4/4 flying Angel tokens, and its back face, Emeria, Shattered Skyclave, is a land. Early in the game you play it as your land drop. Late in the game, when you'd rather have a powerful spell than an eighth land, you cast the front face instead. Playing the land face counts as your land drop for the turn, and since it's a land being played rather than a spell being cast, it can't be countered.
+
+Not every MDFC is a spell-and-land. Some have two nonland faces. Valki, God of Lies has a cheap black creature on the front and a seven-mana planeswalker on the back, Tibalt, Cosmic Impostor, and you can cast whichever face suits the moment. Others, like Brightclimb Pathway, have a land on each side, and you choose which color of land you want as you play it.
+
+<InArticleAd />
+
+## Mana value of each face
+
+This is the rule that causes the most confusion. The short version: mana value depends on where the card is.
+
+**In your hand, library, graveyard or exile,** a double-faced card has only the characteristics of its front face. Its mana value is the front face's mana value, its colors are the front face's colors, and it's whatever card type the front face is. An Emeria's Call in your library is a sorcery with mana value 7, not a land, even though you could play it as a land from your hand.
+
+**On the stack and on the battlefield,** the card has the characteristics of whichever face is up.
+
+- For a **modal DFC**, that's the face you chose. If you cast Tibalt, Cosmic Impostor, the spell on the stack has the back face's mana cost and mana value. If you play the land face, it's a land with mana value 0 on the battlefield.
+- For a **transforming DFC**, the back face has no mana cost printed, so the rules use the front face's mana cost to determine its mana value. Insectile Aberration has mana value 1, because Delver of Secrets costs one mana. Jace, Telepath Unbound has mana value 2, the same as Jace, Vryn's Prodigy.
+
+Here's how that plays out with common effects:
+
+| Situation | What the game sees |
+| --- | --- |
+| Searching your library for a card with mana value 3 or less | Front face only |
+| Revealing or discarding a DFC from hand | Front face only |
+| Countering a spell with mana value 4 or more | The face being cast |
+| Destroying a permanent with mana value 2 or less | The face that's up (front face's value for a transformed card) |
+
+### Color of each face
+
+Back faces of transforming DFCs don't have a mana cost, so they show their color with a color indicator, a small colored dot next to the type line. A transformed permanent has the color shown on its back face, which can differ from the front.
+
+In Commander, color identity counts both faces of a double-faced card. A card with a black front face and a black-red back face has a black-red color identity and can only go in a deck whose commander includes both colors.
+
+### Meld cards
+
+Meld cards are a rare cousin. Two specific cards, each with half of a giant creature printed on its back, combine into one oversized permanent when their conditions are met. The melded permanent's mana value is the total of the two front faces' mana values. You'll see these rarely, but the principle matches transforming DFCs: back faces borrow from the front.
+
+## Playing double-faced cards in paper
+
+Double-faced cards create a physical problem: if the back of the card isn't a normal Magic card back, anyone can see what it is while it's in your library or hand. There are two standard solutions.
+
+### Opaque sleeves
+
+The simplest fix is to sleeve your whole deck in sleeves with fully opaque backs. Every card then looks the same from behind, and a DFC is indistinguishable from the rest. When a transforming DFC flips, take it out of the sleeve and turn it over, or put it back in facing the other way, so the face that's up shows through the clear front.
+
+Make sure your sleeves really are opaque. If you can see the outline of a card's art through the back of the sleeve, DFCs are identifiable, and that's a problem in any game where it matters.
+
+### Checklist and substitute cards
+
+Some products include checklist cards: a normal-backed card that lists several double-faced cards, with a bubble to mark which one it represents. You put the checklist card in your deck and keep the real DFC off to the side. When you draw the checklist card, nothing is revealed. When the card would become public, such as when you cast it, you swap in the real DFC. Players without official checklist cards often use a basic land or proxy marked with the card's name in casual games.
+
+Tournament rules generally require one of these approaches, opaque sleeves or substitute cards, whenever your deck contains DFCs. Casual groups can be more relaxed, but it's a courtesy to follow the same practice so nobody has to wonder.
+
+### Transforming in paper
+
+Whatever method you use, make it obvious which face is up. Keep the card turned completely to the correct side, and announce when it transforms. If a transformed card has damage or counters on it, keep the dice or tokens with it when you flip it over, since those carry over.
+
+## Common mistakes with double-faced cards
+
+- **Trying to cast the back face of a transforming DFC.** You can't. It starts on the front and only flips when an effect says so.
+- **Using the back face's mana value from your library.** In every zone except the stack and the battlefield, only the front face exists.
+- **Forgetting that transforming isn't entering.** A transformed creature keeps its counters, Auras and ability to attack, and its enters abilities don't trigger.
+- **Counting a modal land face as a spell.** Playing the land side uses your land drop and doesn't count as casting a spell, so it won't trigger "whenever you cast" abilities.
+
+For more on reading the information printed on each face, the guide to [how to read a Magic card](/blog/how-to-read-a-magic-card) walks through every part of the frame.
+
+## The takeaway
+
+Transforming DFCs start on the front and flip when told to, staying the same permanent with the front face's mana value. Modal DFCs let you pick a face, and the face you pick is the one that counts on the stack and battlefield. Everywhere else, a DFC is just its front face. Sleeve with opaque backs or use checklist cards in paper, and spell-land MDFCs become some of the most flexible cards you can put in a deck.
+
+<DeckLabCTA format="modern" brief="Blue tempo deck with Delver of Secrets and cheap instants and sorceries" />
