@@ -47,6 +47,7 @@ from app.constants import (
     THEME_TO_TAGS,
 )
 from app.config import DATA_DIR
+from app.services import card_function
 from app.services.card_roles import primary_role
 from app.services.locked_cache import locked_cached_property
 from app.rules import copy_limit, is_basic_land, is_land_card
@@ -2179,34 +2180,6 @@ class DeckGenerator:
                 return label
         return None
 
-    def _commander_provenance(
-        self,
-        card: CardRecord,
-        base: ArchetypeRecord | None,
-        commander: CardRecord,
-        role: str,
-    ) -> str | None:
-        """Commander-specific reasons, in the order the 99 are assembled."""
-        name = card.name.lower()
-        if any(name == staple.lower() for staple, _ in self._COMMANDER_BASELINE):
-            return "A Commander staple that almost every deck in these colors runs."
-        package = base.metadata.commander_package if base is not None else None
-        if package is not None:
-            for packages, label in (
-                (package.signature_cards, f"A signature card in {commander.name} decks."),
-                (package.synergy_packages, f"Part of {commander.name}'s synergy package."),
-                (package.ramp_package, f"Picked for {commander.name}'s ramp package."),
-                (package.draw_package, f"Picked for {commander.name}'s card-draw package."),
-                (package.interaction_package, f"Picked for {commander.name}'s interaction package."),
-                (package.land_package, f"A land from {commander.name}'s mana base package."),
-            ):
-                if any(p.name.lower() == name for p in packages):
-                    return label
-        mechanic = self._shared_mechanic(card, commander)
-        if mechanic:
-            return f"Works with {commander.name}: both care about {mechanic}."
-        return None
-
     def _card_summary(self, card: CardRecord) -> str:
         """What the card is, from its own data: "a 1-mana creature with haste"."""
         type_line = card.type_line or ""
@@ -2224,53 +2197,19 @@ class DeckGenerator:
             summary += " with " + " and ".join(keywords)
         return summary
 
-    def _card_provenance(
-        self,
-        card: CardRecord,
-        base: ArchetypeRecord | None,
-        request: GenerateDeckRequest,
-        requested_tags: list[str],
-        role: str,
-        commander: CardRecord | None = None,
-    ) -> str:
-        """Why this card is in the deck, in the order the builder decides it."""
-        name = card.name.lower()
-        if any(name == included.lower() for included in request.include_cards):
-            return "You asked for this card."
-        if commander is not None:
-            reason = self._commander_provenance(card, base, commander, role)
-            if reason:
-                return reason
-        if base is not None and commander is None:
-            metadata = base.metadata
-            # Quote frequencies only when they come from real tournament
-            # results. The curated templates are one synthesized list each,
-            # so their inclusion rates are always 100% and say nothing.
-            observed = metadata.evidence == "observed" and base.source_count >= 3
-            for packages, label in ((metadata.core_cards, "core"), (metadata.flex_cards, "flex")):
-                package = next((p for p in packages if p.name.lower() == name), None)
-                if package is None:
-                    continue
-                if observed and package.inclusion_rate is not None:
-                    return (
-                        f"A {label} card of {base.name}: it appears in {package.inclusion_rate:.0%} of the "
-                        f"{base.source_count} tournament lists this deck is modeled on."
-                    )
-                if label == "core":
-                    return f"A core card of the {base.name} list this deck is built from."
-                return f"A flex slot in the {base.name} list this deck is built from."
-            if any(ref.name.lower() == name for ref in base.mainboard):
-                return f"Part of the {base.name} list this deck is built from."
-        if any(name == seed.name.lower() for seed in request.seed_cards):
-            return "A signature card of the strategy you picked."
-        matched = [tag for tag in requested_tags if tag in card.tags]
-        if matched:
-            return f"Added as a {role} that fits the {matched[0]} plan you asked for."
-        if commander is not None:
-            if role == "mana base":
-                return f"A land that fits {commander.name}'s colors."
-            return f"One of the top-ranked {role} picks in {commander.name}'s colors."
-        return f"Added to round out the deck's {role} slots."
+    @staticmethod
+    def _deck_plan(base: ArchetypeRecord | None, requested_tags: list[str]) -> str | None:
+        """aggro / control / ... from what the user asked for, else the shell."""
+        for tag in requested_tags:
+            if tag in card_function.PLANS:
+                return tag
+        if base is not None:
+            for tag in base.tags:
+                if tag in card_function.PLANS:
+                    return tag
+            strategy = (base.strategy or "").lower()
+            return next((plan for plan in card_function.PLANS if plan in strategy), None)
+        return None
 
     def _build_card_notes(
         self,
@@ -2280,27 +2219,38 @@ class DeckGenerator:
         requested_tags: list[str] | None = None,
         commander: str | None = None,
     ) -> list[DeckCardExplanation]:
+        """The "Why?" note for each card: what it does in a game, read from its
+        rules text, and why that matters for this deck's plan."""
         notes: list[DeckCardExplanation] = []
         request = request or GenerateDeckRequest(format="modern")
         commander_card = self.repository.get_card(commander) if commander else None
         if commander_card is not None and " // " in commander_card.name:
             # Double-faced commanders read by their front face in prose.
             commander_card = commander_card.model_copy(update={"name": commander_card.name.split(" // ")[0]})
+        plan = self._deck_plan(base, requested_tags or [])
+        included = {name.lower() for name in request.include_cards}
         for ref in refs:
             card = self.repository.get_card(ref.name)
             if not card or is_basic_land(card):
                 continue
             role = self._primary_role(card)
-            why = self._card_provenance(card, base, request, requested_tags or [], role, commander_card)
-            what = self._card_summary(card)
-            copies = f" Running {ref.quantity} copies." if ref.quantity > 1 else ""
-            if what == "a land":
-                does = f"{card.name} is a land in the mana base."
-            elif role == "flex slot":
-                does = f"{card.name} is {what}, filling a flex slot."
+            parts: list[str] = []
+            if card.name.lower() in included:
+                parts.append("You asked for this card.")
+            function = card_function.describe(card)
+            if function and function.startswith("its "):
+                parts.append(f"{card.name}'s {function[4:]}.")
+            elif function:
+                parts.append(f"{card.name} {function}.")
             else:
-                does = f"{card.name} is {what}, playing the {role} role."
-            notes.append(DeckCardExplanation(name=card.name, role=role, reason=f"{why} {does}{copies}"))
+                parts.append(f"{card.name} is {self._card_summary(card)}.")
+            if commander_card is not None and (mechanic := self._shared_mechanic(card, commander_card)):
+                parts.append(f"It works with {commander_card.name}: both care about {mechanic}.")
+            if (clause := card_function.plan_clause(role, plan)) and role != "mana base":
+                parts.append(clause)
+            if ref.quantity > 1:
+                parts.append(f"Running {ref.quantity} copies.")
+            notes.append(DeckCardExplanation(name=card.name, role=role, reason=" ".join(parts)))
         return notes
 
     @staticmethod

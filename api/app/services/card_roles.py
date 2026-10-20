@@ -27,10 +27,7 @@ _DRAW_TEXT = re.compile(
 # Damage that can hit creatures is removal first; player-only damage is reach.
 _REMOVAL_DAMAGE_TEXT = re.compile(r"damage to (?:any target|target creature|each creature)", re.IGNORECASE)
 _REACH_TEXT = re.compile(r"damage to (?:target player|each opponent|target opponent)", re.IGNORECASE)
-_RAMP_TEXT = re.compile(r"add \{|search your library for (?:a|up to \w+) (?:basic )?land", re.IGNORECASE)
-
-# Tags that describe what a card is a part of, not what it does.
-_TYPE_ONLY_TAGS = frozenset({"spells", "land", "creature", "artifact"})
+_RAMP_TEXT = re.compile(r"add \{|add one mana|search your library for (?:a|up to \w+) (?:basic )?land", re.IGNORECASE)
 
 
 def _spell_role(card: CardRecord) -> str:
@@ -46,31 +43,60 @@ def _spell_role(card: CardRecord) -> str:
     return "flex slot"
 
 
+# Tags in priority order. The ingest stores tags in arbitrary order and many
+# cards carry several (Force of Negation: graveyard, interaction, removal,
+# spells), so the first tag on the card was a coin flip.
+_TAG_PRIORITY = (
+    "removal", "countermagic", "interaction", "disruption",
+    "draw", "cantrip",
+    "ramp", "mana_rock",
+    "pressure", "finisher",
+    "prowess", "tokens", "lifegain",
+    "graveyard", "tribal",
+)
+
+
+def _role_from_tags(card: CardRecord, can_attack: bool) -> str | None:
+    tags = set(card.tags)
+    for tag in _TAG_PRIORITY:
+        if tag not in tags:
+            continue
+        role = ROLE_MAP.get(tag)
+        if role is None or (role == "threat" and not can_attack):
+            continue
+        return role
+    return None
+
+
 def primary_role(card: CardRecord | None) -> str:
     if card is None:
         return "flex slot"
     if is_land_card(card):
         return "mana base"
     type_line = card.type_line or ""
+    text = card.oracle_text or " ".join(face.oracle_text or "" for face in card.faces)
     # A planeswalker is a threat even when one ability ramps or draws
     # (Chandra, Torch of Defiance).
     if "Planeswalker" in type_line:
         return "threat"
-    is_spell = "Instant" in type_line or "Sorcery" in type_line
-    can_attack = "Creature" in type_line or "Planeswalker" in type_line
-    for tag in card.tags:
-        role = ROLE_MAP.get(tag)
-        if role is None or tag in _TYPE_ONLY_TAGS:
-            continue
-        if role == "threat" and not can_attack:
-            continue
+    # Instants and sorceries say what they do: trust the rules text first.
+    if "Instant" in type_line or "Sorcery" in type_line:
+        role = _spell_role(card)
+        return role if role != "flex slot" else (_role_from_tags(card, can_attack=False) or role)
+    if "Creature" in type_line:
+        # Mana creatures (Llanowar Elves) are acceleration, not threats.
+        if card.mana_value <= 3 and _RAMP_TEXT.search(text):
+            return "mana development"
+        role = _role_from_tags(card, can_attack=True)
+        # An engine or payoff creature needs a triggered ability to be one;
+        # Tarmogoyf's graveyard tag doesn't make it an engine.
+        if role in {"engine", "payoff"} and "whenever" not in text.lower():
+            role = None
+        return role or "threat"
+    role = _role_from_tags(card, can_attack=False)
+    if role:
         return role
-    if can_attack:
-        return "threat"
-    if is_spell:
-        return _spell_role(card)
     if "Artifact" in type_line or "Enchantment" in type_line:
-        text = card.oracle_text or ""
         if _RAMP_TEXT.search(text):
             return "mana development"
         if _DRAW_TEXT.search(text):
