@@ -4,6 +4,9 @@ import Link from "next/link";
 import { PostCard } from "@/components/blog/post-card";
 import { CATEGORIES, SITE_NAME, postsInCategory, type CategoryId } from "@/lib/blog";
 
+// Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: `Magic: The Gathering Guides | ${SITE_NAME}`,
   description:

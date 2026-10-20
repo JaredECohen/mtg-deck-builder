@@ -11,7 +11,7 @@ primary keyword (`how-to-play-magic-the-gathering.mdx`). Files that aren't
 ---
 title: "How to Play Magic: The Gathering: A Complete Beginner's Guide"
 description: "One or two sentences, 140-160 characters. It is the Google snippet: say what the reader learns."
-date: 2026-10-19          # first published (YYYY-MM-DD)
+date: 2026-10-19          # publish day (YYYY-MM-DD), New York time; future dates are scheduled
 updated: 2026-10-19       # optional, last meaningful revision
 category: learn-to-play   # learn-to-play | formats | deck-archetypes | strategy
 keywords: ["how to play magic the gathering", "mtg rules for beginners"]
@@ -21,6 +21,20 @@ draft: false              # true hides it everywhere (index, sitemap, RSS)
 ```
 
 The title renders as the page's only `<h1>`. Don't repeat it in the body.
+
+## Scheduling
+
+Guides publish one per day. A guide with a future `date` is hidden everywhere
+(index, hubs, related, sitemap, RSS, its own URL) until midnight New York
+time on that day; listing pages re-render hourly, so it appears without a
+deploy. `SCHEDULE.md` is the calendar: take the next open date, one guide
+per day. Preview the site as of another day with `GUIDES_TODAY=2026-11-01`.
+
+Links to a guide that hasn't published yet are fine: they render as plain
+text until it goes live. Every guide still needs at least one link that
+works on its own publish day.
+
+Run `npm run check:guides` (CI does too) before committing.
 
 ## Body
 

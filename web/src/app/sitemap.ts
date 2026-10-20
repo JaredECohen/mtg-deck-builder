@@ -2,6 +2,9 @@ import type { MetadataRoute } from "next";
 
 import { CATEGORIES, SITE_URL, allPosts } from "@/lib/blog";
 
+// Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 3600;
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const posts = allPosts();
   const newest = posts[0]?.updated ?? new Date().toISOString().slice(0, 10);

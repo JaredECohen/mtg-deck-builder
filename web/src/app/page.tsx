@@ -6,6 +6,9 @@ import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
 import { allPosts } from "@/lib/blog";
 
+// Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
