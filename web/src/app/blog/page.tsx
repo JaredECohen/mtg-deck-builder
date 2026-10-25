@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default function BlogIndexPage() {
-  const categories = Object.keys(CATEGORIES) as CategoryId[];
+  const categories = (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => postsInCategory(id).length > 0);
   return (
     <main className="shell blog-shell">
       <header className="blog-header">
@@ -35,7 +35,6 @@ export default function BlogIndexPage() {
       </header>
       {categories.map((id) => {
         const posts = postsInCategory(id);
-        if (!posts.length) return null;
         return (
           <section key={id} className="blog-section" aria-labelledby={`cat-${id}`}>
             <div className="blog-section-head">

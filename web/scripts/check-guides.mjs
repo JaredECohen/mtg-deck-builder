@@ -12,6 +12,7 @@
 //   "2", {U} breaks the build)
 // - a <DeckLabCTA> with a supported format, two <InArticleAd /> breaks on
 //   their own lines, no "# " h1 in the body
+// - the body spells out "Magic: The Gathering" at least once
 // - body length 900-3,500 words
 
 import fs from "node:fs";
@@ -21,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 
 const BLOG_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "content", "blog");
-const CATEGORIES = new Set(["learn-to-play", "formats", "deck-archetypes", "strategy"]);
+const CATEGORIES = new Set(["learn-to-play", "formats", "deck-archetypes", "strategy", "sets"]);
 const FORMATS = new Set(["standard", "modern", "pioneer", "legacy", "commander"]);
 
 const asDate = (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? ""));
@@ -82,6 +83,8 @@ for (const post of live) {
   if (adLines.length < 2) fail(`${adLines.length} <InArticleAd /> (want 2)`);
   for (const line of adLines) if (line.trim() !== "<InArticleAd />") fail("<InArticleAd /> must be alone on its line");
   if (/^# /m.test(body)) fail('body has a "# " h1 (the title is the h1)');
+  // Spell the game out at least once; "MTG" alone isn't clear to every reader.
+  if (!body.includes("Magic: The Gathering")) fail('never says "Magic: The Gathering" (spell it out at first mention)');
 
   const words = body.replace(/<[^>]+>|[#>*_`|-]/g, " ").split(/\s+/).filter(Boolean).length;
   if (words < 900 || words > 3500) fail(`${words} words (want 900-3,500)`);

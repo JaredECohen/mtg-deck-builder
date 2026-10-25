@@ -11,12 +11,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const pages: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/blog`, lastModified: newest, changeFrequency: "weekly", priority: 0.9 },
-    ...Object.keys(CATEGORIES).map((id) => ({
-      url: `${SITE_URL}/blog/${id}`,
-      lastModified: newest,
-      changeFrequency: "weekly" as const,
-      priority: 0.7,
-    })),
+    ...Object.keys(CATEGORIES)
+      .filter((id) => posts.some((post) => post.category === id))
+      .map((id) => ({
+        url: `${SITE_URL}/blog/${id}`,
+        lastModified: newest,
+        changeFrequency: "weekly" as const,
+        priority: 0.7,
+      })),
     ...posts.map((post) => ({
       url: `${SITE_URL}/blog/${post.slug}`,
       lastModified: post.updated,

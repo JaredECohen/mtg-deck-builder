@@ -1,6 +1,7 @@
 # Guides publishing calendar
 
 One guide a day at midnight New York time (each file's `date`; see README.md).
+Set guides alternate with the other guides from 2026-10-27 to 2026-12-04.
 Status is set when the file exists: `written` (scheduled) or `planned`. Keep this table in date order.
 
 | Date | Slug | Category | Working title | Status |
@@ -12,96 +13,116 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-10-24 | `how-to-evaluate-cards-limited` | strategy | How to Evaluate Cards | written |
 | 2026-10-25 | `commander-threat-assessment` | strategy | Commander Threat Assessment | written |
 | 2026-10-26 | `mtg-card-types-explained` | learn-to-play | MTG Card Types Explained | written |
-| 2026-10-27 | `mtg-burn-deck-guide` | deck-archetypes | How to Build and Play a Burn Deck | written |
-| 2026-10-28 | `card-advantage-explained` | strategy | Card Advantage Explained | written |
-| 2026-10-29 | `mtg-standard-format-guide` | formats | Standard Format Guide | written |
-| 2026-10-30 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | written |
-| 2026-10-31 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | written |
-| 2026-11-01 | `how-to-play-against-aggro` | strategy | How to Beat Aggro Decks | written |
-| 2026-11-02 | `mtg-combat-explained` | learn-to-play | MTG Combat Explained Step by Step | written |
-| 2026-11-03 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | written |
-| 2026-11-04 | `mtg-pioneer-format-guide` | formats | Pioneer Format Guide | written |
-| 2026-11-05 | `how-to-play-against-control` | strategy | How to Beat Control Decks | written |
-| 2026-11-06 | `mtg-turn-structure-phases` | learn-to-play | MTG Turn Structure: Every Phase and Step | written |
-| 2026-11-07 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | written |
-| 2026-11-08 | `how-to-play-against-combo` | strategy | How to Beat Combo Decks | written |
-| 2026-11-09 | `mtg-modern-format-guide` | formats | Modern Format Guide | written |
-| 2026-11-10 | `summoning-sickness-explained` | learn-to-play | Summoning Sickness Explained | written |
-| 2026-11-11 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | written |
-| 2026-11-12 | `tempo-explained-mtg` | strategy | What Is Tempo in MTG? | written |
-| 2026-11-13 | `mtg-color-pie-guide` | learn-to-play | The MTG Color Pie Explained | written |
-| 2026-11-14 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | written |
-| 2026-11-15 | `whos-the-beatdown-mtg` | strategy | Who's the Beatdown? Role Assignment in MTG | written |
-| 2026-11-16 | `mtg-legacy-format-guide` | formats | Legacy Format Guide | written |
-| 2026-11-17 | `mtg-planeswalkers-explained` | learn-to-play | How Planeswalkers Work | written |
-| 2026-11-18 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | written |
-| 2026-11-19 | `combat-tricks-guide` | strategy | How to Use Combat Tricks | written |
-| 2026-11-20 | `mtg-vintage-format-guide` | formats | Vintage Format Guide | written |
-| 2026-11-21 | `mtg-mana-symbols-explained` | learn-to-play | MTG Mana Symbols and Costs Explained | written |
-| 2026-11-22 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
-| 2026-11-23 | `when-to-attack-mtg` | strategy | When to Attack in MTG | written |
-| 2026-11-24 | `cedh-competitive-commander-guide` | formats | cEDH: Competitive Commander Explained | written |
-| 2026-11-25 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | written |
-| 2026-11-26 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | written |
-| 2026-11-27 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | written |
-| 2026-11-28 | `two-headed-giant-mtg` | formats | Two-Headed Giant Format Guide | written |
-| 2026-11-29 | `mtg-counters-explained` | learn-to-play | Counters in MTG Explained | written |
-| 2026-11-30 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | written |
-| 2026-12-01 | `bluffing-in-mtg` | strategy | Bluffing in MTG | written |
-| 2026-12-02 | `mtg-brawl-format-guide` | formats | Brawl Format Guide | written |
-| 2026-12-03 | `mtg-triggered-abilities-explained` | learn-to-play | Triggered Abilities Explained | written |
-| 2026-12-04 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | written |
-| 2026-12-05 | `how-to-playtest-a-deck` | strategy | How to Playtest an MTG Deck | written |
-| 2026-12-06 | `mtg-cube-draft-guide` | formats | Cube Draft Explained | written |
-| 2026-12-07 | `activated-vs-static-abilities` | learn-to-play | Activated, Static and Triggered Abilities | written |
-| 2026-12-08 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | written |
-| 2026-12-09 | `mtg-sequencing-guide` | strategy | Sequencing Your Plays in MTG | written |
-| 2026-12-10 | `mtg-ban-list-explained` | formats | Why Cards Get Banned in MTG | written |
-| 2026-12-11 | `mtg-graveyard-and-exile-zones` | learn-to-play | The Graveyard and Exile Explained | written |
-| 2026-12-12 | `lifegain-deck-guide` | deck-archetypes | Lifegain Decks Explained | written |
-| 2026-12-13 | `mana-flood-and-screw-explained` | strategy | Mana Flood and Mana Screw | written |
-| 2026-12-14 | `mtg-rotation-explained` | formats | Standard Rotation Explained | written |
-| 2026-12-15 | `instant-speed-explained` | learn-to-play | What Does Instant Speed Mean? | written |
-| 2026-12-16 | `plus-one-counters-deck-guide` | deck-archetypes | +1/+1 Counters Decks Explained | written |
-| 2026-12-17 | `how-to-practice-and-improve-at-mtg` | strategy | How to Get Better at Magic | written |
-| 2026-12-18 | `commander-rule-zero-guide` | formats | Rule Zero in Commander | written |
-| 2026-12-19 | `how-to-win-magic-the-gathering` | learn-to-play | All the Ways to Win at Magic | written |
-| 2026-12-20 | `landfall-deck-guide` | deck-archetypes | Landfall Decks Explained | written |
-| 2026-12-21 | `how-to-draft-mtg-signals` | strategy | Reading Signals in Booster Draft | written |
-| 2026-12-22 | `mtg-sealed-prerelease-guide` | formats | Your First Prerelease: A Sealed Guide | written |
-| 2026-12-23 | `mtg-legendary-rule-explained` | learn-to-play | The Legend Rule Explained | written |
-| 2026-12-24 | `artifact-deck-guide` | deck-archetypes | Artifact Decks Explained | written |
-| 2026-12-25 | `sealed-deck-building-guide` | strategy | How to Build a Sealed Deck | written |
-| 2026-12-26 | `best-of-one-vs-best-of-three` | formats | Best-of-One vs Best-of-Three | written |
-| 2026-12-27 | `double-faced-cards-explained` | learn-to-play | Double-Faced Cards Explained | written |
-| 2026-12-28 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | written |
-| 2026-12-29 | `limited-combat-math` | strategy | Combat Math in Limited | written |
-| 2026-12-30 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | written |
-| 2026-12-31 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | written |
-| 2027-01-01 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | written |
-| 2027-01-02 | `metagame-explained-mtg` | strategy | What Is a Metagame? | written |
-| 2027-01-03 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | written |
-| 2027-01-04 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | written |
-| 2027-01-05 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | written |
-| 2027-01-06 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | written |
-| 2027-01-07 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | written |
-| 2027-01-08 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | written |
-| 2027-01-09 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | written |
-| 2027-01-10 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | written |
-| 2027-01-11 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | written |
-| 2027-01-12 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | written |
-| 2027-01-13 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | written |
-| 2027-01-14 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | written |
-| 2027-01-15 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | written |
-| 2027-01-16 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | written |
-| 2027-01-17 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | written |
-| 2027-01-18 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | written |
-| 2027-01-19 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | written |
-| 2027-01-20 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | written |
-| 2027-01-21 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | written |
-| 2027-01-22 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | written |
-| 2027-01-23 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | written |
-| 2027-01-24 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | written |
-| 2027-01-25 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | written |
-| 2027-01-26 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | written |
-| 2027-01-27 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | written |
+| 2026-10-27 | `reality-fracture-mtg-set-guide` | sets | Reality Fracture Set Guide | written |
+| 2026-10-28 | `mtg-burn-deck-guide` | deck-archetypes | How to Build and Play a Burn Deck | written |
+| 2026-10-29 | `the-hobbit-mtg-set-guide` | sets | The Hobbit Set Guide | written |
+| 2026-10-30 | `card-advantage-explained` | strategy | Card Advantage Explained | written |
+| 2026-10-31 | `marvel-super-heroes-mtg-set-guide` | sets | Marvel Super Heroes Set Guide | written |
+| 2026-11-01 | `mtg-standard-format-guide` | formats | Standard Format Guide | written |
+| 2026-11-02 | `secrets-of-strixhaven-mtg-set-guide` | sets | Secrets of Strixhaven Set Guide | written |
+| 2026-11-03 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | written |
+| 2026-11-04 | `teenage-mutant-ninja-turtles-mtg-set-guide` | sets | Teenage Mutant Ninja Turtles Set Guide | written |
+| 2026-11-05 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | written |
+| 2026-11-06 | `star-trek-mtg-set-guide` | sets | Star Trek Set Guide | written |
+| 2026-11-07 | `how-to-play-against-aggro` | strategy | How to Beat Aggro Decks | written |
+| 2026-11-08 | `lorwyn-eclipsed-mtg-set-guide` | sets | Lorwyn Eclipsed Set Guide | written |
+| 2026-11-09 | `mtg-combat-explained` | learn-to-play | MTG Combat Explained Step by Step | written |
+| 2026-11-10 | `avatar-the-last-airbender-mtg-set-guide` | sets | Avatar: The Last Airbender Set Guide | written |
+| 2026-11-11 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | written |
+| 2026-11-12 | `spider-man-mtg-set-guide` | sets | Marvel's Spider-Man Set Guide | written |
+| 2026-11-13 | `mtg-pioneer-format-guide` | formats | Pioneer Format Guide | written |
+| 2026-11-14 | `edge-of-eternities-mtg-set-guide` | sets | Edge of Eternities Set Guide | written |
+| 2026-11-15 | `how-to-play-against-control` | strategy | How to Beat Control Decks | written |
+| 2026-11-16 | `final-fantasy-mtg-set-guide` | sets | Final Fantasy Set Guide | written |
+| 2026-11-17 | `mtg-turn-structure-phases` | learn-to-play | MTG Turn Structure: Every Phase and Step | written |
+| 2026-11-18 | `tarkir-dragonstorm-mtg-set-guide` | sets | Tarkir: Dragonstorm Set Guide | written |
+| 2026-11-19 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | written |
+| 2026-11-20 | `aetherdrift-mtg-set-guide` | sets | Aetherdrift Set Guide | written |
+| 2026-11-21 | `how-to-play-against-combo` | strategy | How to Beat Combo Decks | written |
+| 2026-11-22 | `foundations-mtg-set-guide` | sets | Foundations Set Guide | written |
+| 2026-11-23 | `mtg-modern-format-guide` | formats | Modern Format Guide | written |
+| 2026-11-24 | `duskmourn-mtg-set-guide` | sets | Duskmourn: House of Horror Set Guide | written |
+| 2026-11-25 | `summoning-sickness-explained` | learn-to-play | Summoning Sickness Explained | written |
+| 2026-11-26 | `bloomburrow-mtg-set-guide` | sets | Bloomburrow Set Guide | written |
+| 2026-11-27 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | written |
+| 2026-11-28 | `outlaws-of-thunder-junction-mtg-set-guide` | sets | Outlaws of Thunder Junction Set Guide | written |
+| 2026-11-29 | `tempo-explained-mtg` | strategy | What Is Tempo in MTG? | written |
+| 2026-11-30 | `murders-at-karlov-manor-mtg-set-guide` | sets | Murders at Karlov Manor Set Guide | written |
+| 2026-12-01 | `mtg-color-pie-guide` | learn-to-play | The MTG Color Pie Explained | written |
+| 2026-12-02 | `lost-caverns-of-ixalan-mtg-set-guide` | sets | The Lost Caverns of Ixalan Set Guide | written |
+| 2026-12-03 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | written |
+| 2026-12-04 | `wilds-of-eldraine-mtg-set-guide` | sets | Wilds of Eldraine Set Guide | written |
+| 2026-12-05 | `whos-the-beatdown-mtg` | strategy | Who's the Beatdown? Role Assignment in MTG | written |
+| 2026-12-06 | `mtg-legacy-format-guide` | formats | Legacy Format Guide | written |
+| 2026-12-07 | `mtg-planeswalkers-explained` | learn-to-play | How Planeswalkers Work | written |
+| 2026-12-08 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | written |
+| 2026-12-09 | `combat-tricks-guide` | strategy | How to Use Combat Tricks | written |
+| 2026-12-10 | `mtg-vintage-format-guide` | formats | Vintage Format Guide | written |
+| 2026-12-11 | `mtg-mana-symbols-explained` | learn-to-play | MTG Mana Symbols and Costs Explained | written |
+| 2026-12-12 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
+| 2026-12-13 | `when-to-attack-mtg` | strategy | When to Attack in MTG | written |
+| 2026-12-14 | `cedh-competitive-commander-guide` | formats | cEDH: Competitive Commander Explained | written |
+| 2026-12-15 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | written |
+| 2026-12-16 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | written |
+| 2026-12-17 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | written |
+| 2026-12-18 | `two-headed-giant-mtg` | formats | Two-Headed Giant Format Guide | written |
+| 2026-12-19 | `mtg-counters-explained` | learn-to-play | Counters in MTG Explained | written |
+| 2026-12-20 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | written |
+| 2026-12-21 | `bluffing-in-mtg` | strategy | Bluffing in MTG | written |
+| 2026-12-22 | `mtg-brawl-format-guide` | formats | Brawl Format Guide | written |
+| 2026-12-23 | `mtg-triggered-abilities-explained` | learn-to-play | Triggered Abilities Explained | written |
+| 2026-12-24 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | written |
+| 2026-12-25 | `how-to-playtest-a-deck` | strategy | How to Playtest an MTG Deck | written |
+| 2026-12-26 | `mtg-cube-draft-guide` | formats | Cube Draft Explained | written |
+| 2026-12-27 | `activated-vs-static-abilities` | learn-to-play | Activated, Static and Triggered Abilities | written |
+| 2026-12-28 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | written |
+| 2026-12-29 | `mtg-sequencing-guide` | strategy | Sequencing Your Plays in MTG | written |
+| 2026-12-30 | `mtg-ban-list-explained` | formats | Why Cards Get Banned in MTG | written |
+| 2026-12-31 | `mtg-graveyard-and-exile-zones` | learn-to-play | The Graveyard and Exile Explained | written |
+| 2027-01-01 | `lifegain-deck-guide` | deck-archetypes | Lifegain Decks Explained | written |
+| 2027-01-02 | `mana-flood-and-screw-explained` | strategy | Mana Flood and Mana Screw | written |
+| 2027-01-03 | `mtg-rotation-explained` | formats | Standard Rotation Explained | written |
+| 2027-01-04 | `instant-speed-explained` | learn-to-play | What Does Instant Speed Mean? | written |
+| 2027-01-05 | `plus-one-counters-deck-guide` | deck-archetypes | +1/+1 Counters Decks Explained | written |
+| 2027-01-06 | `how-to-practice-and-improve-at-mtg` | strategy | How to Get Better at Magic | written |
+| 2027-01-07 | `commander-rule-zero-guide` | formats | Rule Zero in Commander | written |
+| 2027-01-08 | `how-to-win-magic-the-gathering` | learn-to-play | All the Ways to Win at Magic | written |
+| 2027-01-09 | `landfall-deck-guide` | deck-archetypes | Landfall Decks Explained | written |
+| 2027-01-10 | `how-to-draft-mtg-signals` | strategy | Reading Signals in Booster Draft | written |
+| 2027-01-11 | `mtg-sealed-prerelease-guide` | formats | Your First Prerelease: A Sealed Guide | written |
+| 2027-01-12 | `mtg-legendary-rule-explained` | learn-to-play | The Legend Rule Explained | written |
+| 2027-01-13 | `artifact-deck-guide` | deck-archetypes | Artifact Decks Explained | written |
+| 2027-01-14 | `sealed-deck-building-guide` | strategy | How to Build a Sealed Deck | written |
+| 2027-01-15 | `best-of-one-vs-best-of-three` | formats | Best-of-One vs Best-of-Three | written |
+| 2027-01-16 | `double-faced-cards-explained` | learn-to-play | Double-Faced Cards Explained | written |
+| 2027-01-17 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | written |
+| 2027-01-18 | `limited-combat-math` | strategy | Combat Math in Limited | written |
+| 2027-01-19 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | written |
+| 2027-01-20 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | written |
+| 2027-01-21 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | written |
+| 2027-01-22 | `metagame-explained-mtg` | strategy | What Is a Metagame? | written |
+| 2027-01-23 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | written |
+| 2027-01-24 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | written |
+| 2027-01-25 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | written |
+| 2027-01-26 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | written |
+| 2027-01-27 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | written |
+| 2027-01-28 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | written |
+| 2027-01-29 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | written |
+| 2027-01-30 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | written |
+| 2027-01-31 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | written |
+| 2027-02-01 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | written |
+| 2027-02-02 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | written |
+| 2027-02-03 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | written |
+| 2027-02-04 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | written |
+| 2027-02-05 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | written |
+| 2027-02-06 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | written |
+| 2027-02-07 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | written |
+| 2027-02-08 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | written |
+| 2027-02-09 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | written |
+| 2027-02-10 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | written |
+| 2027-02-11 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | written |
+| 2027-02-12 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | written |
+| 2027-02-13 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | written |
+| 2027-02-14 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | written |
+| 2027-02-15 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | written |
+| 2027-02-16 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | written |
