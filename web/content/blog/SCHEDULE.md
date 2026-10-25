@@ -1,8 +1,9 @@
 # Guides publishing calendar
 
 One guide a day at midnight New York time (each file's `date`; see README.md).
-Set guides alternate with the other guides from 2026-10-27 to 2026-12-04, and again from
-2026-12-06 to 2027-03-02 (Pioneer-era sets).
+Set guides alternate with the other guides from 2026-10-27 to 2026-12-04, from
+2026-12-06 to 2027-03-02 (Pioneer-era sets) and from 2027-03-04 to 2027-04-30 (classic sets);
+after the regular guides run out, a classic set guide publishes every day to 2027-06-11.
 Status is set when the file exists: `written` (scheduled) or `planned`. Keep this table in date order.
 
 | Date | Slug | Category | Working title | Status |
@@ -142,32 +143,103 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2027-03-01 | `enchantress-deck-guide` | deck-archetypes | Enchantress Decks Explained | written |
 | 2027-03-02 | `return-to-ravnica-mtg-set-guide` | sets | Return to Ravnica Set Guide | written |
 | 2027-03-03 | `limited-combat-math` | strategy | Combat Math in Limited | written |
-| 2027-03-04 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | written |
-| 2027-03-05 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | written |
-| 2027-03-06 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | written |
-| 2027-03-07 | `metagame-explained-mtg` | strategy | What Is a Metagame? | written |
-| 2027-03-08 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | written |
-| 2027-03-09 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | written |
-| 2027-03-10 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | written |
-| 2027-03-11 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | written |
-| 2027-03-12 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | written |
-| 2027-03-13 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | written |
-| 2027-03-14 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | written |
-| 2027-03-15 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | written |
-| 2027-03-16 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | written |
-| 2027-03-17 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | written |
-| 2027-03-18 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | written |
-| 2027-03-19 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | written |
-| 2027-03-20 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | written |
-| 2027-03-21 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | written |
-| 2027-03-22 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | written |
-| 2027-03-23 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | written |
-| 2027-03-24 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | written |
-| 2027-03-25 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | written |
-| 2027-03-26 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | written |
-| 2027-03-27 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | written |
-| 2027-03-28 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | written |
-| 2027-03-29 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | written |
-| 2027-03-30 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | written |
-| 2027-03-31 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | written |
-| 2027-04-01 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | written |
+| 2027-03-04 | `magic-2013-mtg-set-guide` | sets | Magic 2013 Set Guide | written |
+| 2027-03-05 | `mtg-planechase-archenemy-casual-variants` | formats | Casual MTG Variants: Planechase, Archenemy and More | written |
+| 2027-03-06 | `avacyn-restored-mtg-set-guide` | sets | Avacyn Restored Set Guide | written |
+| 2027-03-07 | `mtg-deathtouch-trample-first-strike` | learn-to-play | Deathtouch, Trample and First Strike Interactions | written |
+| 2027-03-08 | `dark-ascension-mtg-set-guide` | sets | Dark Ascension Set Guide | written |
+| 2027-03-09 | `superfriends-planeswalker-decks` | deck-archetypes | Superfriends: Planeswalker Decks | written |
+| 2027-03-10 | `innistrad-mtg-set-guide` | sets | Innistrad Set Guide | written |
+| 2027-03-11 | `metagame-explained-mtg` | strategy | What Is a Metagame? | written |
+| 2027-03-12 | `magic-2012-mtg-set-guide` | sets | Magic 2012 Set Guide | written |
+| 2027-03-13 | `mtg-oathbreaker-format` | formats | Oathbreaker Format Explained | written |
+| 2027-03-14 | `new-phyrexia-mtg-set-guide` | sets | New Phyrexia Set Guide | written |
+| 2027-03-15 | `mtg-rules-commonly-misplayed` | learn-to-play | 10 MTG Rules Players Often Get Wrong | written |
+| 2027-03-16 | `mirrodin-besieged-mtg-set-guide` | sets | Mirrodin Besieged Set Guide | written |
+| 2027-03-17 | `elves-deck-guide` | deck-archetypes | Elves Decks Explained | written |
+| 2027-03-18 | `scars-of-mirrodin-mtg-set-guide` | sets | Scars of Mirrodin Set Guide | written |
+| 2027-03-19 | `tilt-and-mental-game-mtg` | strategy | Tilt and the Mental Game in Magic | written |
+| 2027-03-20 | `magic-2011-mtg-set-guide` | sets | Magic 2011 Set Guide | written |
+| 2027-03-21 | `how-to-build-a-60-card-deck` | deck-archetypes | How to Build a 60-Card Deck | written |
+| 2027-03-22 | `rise-of-the-eldrazi-mtg-set-guide` | sets | Rise of the Eldrazi Set Guide | written |
+| 2027-03-23 | `mtg-arena-beginner-guide` | learn-to-play | MTG Arena Beginner Guide | written |
+| 2027-03-24 | `worldwake-mtg-set-guide` | sets | Worldwake Set Guide | written |
+| 2027-03-25 | `mtg-tournament-guide-first-event` | strategy | Your First MTG Tournament | written |
+| 2027-03-26 | `zendikar-mtg-set-guide` | sets | Zendikar Set Guide | written |
+| 2027-03-27 | `goblins-deck-guide` | deck-archetypes | Goblins Decks Explained | written |
+| 2027-03-28 | `magic-2010-mtg-set-guide` | sets | Magic 2010 Set Guide | written |
+| 2027-03-29 | `mtg-card-rarity-explained` | learn-to-play | MTG Card Rarity Explained | written |
+| 2027-03-30 | `alara-reborn-mtg-set-guide` | sets | Alara Reborn Set Guide | written |
+| 2027-03-31 | `how-to-read-a-decklist` | strategy | How to Read an MTG Decklist | written |
+| 2027-04-01 | `conflux-mtg-set-guide` | sets | Conflux Set Guide | written |
+| 2027-04-02 | `mtg-mana-base-guide` | deck-archetypes | How to Build a Mana Base | written |
+| 2027-04-03 | `shards-of-alara-mtg-set-guide` | sets | Shards of Alara Set Guide | written |
+| 2027-04-04 | `how-to-teach-someone-magic` | learn-to-play | How to Teach Someone to Play Magic | written |
+| 2027-04-05 | `eventide-mtg-set-guide` | sets | Eventide Set Guide | written |
+| 2027-04-06 | `resource-management-mtg` | strategy | Life, Cards and Mana as Resources | written |
+| 2027-04-07 | `shadowmoor-mtg-set-guide` | sets | Shadowmoor Set Guide | written |
+| 2027-04-08 | `commander-ramp-guide` | deck-archetypes | Ramp in Commander: How Much and Which Kind | written |
+| 2027-04-09 | `morningtide-mtg-set-guide` | sets | Morningtide Set Guide | written |
+| 2027-04-10 | `how-to-find-a-local-game-store-mtg` | learn-to-play | Playing Magic at a Local Game Store | written |
+| 2027-04-11 | `lorwyn-mtg-set-guide` | sets | Lorwyn Set Guide | written |
+| 2027-04-12 | `how-to-win-commander-games` | strategy | How to Win More Commander Games | written |
+| 2027-04-13 | `tenth-edition-mtg-set-guide` | sets | Tenth Edition Set Guide | written |
+| 2027-04-14 | `commander-card-draw-guide` | deck-archetypes | Card Draw in Commander | written |
+| 2027-04-15 | `future-sight-mtg-set-guide` | sets | Future Sight Set Guide | written |
+| 2027-04-16 | `mtg-keywords-glossary` | learn-to-play | MTG Keywords Glossary | written |
+| 2027-04-17 | `planar-chaos-mtg-set-guide` | sets | Planar Chaos Set Guide | written |
+| 2027-04-18 | `how-to-build-an-mtg-collection-on-a-budget` | strategy | Building an MTG Collection on a Budget | written |
+| 2027-04-19 | `time-spiral-mtg-set-guide` | sets | Time Spiral Set Guide | written |
+| 2027-04-20 | `commander-removal-and-board-wipes` | deck-archetypes | Removal and Board Wipes in Commander | written |
+| 2027-04-21 | `coldsnap-mtg-set-guide` | sets | Coldsnap Set Guide | written |
+| 2027-04-22 | `mtg-glossary-slang` | learn-to-play | MTG Slang and Terms Explained | written |
+| 2027-04-23 | `dissension-mtg-set-guide` | sets | Dissension Set Guide | written |
+| 2027-04-24 | `how-to-upgrade-a-commander-precon` | deck-archetypes | How to Upgrade a Commander Precon | written |
+| 2027-04-25 | `guildpact-mtg-set-guide` | sets | Guildpact Set Guide | written |
+| 2027-04-26 | `mtg-poison-counters-and-infect` | learn-to-play | Poison Counters and Infect Explained | written |
+| 2027-04-27 | `ravnica-city-of-guilds-mtg-set-guide` | sets | Ravnica: City of Guilds Set Guide | written |
+| 2027-04-28 | `how-to-care-for-mtg-cards` | strategy | How to Protect and Store Your Magic Cards | written |
+| 2027-04-29 | `ninth-edition-mtg-set-guide` | sets | Ninth Edition Set Guide | written |
+| 2027-04-30 | `mtg-proxies-and-playtest-etiquette` | formats | Proxies and Playtest Cards: Etiquette and Rules | written |
+| 2027-05-01 | `saviors-of-kamigawa-mtg-set-guide` | sets | Saviors of Kamigawa Set Guide | written |
+| 2027-05-02 | `betrayers-of-kamigawa-mtg-set-guide` | sets | Betrayers of Kamigawa Set Guide | written |
+| 2027-05-03 | `champions-of-kamigawa-mtg-set-guide` | sets | Champions of Kamigawa Set Guide | written |
+| 2027-05-04 | `fifth-dawn-mtg-set-guide` | sets | Fifth Dawn Set Guide | written |
+| 2027-05-05 | `darksteel-mtg-set-guide` | sets | Darksteel Set Guide | written |
+| 2027-05-06 | `mirrodin-mtg-set-guide` | sets | Mirrodin Set Guide | written |
+| 2027-05-07 | `eighth-edition-mtg-set-guide` | sets | Eighth Edition Set Guide | written |
+| 2027-05-08 | `scourge-mtg-set-guide` | sets | Scourge Set Guide | written |
+| 2027-05-09 | `legions-mtg-set-guide` | sets | Legions Set Guide | written |
+| 2027-05-10 | `onslaught-mtg-set-guide` | sets | Onslaught Set Guide | written |
+| 2027-05-11 | `judgment-mtg-set-guide` | sets | Judgment Set Guide | written |
+| 2027-05-12 | `torment-mtg-set-guide` | sets | Torment Set Guide | written |
+| 2027-05-13 | `odyssey-mtg-set-guide` | sets | Odyssey Set Guide | written |
+| 2027-05-14 | `apocalypse-mtg-set-guide` | sets | Apocalypse Set Guide | written |
+| 2027-05-15 | `seventh-edition-mtg-set-guide` | sets | Seventh Edition Set Guide | written |
+| 2027-05-16 | `planeshift-mtg-set-guide` | sets | Planeshift Set Guide | written |
+| 2027-05-17 | `invasion-mtg-set-guide` | sets | Invasion Set Guide | written |
+| 2027-05-18 | `prophecy-mtg-set-guide` | sets | Prophecy Set Guide | written |
+| 2027-05-19 | `nemesis-mtg-set-guide` | sets | Nemesis Set Guide | written |
+| 2027-05-20 | `mercadian-masques-mtg-set-guide` | sets | Mercadian Masques Set Guide | written |
+| 2027-05-21 | `urzas-destiny-mtg-set-guide` | sets | Urza's Destiny Set Guide | written |
+| 2027-05-22 | `classic-sixth-edition-mtg-set-guide` | sets | Classic Sixth Edition Set Guide | written |
+| 2027-05-23 | `urzas-legacy-mtg-set-guide` | sets | Urza's Legacy Set Guide | written |
+| 2027-05-24 | `urzas-saga-mtg-set-guide` | sets | Urza's Saga Set Guide | written |
+| 2027-05-25 | `exodus-mtg-set-guide` | sets | Exodus Set Guide | written |
+| 2027-05-26 | `stronghold-mtg-set-guide` | sets | Stronghold Set Guide | written |
+| 2027-05-27 | `tempest-mtg-set-guide` | sets | Tempest Set Guide | written |
+| 2027-05-28 | `weatherlight-mtg-set-guide` | sets | Weatherlight Set Guide | written |
+| 2027-05-29 | `fifth-edition-mtg-set-guide` | sets | Fifth Edition Set Guide | written |
+| 2027-05-30 | `visions-mtg-set-guide` | sets | Visions Set Guide | written |
+| 2027-05-31 | `mirage-mtg-set-guide` | sets | Mirage Set Guide | written |
+| 2027-06-01 | `alliances-mtg-set-guide` | sets | Alliances Set Guide | written |
+| 2027-06-02 | `homelands-mtg-set-guide` | sets | Homelands Set Guide | written |
+| 2027-06-03 | `ice-age-mtg-set-guide` | sets | Ice Age Set Guide | written |
+| 2027-06-04 | `fourth-edition-mtg-set-guide` | sets | Fourth Edition Set Guide | written |
+| 2027-06-05 | `fallen-empires-mtg-set-guide` | sets | Fallen Empires Set Guide | written |
+| 2027-06-06 | `the-dark-mtg-set-guide` | sets | The Dark Set Guide | written |
+| 2027-06-07 | `legends-mtg-set-guide` | sets | Legends Set Guide | written |
+| 2027-06-08 | `revised-edition-mtg-set-guide` | sets | Revised Edition Set Guide | written |
+| 2027-06-09 | `antiquities-mtg-set-guide` | sets | Antiquities Set Guide | written |
+| 2027-06-10 | `arabian-nights-mtg-set-guide` | sets | Arabian Nights Set Guide | written |
+| 2027-06-11 | `alpha-beta-unlimited-mtg-set-guide` | sets | Alpha, Beta and Unlimited Set Guide | written |
