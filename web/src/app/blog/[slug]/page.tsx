@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (isCategory(slug)) {
     const category = CATEGORIES[slug];
     return {
-      title: `${category.label}: MTG Guides | ${SITE_NAME}`,
+      title: `${category.label} for Magic: The Gathering | ${SITE_NAME}`,
       description: category.description,
       alternates: { canonical: `/blog/${slug}` },
     };
@@ -69,7 +69,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function BlogSlugPage({ params }: Params) {
   const { slug } = await params;
-  if (isCategory(slug)) return <CategoryHub category={slug} />;
+  if (isCategory(slug)) {
+    // A category with no published guide yet (e.g. before its first scheduled date) isn't a page.
+    if (!postsInCategory(slug).length) notFound();
+    return <CategoryHub category={slug} />;
+  }
   const post = getPost(slug);
   if (!post) notFound();
   return <Article post={post} />;

@@ -13,7 +13,7 @@ title: "How to Play Magic: The Gathering: A Complete Beginner's Guide"
 description: "One or two sentences, 140-160 characters. It is the Google snippet: say what the reader learns."
 date: 2026-10-19          # publish day (YYYY-MM-DD), New York time; future dates are scheduled
 updated: 2026-10-19       # optional, last meaningful revision
-category: learn-to-play   # learn-to-play | formats | deck-archetypes | strategy
+category: learn-to-play   # learn-to-play | formats | deck-archetypes | strategy | sets
 keywords: ["how to play magic the gathering", "mtg rules for beginners"]
 related: ["how-to-read-a-magic-card", "your-first-game-of-magic"]  # 2-4 slugs
 draft: false              # true hides it everywhere (index, sitemap, RSS)
@@ -24,7 +24,8 @@ The title renders as the page's only `<h1>`. Don't repeat it in the body.
 
 ## Scheduling
 
-Guides publish one per day. A guide with a future `date` is hidden everywhere
+Guides publish one per day. Set guides (`category: sets`) alternate with the
+other guides while there are set guides left to publish. A guide with a future `date` is hidden everywhere
 (index, hubs, related, sitemap, RSS, its own URL) until midnight New York
 time on that day; listing pages re-render hourly, so it appears without a
 deploy. `SCHEDULE.md` is the calendar: take the next open date, one guide
@@ -66,6 +67,12 @@ Run `npm run check:guides` (CI does too) before committing.
   describe the principle and cite the official source by name (the
   Comprehensive Rules, the official Commander brackets) instead of a number
   you are unsure of.
+- Set guides are the exception to "nothing that goes stale": they cover a
+  set's meta by design. Verify every card name and rarity on Scryfall, verify
+  bans and deck names against a dated source, and anchor anything
+  time-sensitive ("in its first months in Standard", "as of October 2026").
+  Revisit the meta section (and set `updated`) when a set's Standard season
+  changes, e.g. after a ban or rotation.
 - Concrete. Use real, long-standing example cards (Lightning Bolt, Llanowar
   Elves, Counterspell, Sol Ring, Wrath of God) to illustrate, and name them
   exactly as printed.
@@ -73,5 +80,9 @@ Run `npm run check:guides` (CI does too) before committing.
   the first time it appears. A strategy guide can assume the basics.
 - No filler, no keyword stuffing, no "In conclusion". End with a short,
   practical takeaway and the `<DeckLabCTA />`.
+- Spell out "Magic: The Gathering" at the first mention in the body, e.g.
+  "Magic: The Gathering (MTG)". After that, "Magic" or "MTG" is fine. Titles
+  and slugs can keep "MTG", since that's what people search for. The checker
+  enforces the first mention.
 - Card names and game terms follow Wizards' capitalization (the battlefield,
   the stack, mana value, Commander, Limited).

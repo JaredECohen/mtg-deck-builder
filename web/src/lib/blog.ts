@@ -37,6 +37,11 @@ export const CATEGORIES = {
     label: "Strategy & Improvement",
     description: "Play better games: mulligans, sideboarding and the decisions that separate good players from great ones.",
   },
+  sets: {
+    label: "Set Guides",
+    description:
+      "One guide per Magic set: the story, the mechanics, the cards that matter, how it drafts and what it did to the Constructed meta.",
+  },
 } as const;
 
 export type CategoryId = keyof typeof CATEGORIES;
