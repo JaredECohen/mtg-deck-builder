@@ -3,7 +3,8 @@
 One guide a day at midnight New York time (each file's `date`; see README.md).
 Set guides alternate with the other guides from 2026-10-27 to 2026-12-04, from
 2026-12-06 to 2027-03-02 (Pioneer-era sets) and from 2027-03-04 to 2027-04-30 (classic sets);
-after the regular guides run out, a classic set guide publishes every day to 2027-06-11.
+after the regular guides run out, set guides publish every day: classic sets to 2027-06-11, then
+supplemental products (Masters, Modern Horizons, Commander, Un-sets, roundups) to 2027-08-05.
 Status is set when the file exists: `written` (scheduled) or `planned`. Keep this table in date order.
 
 | Date | Slug | Category | Working title | Status |
@@ -243,3 +244,58 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2027-06-09 | `antiquities-mtg-set-guide` | sets | Antiquities Set Guide | written |
 | 2027-06-10 | `arabian-nights-mtg-set-guide` | sets | Arabian Nights Set Guide | written |
 | 2027-06-11 | `alpha-beta-unlimited-mtg-set-guide` | sets | Alpha, Beta and Unlimited Set Guide | written |
+| 2027-06-12 | `modern-horizons-3-mtg-set-guide` | sets | Modern Horizons 3 Set Guide | written |
+| 2027-06-13 | `lord-of-the-rings-tales-of-middle-earth-mtg-set-guide` | sets | Lord of the Rings Set Guide | written |
+| 2027-06-14 | `modern-horizons-2-mtg-set-guide` | sets | Modern Horizons 2 Set Guide | written |
+| 2027-06-15 | `commander-legends-mtg-set-guide` | sets | Commander Legends Set Guide | written |
+| 2027-06-16 | `modern-horizons-mtg-set-guide` | sets | Modern Horizons Set Guide | written |
+| 2027-06-17 | `fallout-mtg-set-guide` | sets | Fallout Set Guide | written |
+| 2027-06-18 | `commander-masters-mtg-set-guide` | sets | Commander Masters Set Guide | written |
+| 2027-06-19 | `secret-lair-mtg-set-guide` | sets | Secret Lair Set Guide | written |
+| 2027-06-20 | `commander-legends-battle-for-baldurs-gate-mtg-set-guide` | sets | Battle for Baldur's Gate Set Guide | written |
+| 2027-06-21 | `double-masters-mtg-set-guide` | sets | Double Masters Set Guide | written |
+| 2027-06-22 | `warhammer-40000-mtg-set-guide` | sets | Warhammer 40,000 Set Guide | written |
+| 2027-06-23 | `innistrad-remastered-mtg-set-guide` | sets | Innistrad Remastered Set Guide | written |
+| 2027-06-24 | `doctor-who-mtg-set-guide` | sets | Doctor Who Set Guide | written |
+| 2027-06-25 | `ultimate-masters-mtg-set-guide` | sets | Ultimate Masters Set Guide | written |
+| 2027-06-26 | `double-masters-2022-mtg-set-guide` | sets | Double Masters 2022 Set Guide | written |
+| 2027-06-27 | `conspiracy-mtg-set-guide` | sets | Conspiracy Set Guide | written |
+| 2027-06-28 | `ravnica-remastered-mtg-set-guide` | sets | Ravnica Remastered Set Guide | written |
+| 2027-06-29 | `assassins-creed-mtg-set-guide` | sets | Assassin's Creed Set Guide | written |
+| 2027-06-30 | `time-spiral-remastered-mtg-set-guide` | sets | Time Spiral Remastered Set Guide | written |
+| 2027-07-01 | `unfinity-mtg-set-guide` | sets | Unfinity Set Guide | written |
+| 2027-07-02 | `masters-25-mtg-set-guide` | sets | Masters 25 Set Guide | written |
+| 2027-07-03 | `conspiracy-take-the-crown-mtg-set-guide` | sets | Conspiracy: Take the Crown Set Guide | written |
+| 2027-07-04 | `dominaria-remastered-mtg-set-guide` | sets | Dominaria Remastered Set Guide | written |
+| 2027-07-05 | `eternal-masters-mtg-set-guide` | sets | Eternal Masters Set Guide | written |
+| 2027-07-06 | `battlebond-mtg-set-guide` | sets | Battlebond Set Guide | written |
+| 2027-07-07 | `unstable-mtg-set-guide` | sets | Unstable Set Guide | written |
+| 2027-07-08 | `modern-masters-mtg-set-guide` | sets | Modern Masters Set Guide | written |
+| 2027-07-09 | `jumpstart-mtg-set-guide` | sets | Jumpstart Set Guide | written |
+| 2027-07-10 | `commander-2021-mtg-set-guide` | sets | Commander 2021 Set Guide | written |
+| 2027-07-11 | `modern-masters-2015-mtg-set-guide` | sets | Modern Masters 2015 Set Guide | written |
+| 2027-07-12 | `innistrad-double-feature-mtg-set-guide` | sets | Innistrad: Double Feature Set Guide | written |
+| 2027-07-13 | `commander-2020-mtg-set-guide` | sets | Commander 2020 Set Guide | written |
+| 2027-07-14 | `iconic-masters-mtg-set-guide` | sets | Iconic Masters Set Guide | written |
+| 2027-07-15 | `unglued-mtg-set-guide` | sets | Unglued Set Guide | written |
+| 2027-07-16 | `commander-2019-mtg-set-guide` | sets | Commander 2019 Set Guide | written |
+| 2027-07-17 | `modern-masters-2017-mtg-set-guide` | sets | Modern Masters 2017 Set Guide | written |
+| 2027-07-18 | `mystery-booster-and-the-list-mtg-set-guide` | sets | Mystery Booster and The List Set Guide | written |
+| 2027-07-19 | `commander-2018-mtg-set-guide` | sets | Commander 2018 Set Guide | written |
+| 2027-07-20 | `unhinged-mtg-set-guide` | sets | Unhinged Set Guide | written |
+| 2027-07-21 | `commander-2017-mtg-set-guide` | sets | Commander 2017 Set Guide | written |
+| 2027-07-22 | `chronicles-and-renaissance-mtg-set-guide` | sets | Chronicles and Renaissance Set Guide | written |
+| 2027-07-23 | `commander-2016-mtg-set-guide` | sets | Commander 2016 Set Guide | written |
+| 2027-07-24 | `portal-mtg-set-guide` | sets | Portal Set Guide | written |
+| 2027-07-25 | `commander-2015-mtg-set-guide` | sets | Commander 2015 Set Guide | written |
+| 2027-07-26 | `duel-decks-mtg-set-guide` | sets | Duel Decks Set Guide | written |
+| 2027-07-27 | `commander-2014-mtg-set-guide` | sets | Commander 2014 Set Guide | written |
+| 2027-07-28 | `from-the-vault-mtg-set-guide` | sets | From the Vault Set Guide | written |
+| 2027-07-29 | `commander-2013-mtg-set-guide` | sets | Commander 2013 Set Guide | written |
+| 2027-07-30 | `unsanctioned-and-unknown-event-mtg-set-guide` | sets | Unsanctioned and Unknown Event Set Guide | written |
+| 2027-07-31 | `commander-2011-mtg-set-guide` | sets | Commander 2011 Set Guide | written |
+| 2027-08-01 | `commander-anthology-and-starter-commander-decks-mtg-set-guide` | sets | Commander Anthology Set Guide | written |
+| 2027-08-02 | `premium-deck-series-and-signature-spellbook-mtg-set-guide` | sets | Premium Deck Series and Signature Spellbook Set Guide | written |
+| 2027-08-03 | `masterpiece-series-mtg-set-guide` | sets | Masterpiece Series Set Guide | written |
+| 2027-08-04 | `starter-sets-mtg-set-guide` | sets | Starter Set Guide | written |
+| 2027-08-05 | `boxed-sets-and-game-night-mtg-set-guide` | sets | Boxed Sets and Game Night Set Guide | written |
