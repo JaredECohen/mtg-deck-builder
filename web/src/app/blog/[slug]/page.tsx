@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 
 import { PostCard } from "@/components/blog/post-card";
 import { mdxComponents } from "@/components/blog/mdx-components";
+import { GuideView } from "@/components/guide-view";
 import {
   AUTHOR,
   CATEGORIES,
@@ -118,6 +119,7 @@ function Article({ post }: { post: Post }) {
   };
   return (
     <main className="shell blog-shell">
+      <GuideView slug={post.slug} category={post.category} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <nav className="blog-breadcrumbs" aria-label="Breadcrumb">
         <Link href="/blog">Guides</Link> <span aria-hidden="true">/</span>{" "}

@@ -52,6 +52,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint
         run: npm run lint
+      - name: Unit tests
+        run: npm test
       - name: Check guides
         run: npm run check:guides
       - name: Build

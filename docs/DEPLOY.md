@@ -104,6 +104,14 @@ optimizer runs as background jobs that the client polls.
 
 You don't need to set CORS: the browser never calls Fly directly.
 
+**Web Analytics.** After the project exists, open the **Analytics** tab in the
+Vercel dashboard and click **Enable**. No environment variable is required.
+Page views work on Hobby. The deck funnel (`deck_generated`, `deck_refined`,
+`deck_exported`, `deck_shared`, `tcgplayer_cart_clicked`, `guide_viewed`) is
+custom events, which Vercel only records on Pro. The README section
+"Analytics" lists each event's properties and what is deliberately left out
+(prompts, deck names, share tokens).
+
 ## 3. Weekly card refresh
 
 `.github/workflows/refresh-cards.yml` runs on Mondays and can also be started
