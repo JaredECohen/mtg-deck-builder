@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DeckPageView } from "@/components/deck-page-view";
 import { ManaCurveChart } from "@/components/workshop/mana-curve-chart";
 import { groupByType } from "@/lib/group-by-type";
 import { SITE_NAME } from "@/lib/blog";
@@ -128,6 +129,7 @@ export default async function SharedDeckPage({ params }: Params) {
 
   return (
     <main className="shell share-page">
+      <DeckPageView format={deck.format} />
       <p className="eyebrow">Shared deck</p>
       <h1>{deck.name}</h1>
       <p className="share-meta">

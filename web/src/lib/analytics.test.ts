@@ -11,6 +11,7 @@ import {
   trackDeckExported,
   trackDeckGenerated,
   trackDeckRefined,
+  trackDeckPageViewed,
   trackDeckShared,
   trackGuideViewed,
   trackTcgplayerCartClicked,
@@ -32,6 +33,7 @@ test("every funnel event has at most two properties", () => {
     "deck_refined",
     "deck_exported",
     "deck_shared",
+    "deck_page_viewed",
     "tcgplayer_cart_clicked",
     "guide_viewed",
   ]);
@@ -95,6 +97,8 @@ test("track helpers send the sanitized payload and nothing else", () => {
   trackDeckExported("plain", "standard");
   trackDeckExported("csv", "standard");
   trackDeckShared("legacy");
+  trackDeckPageViewed("commander");
+  trackDeckPageViewed("Ada's deck");
   trackTcgplayerCartClicked("modern");
   trackGuideViewed("mtg-mulligan-guide", "strategy");
   trackGuideViewed("../etc/passwd", "strategy");
@@ -104,6 +108,7 @@ test("track helpers send the sanitized payload and nothing else", () => {
     { name: "deck_refined", props: { format: "pioneer" } },
     { name: "deck_exported", props: { target: "moxfield", format: "standard" } },
     { name: "deck_shared", props: { format: "legacy" } },
+    { name: "deck_page_viewed", props: { format: "commander" } },
     { name: "tcgplayer_cart_clicked", props: { format: "modern" } },
     { name: "guide_viewed", props: { slug: "mtg-mulligan-guide", category: "strategy" } },
   ]);
@@ -124,6 +129,11 @@ test("page URLs lose brief text and share tokens", () => {
   assert.equal(url.searchParams.has("deck"), false);
   assert.equal(redacted.includes("ada@"), false);
   assert.equal(redacted.includes("abcDEF"), false);
+
+  const shared = redactAnalyticsUrl("https://mtgdecklab.app/d/abcDEF123456?utm_source=discord");
+  assert.equal(shared, "https://mtgdecklab.app/d?utm_source=discord");
+  assert.equal(redactAnalyticsUrl("/d/abcDEF123456"), "/d");
+  assert.equal(redactAnalyticsUrl("/d/abcDEF123456?deck=abcDEF123456"), "/d");
 });
 
 test("page URLs keep a normal guide path and a safe format hash link", () => {
