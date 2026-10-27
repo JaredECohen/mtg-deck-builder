@@ -3,12 +3,14 @@ import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { SiteAnalytics } from "@/components/site-analytics";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ADSENSE_CLIENT } from "@/lib/ads";
+import { SITE_URL } from "@/lib/blog";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://mtgdecklab.app"),
+  metadataBase: new URL(SITE_URL),
   title: "MTG Deck Lab: Free Magic: The Gathering Deck Builder",
   description:
     "Build legal Magic: The Gathering decks for Standard, Pioneer, Modern, Legacy and Commander, with a reason for every card, a mana curve and a price.",
@@ -38,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <SiteHeader />
         {children}
         <SiteFooter />
+        <SiteAnalytics />
       </body>
     </html>
   );

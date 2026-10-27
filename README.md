@@ -71,13 +71,47 @@ so local runs and CI see the same data and never write to `var/`.
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push
 to `main` and every PR: the backend `pytest` suite and the frontend
-`tsc --noEmit` + `next build`.
+unit tests, `tsc --noEmit`, lint, and `next build`.
 
 ## Deploy
 
 The web app deploys to Vercel and the API to one Fly.io machine, with SQLite
 on a volume (about $6/month). [docs/DEPLOY.md](docs/DEPLOY.md) has the
 setup steps, secrets, the weekly card-refresh workflow and spend caps.
+
+## Analytics
+
+Traffic and the deck funnel are recorded with [Vercel Web Analytics](https://vercel.com/docs/analytics)
+(`@vercel/analytics`). The script is in the root layout. Nothing is stored until
+Web Analytics is enabled for the Vercel project, and no environment variable is
+required.
+
+1. Open the `mtg-deck-builder` project in the [Vercel dashboard](https://vercel.com/dashboard).
+2. Go to the **Analytics** tab and click **Enable**.
+3. Deploy this change to production if it is not already live. Preview deployments
+   report into the Preview environment; production reports into Production.
+
+Page views, including guide pages, are collected on the Hobby plan (50,000 events
+per month, then collection pauses). **Custom events require Pro.** On Hobby,
+Vercel does not record them, so the funnel stays empty until the team is on Pro.
+On Pro, each custom event can carry two properties.
+Web Analytics Plus ($10/month) raises that to eight, which this site does not need.
+
+| Event | When it fires | Properties |
+| --- | --- | --- |
+| `deck_generated` | A deck build succeeds | `format`, `source` (`new` or `alternative`) |
+| `deck_refined` | A refine succeeds | `format` |
+| `deck_exported` | An Arena, Moxfield, or Archidekt export is built | `target`, `format` |
+| `deck_shared` | A share link is created | `format` |
+| `tcgplayer_cart_clicked` | "Buy entire deck on TCGplayer" is clicked | `format` |
+| `guide_viewed` | A guide article is opened | `slug`, `category` |
+
+`format` is one of `standard`, `modern`, `pioneer`, `legacy`, `commander`.
+`target` is `arena`, `moxfield`, or `archidekt`. Plain-text and CSV exports are
+not part of the funnel. Prompts, deck titles, card lists, emails, and share
+tokens are rejected before send. Page-view URLs have the `brief` and `deck`
+query parameters removed, so a guide's "try this" link and a share link do not
+land in analytics. `/privacy` describes the same limits.
 
 ## Capabilities
 

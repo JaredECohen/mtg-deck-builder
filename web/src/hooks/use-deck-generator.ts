@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { trackDeckGenerated, trackDeckRefined } from "@/lib/analytics";
 import { fetchMetaSummary, generateDeck, refineDeck } from "@/lib/api";
 import type { GenerateDeckInput } from "@/lib/api";
 import type { DeckResponse, MetaSummaryResponse } from "@/lib/types";
@@ -86,6 +87,7 @@ export function useDeckGenerator() {
       // A fresh build starts a fresh revision history.
       setRevisions([makeRevision(payload, "generate", input.archetype_name ? `Built "${input.archetype_name}"` : "Generated")]);
       setLastInput(input);
+      trackDeckGenerated(payload.format, input.archetype_name ? "alternative" : "new");
       try {
         const metaPayload = await fetchMetaSummary(payload.format, controller.signal);
         if (!controller.signal.aborted) setMeta(metaPayload);
@@ -120,6 +122,7 @@ export function useDeckGenerator() {
         // history untouched so it can simply be retried.
         const label = prompt.trim().length > 60 ? `${prompt.trim().slice(0, 57)}…` : prompt.trim();
         setRevisions((list) => appendRevision(list, makeRevision(payload, "refine", `Refined: ${label || "refinement"}`)));
+        trackDeckRefined(payload.format);
         return payload;
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return null;

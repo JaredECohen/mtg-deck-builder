@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { trackDeckExported } from "@/lib/analytics";
 import { exportDeck, type ExportTarget } from "@/lib/api";
 import type { DeckResponse } from "@/lib/types";
 
@@ -40,6 +41,7 @@ export function useDeckExport(deck: DeckResponse | null) {
         if (controller.signal.aborted) return null;
         setContent(payload.content);
         setTarget(nextTarget);
+        trackDeckExported(nextTarget, deck.format);
         return payload.content;
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return null;

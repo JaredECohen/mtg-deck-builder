@@ -14,6 +14,7 @@ import { ProvenanceBanner } from "./provenance-banner";
 import { RevisionHistory } from "./revision-history";
 import { useDeckChat } from "@/hooks/use-deck-chat";
 import type { DeckRevision } from "@/hooks/use-deck-generator";
+import { trackTcgplayerCartClicked } from "@/lib/analytics";
 import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
 import { MAX_PROMPT_CHARS } from "@/lib/api";
 import { cardCount } from "@/lib/deck-diff";
@@ -53,7 +54,14 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
       <p className="muted" style={{ marginTop: 0 }}>
         Buy the whole list in one TCGplayer cart at the cheapest available prices, or grab individual singles below.
       </p>
-      <a href={massEntryUrl} target="_blank" rel="noreferrer sponsored" className="button" style={{ marginBottom: 12 }}>
+      <a
+        href={massEntryUrl}
+        target="_blank"
+        rel="noreferrer sponsored"
+        className="button"
+        style={{ marginBottom: 12 }}
+        onClick={() => trackTcgplayerCartClicked(deck.format)}
+      >
         Buy entire deck on TCGplayer
       </a>
       <details>
