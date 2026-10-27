@@ -1,0 +1,14 @@
+Official product decklists in official_decks.json are names and quantities
+taken from MTGJSON (https://mtgjson.com).
+
+MTGJSON publishes that data under the MIT license:
+https://www.mtgjson.com/license/
+
+The lists are Wizards of the Coast products (Commander precons and Pioneer
+Challenger Decks), not a scrape of a tournament metagame site. Each record
+keeps the source URL MTGJSON recorded for that product when it had one.
+
+Copyright (c) MTGJSON contributors. Permission is granted to use, copy,
+modify, merge, publish, and distribute this data, provided the copyright
+notice and the MIT permission notice travel with substantial portions of it.
+The data is provided as-is, without warranty.

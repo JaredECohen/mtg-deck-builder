@@ -139,6 +139,18 @@ def representative_deck(decks: list[TournamentDeck]) -> TournamentDeck:
     return max(decks, key=deck_weight)
 
 
+def evidence_for_source(source: str) -> str:
+    """``template`` for synthesized or sample lists, ``observed`` otherwise.
+
+    Official product decks (``mtgjson``) count as observed: they are published
+    lists, not a hand-written skeleton. They are still not a tournament
+    metagame; the event name and finish label say "Official product".
+    """
+    if source.startswith("synthesized") or source == "sample":
+        return "template"
+    return "observed"
+
+
 def infer_name(deck: TournamentDeck, tags: list[str], colors: list[str]) -> str:
     if deck.commander:
         return f"{deck.commander} {(' '.join(tag.title() for tag in tags[:2])) or 'Commander'}".strip()
@@ -441,14 +453,11 @@ def build_archetype_payload(repository: CardRepository, decks: list[TournamentDe
     )[:5]
     archetype_type = "commander" if rep.commander else "constructed"
     event_dates = [str(deck.event_date)[:10] for deck in decks if deck.event_date]
-    # Template evidence: every source deck was synthesized from a curated
-    # builtin or is bundled sample data, so the archetype encodes a shape,
-    # not observed tournament results.
-    evidence = (
-        "template"
-        if all((deck.source or "").startswith("synthesized") or deck.source == "sample" for deck in decks)
-        else "observed"
-    )
+    # The representative deck decides the label. A precon that clustered with
+    # a higher-weight template must not rebrand that template as an observed
+    # tournament result. A cluster whose representative is an official product
+    # list (or any non-template source) is observed.
+    evidence = evidence_for_source(rep.source or "")
     metadata_json: dict[str, object] = {
         "last_seen": max(event_dates) if event_dates else None,
         "evidence": evidence,
