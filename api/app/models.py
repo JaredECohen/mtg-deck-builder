@@ -669,6 +669,56 @@ class CommanderProfileResponse(BaseModel):
     commander: CommanderProfile
 
 
+class PreconSummary(BaseModel):
+    id: str
+    name: str
+    commander: str | None = None
+    commanders: list[str] = Field(default_factory=list)
+    color_identity: list[str] = Field(default_factory=list)
+    release_date: str | None = None
+    set_code: str | None = None
+    format: Literal["commander"] = "commander"
+
+
+class PreconSearchResponse(BaseModel):
+    precons: list[PreconSummary]
+
+
+class PreconUpgradeRequest(BaseModel):
+    precon_id: Annotated[str, Field(max_length=200)] | None = None
+    deck_text: Annotated[str, Field(max_length=100_000)] | None = None
+    budget_usd: float = Field(ge=0, le=5_000)
+    # Bracket ceiling for the cards we add. 3 is "upgraded precon": Game
+    # Changers are allowed up to three, mass land denial and extra turns are not.
+    max_bracket: int | None = Field(default=3, ge=1, le=5)
+    max_swaps: int = Field(default=12, ge=1, le=40)
+
+
+class PreconSwap(BaseModel):
+    rank: int
+    cut: str
+    cut_explanation: str
+    add: str
+    add_explanation: str
+    add_price_usd: float
+    score: float
+
+
+class PreconUpgradeResponse(BaseModel):
+    precon_id: str | None = None
+    name: str
+    commander: str | None = None
+    commanders: list[str] = Field(default_factory=list)
+    budget_usd: float
+    total_cost_usd: float
+    swaps: list[PreconSwap] = Field(default_factory=list)
+    legality: ValidationResult
+    bracket: BracketAssessment
+    tcgplayer_cart_url: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    upgraded_mainboard: list[CardRef] = Field(default_factory=list)
+
+
 RefineDeckRequest.model_rebuild()
 ExportDeckRequest.model_rebuild()
 DeckProvenance.model_rebuild()
