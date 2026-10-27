@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
-const UPDATED = "October 18, 2026";
+const UPDATED = "October 27, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -18,17 +18,25 @@ export default function PrivacyPage() {
       <h1>Privacy</h1>
       <p className="legal-updated">Last updated {UPDATED}</p>
 
-      <h2>No accounts</h2>
+      <h2>Accounts are optional</h2>
       <p>
-        MTG Deck Lab has no sign-up and asks for no personal information. You can build, analyze and share decks
-        without telling us who you are.
+        You can build, analyze and share decks without telling us who you are. If you sign in, we email a one-time
+        link to the address you give us. There is no password. Signing in lets you keep a personal library of decks.
       </p>
 
       <h2>What we store</h2>
       <ul>
         <li>
-          <strong>Decks you save or share.</strong> The deck list, its name, notes and evaluation are stored on our
-          server so the share link works. Anyone with a share link can view that deck.
+          <strong>Decks you save or share.</strong> The deck list, its name, notes, mana curve, per-card reasons and
+          price are stored so the share page works. Anyone with the link can view that deck. Public decks may be
+          indexed by search engines and listed in our sitemap. You can hide a deck from search engines; the link
+          still opens it.
+        </li>
+        <li>
+          <strong>Your account, if you create one.</strong> We store your email address and a hash of your sign-in
+          session. The email is sent to our email provider (Resend) only to deliver the sign-in link. You can delete
+          individual decks, or delete the account, from your library. Deleting the account removes the library and
+          the sign-in.
         </li>
         <li>
           <strong>Preferences and drafts in your browser.</strong> Your beginner or expert mode setting and unsaved

@@ -2,8 +2,12 @@
 //
 // The browser talks only to /api/backend/*. This handler forwards the request
 // to API_BASE and adds the X-API-Key header from the server-only MTG_API_KEY
-// env var, so the key never ships in the client bundle. Cookies and the Host
-// header are not forwarded; status, content type and body come back as-is.
+// env var, so the key never ships in the client bundle. The raw Cookie and
+// Host headers are not forwarded. A decklab_session cookie, when present, is
+// sent as X-User-Session so a signed-in library stays on the API without
+// putting the session token in JavaScript. Sign-in itself is not proxied:
+// /v1/auth/* is rejected here so a magic-link or session token can't come
+// back through this route. Status, content type and body come back as-is.
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +48,11 @@ async function forward(request: Request): Promise<Response> {
   if (!ALLOWED_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix))) {
     return errorResponse(404, "Not found.");
   }
+  // Auth responses can carry a session token or a debug sign-in link. Those
+  // routes are served by /api/auth/*, which keeps the token in an httpOnly cookie.
+  if (path === "/v1/auth" || path.startsWith("/v1/auth/")) {
+    return errorResponse(404, "Not found.");
+  }
 
   const headers = new Headers();
   for (const name of FORWARDED_REQUEST_HEADERS) {
@@ -55,6 +64,8 @@ async function forward(request: Request): Promise<Response> {
   if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
   const apiKey = process.env.MTG_API_KEY;
   if (apiKey) headers.set("x-api-key", apiKey);
+  const session = sessionToken(request);
+  if (session) headers.set("x-user-session", session);
 
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -103,4 +114,28 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function DELETE(request: Request): Promise<Response> {
   return forward(request);
+}
+
+export async function PATCH(request: Request): Promise<Response> {
+  return forward(request);
+}
+
+const SESSION_COOKIE = "decklab_session";
+
+function sessionToken(request: Request): string | null {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq === -1 || trimmed.slice(0, eq) !== SESSION_COOKIE) continue;
+    let value = trimmed.slice(eq + 1);
+    try {
+      value = decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+    if (/^[A-Za-z0-9_-]{20,200}$/.test(value)) return value;
+  }
+  return null;
 }

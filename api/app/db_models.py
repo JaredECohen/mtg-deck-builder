@@ -97,6 +97,7 @@ class SavedDeck(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     share_token: Mapped[str] = mapped_column(String(64), index=True, unique=True)
+    # ``key:`` + hash of an API key, or ``user:`` + account id. Never a raw key.
     owner: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), default="Untitled deck")
     format: Mapped[str] = mapped_column(String(32), index=True)
@@ -107,6 +108,50 @@ class SavedDeck(Base):
     evaluation: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     created_at: Mapped[str] = mapped_column(String(32), index=True)
     updated_at: Mapped[str] = mapped_column(String(32))
+    # public = share page may be indexed and listed in the sitemap.
+    # unlisted = link still opens the deck, but the page is noindex and
+    # the token is omitted from /v1/decks/public.
+    visibility: Mapped[str] = mapped_column(String(16), default="public", server_default="public", index=True)
+    colors: Mapped[list[str]] = mapped_column(JSON, default=list)
+    price_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    card_notes: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    mana_curve: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
+    card_types: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    key_cards: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class UserAccount(Base):
+    """Optional sign-in. The site works without one of these."""
+
+    __tablename__ = "user_accounts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class LoginToken(Base):
+    """One-time magic-link secret. Only the sha256 hash is stored."""
+
+    __tablename__ = "login_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[str] = mapped_column(String(40))
+    used_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
+class AuthSession(Base):
+    """Browser session. Only the sha256 hash of the cookie value is stored."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[str] = mapped_column(String(40))
+    created_at: Mapped[str] = mapped_column(String(40))
 
 
 class CardEmbedding(Base):

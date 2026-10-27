@@ -12,9 +12,9 @@ class InMemoryRateLimiter:
     distributed setups replace with a Redis-backed implementation.
     """
 
-    def __init__(self, *, requests_per_minute: int) -> None:
+    def __init__(self, *, requests_per_minute: int, window_seconds: float = 60.0) -> None:
         self.limit = requests_per_minute
-        self.window = 60.0
+        self.window = window_seconds
         self._timestamps: defaultdict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
         self._calls_since_sweep = 0
@@ -60,3 +60,8 @@ evaluate_rate_limiter = InMemoryRateLimiter(requests_per_minute=20)
 # commander search, meta, saved/shared reads): a generous per-client ceiling
 # that still stops scraping and request floods.
 public_rate_limiter = InMemoryRateLimiter(requests_per_minute=240)
+
+# Sign-in links are cheap to request and expensive to mail. Per email and
+# per IP, counted over an hour rather than a minute.
+auth_email_limiter = InMemoryRateLimiter(requests_per_minute=5, window_seconds=3600)
+auth_ip_limiter = InMemoryRateLimiter(requests_per_minute=20, window_seconds=3600)

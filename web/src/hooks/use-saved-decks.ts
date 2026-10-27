@@ -2,13 +2,51 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { deleteSavedDeck, fetchDeckHistory, saveDeck, type DeckEvaluation, type SavedDeck } from "@/lib/api";
+import {
+  deleteSavedDeck,
+  fetchDeckHistory,
+  saveDeck,
+  type DeckEvaluation,
+  type DeckVisibility,
+  type SavedDeck
+} from "@/lib/api";
 import type { DeckResponse } from "@/lib/types";
 
-/** Share URL for a saved deck: opens it in the Analyze workflow. */
+const LOCAL_KEY = "decklab.local-decks";
+
+export type LocalDeck = {
+  id: string;
+  share_token: string;
+  name: string;
+  format: string;
+  created_at: string;
+  visibility: DeckVisibility;
+};
+
+/** Public page for a shared deck. */
 export function shareUrl(token: string): string {
-  if (typeof window === "undefined") return `/?deck=${encodeURIComponent(token)}`;
-  return `${window.location.origin}${window.location.pathname}?deck=${encodeURIComponent(token)}`;
+  const path = `/d/${encodeURIComponent(token)}`;
+  if (typeof window === "undefined") return path;
+  return `${window.location.origin}${path}`;
+}
+
+/** Opens the same list in the Analyze workflow. */
+export function analyzeUrl(token: string): string {
+  return `/?deck=${encodeURIComponent(token)}`;
+}
+
+function keyCardsFor(deck: DeckResponse): string[] {
+  const lands = new Set(
+    Object.entries(deck.card_types)
+      .filter(([, type]) => type === "Land")
+      .map(([name]) => name)
+  );
+  const fromRoles = [...new Set(deck.role_summary.flatMap((role) => role.key_cards))].filter((name) => !lands.has(name));
+  if (fromRoles.length) return fromRoles.slice(0, 4);
+  return deck.mainboard
+    .map((card) => card.name)
+    .filter((name) => !lands.has(name))
+    .slice(0, 4);
 }
 
 /** Save the deck on screen and mint a share link. Resets when the deck changes. */
@@ -24,7 +62,7 @@ export function useSaveDeck(deck: DeckResponse | null) {
   }, [deck]);
 
   const save = useCallback(
-    async (evaluation?: DeckEvaluation | null) => {
+    async (evaluation?: DeckEvaluation | null, visibility: DeckVisibility = "public") => {
       if (!deck) return null;
       const target = deck;
       setSaving(true);
@@ -37,7 +75,18 @@ export function useSaveDeck(deck: DeckResponse | null) {
           sideboard: target.sideboard,
           commander: target.commander ?? undefined,
           notes: target.strategy_summary,
-          evaluation: evaluation ?? undefined
+          evaluation: evaluation ?? undefined,
+          visibility,
+          colors: target.colors,
+          price_usd: target.estimated_price_usd ?? null,
+          card_notes: target.card_notes.slice(0, 250).map((note) => ({
+            name: note.name,
+            role: note.role.slice(0, 80),
+            reason: note.reason.slice(0, 2000)
+          })),
+          mana_curve: target.mana_curve,
+          card_types: target.card_types,
+          key_cards: keyCardsFor(target)
         });
         setSaved(result);
         return result;
@@ -54,7 +103,38 @@ export function useSaveDeck(deck: DeckResponse | null) {
   return { saved, saving, error, save };
 }
 
-/** The saved decks owned by this server's API key (GET /v1/decks/history). */
+export function readLocalDecks(): LocalDeck[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_KEY) ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((row): row is LocalDeck => Boolean(row && typeof row.id === "string" && typeof row.share_token === "string")).slice(0, 30);
+  } catch {
+    return [];
+  }
+}
+
+export function rememberLocalDeck(deck: SavedDeck): LocalDeck[] {
+  const entry: LocalDeck = {
+    id: deck.id,
+    share_token: deck.share_token,
+    name: deck.name,
+    format: deck.format,
+    created_at: deck.created_at,
+    visibility: deck.visibility === "unlisted" ? "unlisted" : "public"
+  };
+  const next = [entry, ...readLocalDecks().filter((row) => row.id !== deck.id)].slice(0, 30);
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function forgetLocalDeck(id: string): LocalDeck[] {
+  const next = readLocalDecks().filter((row) => row.id !== id);
+  window.localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
+  return next;
+}
+
+/** The signed-in library (GET /v1/decks/history, scoped to the session). */
 export function useSavedDeckList() {
   const [decks, setDecks] = useState<SavedDeck[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,7 +144,7 @@ export function useSavedDeckList() {
     setLoading(true);
     setError(null);
     try {
-      setDecks(await fetchDeckHistory(20));
+      setDecks(await fetchDeckHistory(50));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load saved decks");
     } finally {
@@ -82,5 +162,5 @@ export function useSavedDeckList() {
     }
   }, []);
 
-  return { decks, loading, error, load, remove };
+  return { decks, loading, error, load, remove, setDecks };
 }
