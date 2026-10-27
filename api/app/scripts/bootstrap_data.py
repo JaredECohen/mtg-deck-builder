@@ -8,8 +8,10 @@ output already exists, so ordinary restarts cost a few database counts:
 1. ``ingest_scryfall``       - cards (only when the cards table is nearly empty,
                                or always with ``--refresh-cards``)
 2. ``ingest_tournament_decks`` - the curated template corpus (when empty)
-3. ``build_archetypes``      - archetypes (when empty, or after new decks)
-4. ``build_card_profiles``   - after an ingest or when none exist (incremental)
+3. ``ingest_official_decks`` - MTGJSON Commander precons and Pioneer Challenger
+                               Decks (every boot; re-download with ``--refresh-cards``)
+4. ``build_archetypes``      - archetypes (when empty, or after new decks)
+5. ``build_card_profiles``   - every card, after an ingest or when none exist
 
 Usage::
 
@@ -66,6 +68,26 @@ def run(refresh_cards: bool = False) -> dict[str, object]:
         step("ingest_tournament_decks", lambda: ingest_tournament_decks([]))
         new_decks = True
 
+    # Official product lists (MTGJSON) augment the template corpus. The weekly
+    # refresh re-downloads them; a normal boot ingests the snapshot already on
+    # disk and skips rows that have not changed. See docs/DATA_SOURCES.md.
+    from app.scripts.ingest_official_decks import download_snapshot, ingest_snapshot, snapshot_path
+
+    def _official() -> None:
+        path = snapshot_path()
+        if refresh_cards:
+            try:
+                download_snapshot(path)
+            except Exception as exc:  # noqa: BLE001 — keep last week's lists if MTGJSON is down
+                print(f"[warn] official deck download failed ({exc}); using {path}")
+        result = ingest_snapshot(path)
+        if int(result.get("inserted") or 0) or int(result.get("replaced") or 0):
+            steps["official_decks_changed"] = True
+
+    step("official_decks", _official)
+    if steps.get("official_decks_changed"):
+        new_decks = True
+
     if new_decks or _count(Archetype) == 0:
         from app.scripts.build_archetypes import main as build_archetypes
 
@@ -74,7 +96,9 @@ def run(refresh_cards: bool = False) -> dict[str, object]:
     if ingested or _count(CardProfile) == 0:
         from app.scripts.build_card_profiles import main as build_card_profiles
 
-        step("build_card_profiles", lambda: build_card_profiles([]))
+        # --all is the default; pass it so the weekly boot log shows the intent.
+        # Modern-only profiling left full ingests near 65% coverage.
+        step("build_card_profiles", lambda: build_card_profiles(["--all"]))
     steps["cards"] = _count(Card)
     return steps
 

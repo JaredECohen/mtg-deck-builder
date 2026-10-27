@@ -31,6 +31,9 @@ from app.models import (
     MetaSummaryResponse,
     ParseDecklistRequest,
     ParsedDecklistResponse,
+    PreconSearchResponse,
+    PreconUpgradeRequest,
+    PreconUpgradeResponse,
     RefineDeckRequest,
     SaveDeckRequest,
     UpdateDeckRequest,
@@ -137,33 +140,23 @@ def _cache_put(key: str, deck: DeckResponse) -> None:
             _generate_cache.popitem(last=False)
 
 def _card_profile_coverage() -> dict[str, int | float | str]:
-    """Compare card count vs card_profiles count. Surfaces the stale-profile
-    case where the optimizer's _build_pool silently returns nothing because
-    no profiles exist. Threshold is 60%.
+    """Compare card count vs card_profiles count.
+
+    A full ingest (about 35k cards) is stale under 90% coverage. The CI
+    fixture is a couple thousand cards and stays on the 60% bar. An empty
+    database is not stale — there is nothing to be stale about.
     """
     from sqlalchemy import func, select
     from app.db import session_scope
     from app.db_models import Card, CardProfile
+    from app.services.profile_coverage import coverage_report
     try:
         with session_scope() as session:
             card_total = session.scalar(select(func.count()).select_from(Card)) or 0
             profile_total = session.scalar(select(func.count()).select_from(CardProfile)) or 0
     except Exception:
-        return {"status": "unknown", "cards": 0, "profiles": 0, "coverage": 0.0}
-    coverage = (profile_total / card_total) if card_total else 0.0
-    # No cards ingested yet (fresh DB / sample-data fallback) is not a
-    # "stale" condition — there's nothing to be stale about. Only flag stale
-    # when cards exist but profiles lag behind them.
-    if card_total == 0:
-        status = "ok"
-    else:
-        status = "ok" if coverage >= 0.60 else "stale"
-    return {
-        "status": status,
-        "cards": int(card_total),
-        "profiles": int(profile_total),
-        "coverage": round(coverage, 4),
-    }
+        return {"status": "unknown", "cards": 0, "profiles": 0, "coverage": 0.0, "target": 0.0}
+    return coverage_report(int(card_total), int(profile_total))
 
 
 @asynccontextmanager
@@ -183,7 +176,7 @@ async def _lifespan(app: FastAPI):
         if coverage["status"] == "stale":
             logger.warning(
                 "card_profiles coverage is %.0f%% (%d/%d). Optimizer will return empty pools. "
-                "Run: python -m app.scripts.build_card_profiles",
+                "Run: python -m app.scripts.build_card_profiles --all",
                 float(coverage["coverage"]) * 100,
                 int(coverage["profiles"]),
                 int(coverage["cards"]),
@@ -205,7 +198,14 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(title="MTG Deck Builder API", version="0.1.0", lifespan=_lifespan)
 
 
-_LIMITED_ELSEWHERE = ("/v1/decks/generate", "/v1/decks/refine", "/v1/decks/chat", "/v1/decks/evaluate", "/v1/jobs/")
+_LIMITED_ELSEWHERE = (
+    "/v1/decks/generate",
+    "/v1/decks/refine",
+    "/v1/decks/chat",
+    "/v1/decks/evaluate",
+    "/v1/jobs/",
+    "/v1/commander/precon-upgrade",
+)
 
 
 @app.middleware("http")
@@ -749,6 +749,35 @@ def card_detail(card_name: str) -> CardDetailResponse:
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
     return CardDetailResponse(card=card)
+
+
+@app.get("/v1/commander/precons", response_model=PreconSearchResponse)
+def search_precons(q: str = "", limit: int = 20) -> PreconSearchResponse:
+    """Official Commander precons from the MTGJSON snapshot. ``q`` matches the
+    deck name, a commander, or the set code."""
+    from app.services.precon_upgrade import search_precons as _search
+
+    return PreconSearchResponse(precons=_search(q, limit=max(1, min(limit, 50))))
+
+
+@app.post("/v1/commander/precon-upgrade", response_model=PreconUpgradeResponse)
+def precon_upgrade(
+    request: PreconUpgradeRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> PreconUpgradeResponse:
+    """Ranked swaps that upgrade a Commander precon without going over a budget."""
+    client_ip = client_key(req)
+    if not deck_rate_limiter.is_allowed(f"precon-upgrade:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many upgrade requests. Please wait before trying again.")
+    from app.services.precon_upgrade import PreconNotFound, upgrade_precon
+
+    try:
+        return upgrade_precon(request, repository=repository, validator=validator)
+    except PreconNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/v1/commanders", response_model=CommanderSearchResponse)

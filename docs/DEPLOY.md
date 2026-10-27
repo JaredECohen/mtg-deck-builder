@@ -156,6 +156,13 @@ When `start.sh` sees the flag, it runs
 A re-ingest running next to a live server (about 600 MB of caches) would go
 over the 1 GB machine. The cost is about a minute of downtime each week.
 
+That refresh also re-downloads the MTGJSON official-deck snapshot (Commander
+precons and Pioneer Challenger Decks) onto the volume. Which sources are
+allowed, and which sites are skipped, is [DATA_SOURCES.md](DATA_SOURCES.md).
+Card profiles now cover every card, not only Modern. The first boot after
+this change profiles the extra cards once; later boots skip profiles that
+are already current. That first pass is the slow step on the 1 GB machine.
+
 Until `FLY_API_TOKEN` is set, the workflow does nothing.
 
 ## Spend caps

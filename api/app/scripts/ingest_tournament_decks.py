@@ -16,6 +16,10 @@ from app.services.database_bootstrap import create_schema
 
 
 SOURCE_PRIORITY = {
+    # Official product lists (MTGJSON) outrank curated templates when a
+    # dedupe key collides. They rarely do: templates and products have
+    # different ids and URLs.
+    "mtgjson": 45,
     "commander_csv": 40,
     "curated_csv": 35,
     "curated_json": 30,
@@ -91,10 +95,24 @@ def main(argv: list[str] | None = None) -> None:
     print(json.dumps(result))
 
 
-def ingest_sources(sources: list[tuple[Path, str, str]]) -> dict[str, object]:
+def _same_list(existing: TournamentDeck, payload: dict[str, object]) -> bool:
+    return (
+        existing.mainboard == payload["mainboard"]
+        and existing.sideboard == payload["sideboard"]
+        and existing.commander == payload["commander"]
+        and (existing.event_date or "") == (payload.get("event_date") or "")
+    )
+
+
+def ingest_raw_decks(
+    raw_decks: list[dict[str, object]],
+    *,
+    source_name: str,
+    ingested_from: Path,
+) -> dict[str, object]:
+    """Merge already-loaded deck dicts. Skips a row whose list has not changed."""
     create_schema()
     repository = CardRepository()
-
     processed = 0
     inserted = 0
     replaced = 0
@@ -103,52 +121,72 @@ def ingest_sources(sources: list[tuple[Path, str, str]]) -> dict[str, object]:
         run = IngestionRun(source="tournament_decks", status="running", records_processed=0)
         session.add(run)
         session.flush()
-
-        for path, source_format, source_name in sources:
-            raw_decks = load_source(path, source_format)
-            for raw_deck in raw_decks:
-                normalized = normalize_raw_deck(
-                    repository,
-                    raw_deck,
-                    source_name=source_name,
-                    ingested_from=path,
-                )
-                payload = normalized_record_payload(normalized)
+        for raw_deck in raw_decks:
+            normalized = normalize_raw_deck(
+                repository,
+                raw_deck,
+                source_name=source_name,
+                ingested_from=ingested_from,
+            )
+            payload = normalized_record_payload(normalized)
+            existing = session.get(TournamentDeck, normalized.id)
+            if existing is None:
                 existing = session.scalar(
                     select(TournamentDeck).where(TournamentDeck.dedupe_key == normalized.dedupe_key)
                 )
-                if existing is not None:
-                    if not should_replace(existing, payload, source_name):
-                        skipped += 1
-                        processed += 1
-                        continue
-                    payload["id"] = existing.id
-                    replaced += 1
-                else:
-                    inserted += 1
-                session.merge(TournamentDeck(**payload))
-                processed += 1
-
+            if existing is not None:
+                if _same_list(existing, payload) or not should_replace(existing, payload, source_name):
+                    skipped += 1
+                    processed += 1
+                    continue
+                payload["id"] = existing.id
+                replaced += 1
+            else:
+                inserted += 1
+            session.merge(TournamentDeck(**payload))
+            processed += 1
         run.status = "completed"
         run.records_processed = processed
         run.notes = json.dumps(
             {
-                "sources": [
-                    {"path": str(path), "format": source_format, "source_name": source_name}
-                    for path, source_format, source_name in sources
-                ],
+                "source_name": source_name,
+                "ingested_from": str(ingested_from),
                 "inserted": inserted,
                 "replaced": replaced,
                 "skipped": skipped,
             }
         )
-
     return {
         "status": "ok",
         "records_processed": processed,
         "inserted": inserted,
         "replaced": replaced,
         "skipped": skipped,
+    }
+
+
+def ingest_sources(sources: list[tuple[Path, str, str]]) -> dict[str, object]:
+    create_schema()
+    processed = 0
+    inserted = 0
+    replaced = 0
+    skipped = 0
+    notes: list[dict[str, str]] = []
+    for path, source_format, source_name in sources:
+        raw_decks = load_source(path, source_format)
+        result = ingest_raw_decks(raw_decks, source_name=source_name, ingested_from=path)
+        processed += int(result["records_processed"])
+        inserted += int(result["inserted"])
+        replaced += int(result["replaced"])
+        skipped += int(result["skipped"])
+        notes.append({"path": str(path), "format": source_format, "source_name": source_name})
+    return {
+        "status": "ok",
+        "records_processed": processed,
+        "inserted": inserted,
+        "replaced": replaced,
+        "skipped": skipped,
+        "sources": notes,
     }
 
 

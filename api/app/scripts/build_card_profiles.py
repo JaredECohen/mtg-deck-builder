@@ -1,11 +1,16 @@
-"""Build CardProfile rows for every Modern-legal card in the DB.
+"""Build CardProfile rows for every card in the DB.
 
 Usage::
 
-    python -m app.scripts.build_card_profiles                 # all Modern-legal
-    python -m app.scripts.build_card_profiles --all           # every card
-    python -m app.scripts.build_card_profiles --rebuild       # bump version
-    python -m app.scripts.build_card_profiles --limit 100     # smoke test
+    python -m app.scripts.build_card_profiles                  # every card
+    python -m app.scripts.build_card_profiles --modern-only    # Modern-legal only
+    python -m app.scripts.build_card_profiles --rebuild        # bump version
+    python -m app.scripts.build_card_profiles --limit 100      # smoke test
+
+The default used to be Modern-legal only. On a full Scryfall ingest that
+left about 65% of cards (22,718 of 35,134) without a profile, so Commander
+and Legacy never saw them. ``--all`` is accepted as a no-op so older
+commands keep working.
 
 The script is idempotent. Existing rows whose ``profile_version`` matches
 the current code version are skipped unless ``--rebuild`` is passed.
@@ -162,14 +167,21 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def want_every_card(*, modern_only: bool, all_flag: bool) -> bool:
+    """``--all`` is the default. ``--modern-only`` is the opt-out."""
+    return all_flag or not modern_only
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--all", action="store_true", help="Profile every card, not just Modern-legal")
+    parser.add_argument("--all", action="store_true", help="Profile every card (this is the default)")
+    parser.add_argument("--modern-only", action="store_true", help="Only Modern-legal cards")
     parser.add_argument("--rebuild", action="store_true", help="Re-profile cards even if a current-version row exists")
     parser.add_argument("--limit", type=int, default=None, help="Limit cards for smoke testing")
     parser.add_argument("--from-sample", action="store_true", help="Read cards from sample JSON instead of DB")
     parser.add_argument("--dry-run", action="store_true", help="Print one profile and exit")
     args = parser.parse_args(argv)
+    args.all = want_every_card(modern_only=args.modern_only, all_flag=args.all)
     return run(args)
 
 

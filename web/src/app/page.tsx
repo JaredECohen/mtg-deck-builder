@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: "Can it improve a deck I already have?",
-    a: "Paste a decklist into the “Analyze my deck” tab to see its mana curve, roles and closest archetype, along with suggestions for what to change.",
+    a: "Paste a decklist into the “Analyze my deck” tab to see its mana curve, roles and closest archetype, along with suggestions for what to change. For a Commander precon, the “Upgrade a precon” tab turns a budget into a ranked list of swaps.",
   },
 ];
 

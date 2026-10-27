@@ -6,15 +6,17 @@ import { useEffect, useState } from "react";
 import { AnalyzeWorkflow } from "./workshop/analyze-workflow";
 import { CardDetailModal } from "./workshop/card-detail-modal";
 import { GenerateWorkflow } from "./workshop/generate-workflow";
+import { PreconUpgrade } from "./workshop/precon-upgrade";
 import { panelId, tabId, Tabs } from "./workshop/tabs";
 import { useCardDetail } from "@/hooks/use-card-detail";
 import { useDataStatus } from "@/hooks/use-data-status";
 
-type BuilderMode = "generate" | "analyze";
+type BuilderMode = "generate" | "analyze" | "precon";
 
 const MODE_TABS = [
   { id: "generate" as const, label: "Generate a deck" },
-  { id: "analyze" as const, label: "Analyze my deck" }
+  { id: "analyze" as const, label: "Analyze my deck" },
+  { id: "precon" as const, label: "Upgrade a precon" }
 ];
 
 export function DeckWorkshop() {
@@ -47,6 +49,9 @@ export function DeckWorkshop() {
       </div>
       <div id={panelId("workshop", "analyze")} role="tabpanel" aria-labelledby={tabId("workshop", "analyze")} hidden={mode !== "analyze"}>
         <AnalyzeWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} sharedToken={sharedToken} />
+      </div>
+      <div id={panelId("workshop", "precon")} role="tabpanel" aria-labelledby={tabId("workshop", "precon")} hidden={mode !== "precon"}>
+        <PreconUpgrade onOpenCard={cardDetail.open} />
       </div>
 
       <CardDetailModal detail={cardDetail} />

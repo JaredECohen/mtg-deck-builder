@@ -14,7 +14,9 @@ import type {
   MetaSummaryResponse,
   OptimizerJobRequest,
   OptimizerJobResponse,
-  ParsedDecklistResponse
+  ParsedDecklistResponse,
+  PreconSummary,
+  PreconUpgradeResponse
 } from "@/lib/types";
 
 // Every request goes through the same-origin proxy (app/api/backend), which
@@ -407,6 +409,28 @@ export async function updateSavedDeck(
 }
 
 /** Similar cards, optionally restricted to cards legal in `format` and inside `colors`. */
+export async function fetchPrecons(query = "", limit = 8, signal?: AbortSignal): Promise<PreconSummary[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (query.trim()) params.set("q", query.trim());
+  const response = await fetch(`${API_BASE}/v1/commander/precons?${params.toString()}`, { signal });
+  const body = await jsonOrThrow<{ precons: PreconSummary[] }>(response, "Precon search failed");
+  return body.precons;
+}
+
+export async function upgradePrecon(payload: {
+  precon_id?: string;
+  deck_text?: string;
+  budget_usd: number;
+  max_bracket?: number;
+}): Promise<PreconUpgradeResponse> {
+  const response = await fetch(`${API_BASE}/v1/commander/precon-upgrade`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload)
+  });
+  return jsonOrThrow<PreconUpgradeResponse>(response, "Precon upgrade failed");
+}
+
 export async function fetchSimilarCards(
   name: string,
   options: { k?: number; format?: FormatName; colors?: string[] } = {},

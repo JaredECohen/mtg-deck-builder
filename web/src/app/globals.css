@@ -2293,6 +2293,48 @@ ul.chips {
   font-size: 1.1rem;
 }
 
+.precon-upgrade {
+  display: grid;
+  gap: 16px;
+}
+
+.precon-budget-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 16px;
+}
+
+.precon-swaps {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.precon-swap {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.precon-swap-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.precon-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 640px) {
+  .precon-budget-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .site-header-links {
     gap: 12px;

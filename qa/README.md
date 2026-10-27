@@ -6,6 +6,7 @@ Two harnesses live here. They answer different questions.
 |---|---|---|---|
 | `benchmark.py` | Does the engine honor the request? Objective pass/fail metrics over a 108-scenario matrix. | None. Deterministic. | `artifacts/benchmark.json`, `BENCHMARK.md` |
 | `run_eval.py` | Do the decks look like good decks? Heuristic + LLM-judged scoring of 10 hand-written scenarios. | OpenAI judge (optional) | `artifacts/deck_eval_*.json`, `REPORT.md` |
+| `compare_generators.py` | Does the optimizer-default path beat the legacy generator on `evaluate_decklist`? | None. | `OPTIMIZER_COMPARISON.md` |
 
 The CI gate `api/tests/test_benchmark_gate.py` runs a 40-scenario subset of `benchmark.py` with every test run.
 
