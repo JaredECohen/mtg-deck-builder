@@ -7,6 +7,9 @@
   "scripts": {
     "dev:web": "npm --workspace web run dev",
     "build:web": "npm --workspace web run build"
+  },
+  "overrides": {
+    "postcss": "8.5.32"
   }
 }
 

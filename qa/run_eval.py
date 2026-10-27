@@ -16,15 +16,18 @@ from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
+_API_ROOT = ROOT / "api"
+if str(_API_ROOT) not in sys.path:
+    sys.path.append(str(_API_ROOT))
+from app.config import OPENAI_EVAL_MODEL as OPENAI_MODEL
+from app.config import responses_reasoning_controls
+
 SCENARIO_PATH = ROOT / "qa" / "deck_scenarios.json"
 OUTPUT_DIR = ROOT / "qa" / "artifacts"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH = ROOT / "qa" / "REPORT.md"
 DEFAULT_API_BASE = os.getenv("MTG_API_BASE")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-# gpt-4.1-mini retires 2027-01-14 (OpenAI deprecations); GPT-5 models take the
-# reasoning/verbosity settings below.
-OPENAI_MODEL = os.getenv("OPENAI_EVAL_MODEL", "gpt-5-mini")
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "2"))
 LLM_BATCH_SIZE = int(os.getenv("OPENAI_BATCH_SIZE", "5"))
@@ -378,7 +381,7 @@ def llm_analysis_batch(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]
                 },
             },
         }
-        if OPENAI_MODEL.startswith("gpt-5"):
+        if responses_reasoning_controls(OPENAI_MODEL):
             payload["reasoning"] = {"effort": "low"}
             payload["text"]["verbosity"] = "low"
 

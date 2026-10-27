@@ -40,6 +40,35 @@ TCGPLAYER_AFFILIATE_URL = os.getenv("TCGPLAYER_AFFILIATE_URL", "").strip()
 LLM_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_TIMEOUT_SECONDS", "30"))
 LLM_BACKGROUND_TIMEOUT_SECONDS = float(os.getenv("MTG_LLM_BACKGROUND_TIMEOUT_SECONDS", "120"))
 LLM_MAX_RETRIES = int(os.getenv("MTG_LLM_MAX_RETRIES", "1"))
+
+
+def env_or_default(name: str, default: str) -> str:
+    """Env override, with a blank value treated as unset."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip()
+    return value or default
+
+
+# Offline deck-quality judge (qa/run_eval.py). gpt-4.1-mini shuts down
+# 2027-01-14; OpenAI's replacement is gpt-6-luna. The previous default,
+# gpt-5-mini, shuts down 2026-12-11 (replacement gpt-5.6-terra, about 20x
+# the token price). Luna is the cheap high-volume model and accepts the
+# same low reasoning effort the runner already sends, so the provider
+# spend cap stays in range. Override with OPENAI_EVAL_MODEL.
+DEFAULT_OPENAI_EVAL_MODEL = "gpt-6-luna"
+OPENAI_EVAL_MODEL = env_or_default("OPENAI_EVAL_MODEL", DEFAULT_OPENAI_EVAL_MODEL)
+
+
+def responses_reasoning_controls(model: str) -> bool:
+    """GPT-5 and GPT-6 accept reasoning.effort and text.verbosity on Responses.
+
+    Older chat models reject those fields, so an env override to one of them
+    must not send them.
+    """
+    name = model.strip().lower()
+    return name.startswith(("gpt-5", "gpt-6"))
 # Card/legality data older than this many days (by newest card release date)
 # is reported as stale: sets and ban updates land every few weeks.
 DATA_STALE_DAYS = int(os.getenv("MTG_DATA_STALE_DAYS", "60"))

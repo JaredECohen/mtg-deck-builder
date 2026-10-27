@@ -193,6 +193,7 @@ cached so generation stays fast and deterministic.
 | `MTG_COACH_MODEL` | Override Haiku model for prose | `claude-haiku-4-5-20251001` |
 | `MTG_CRITIC_MAX_TOKENS_PER_CALL` | Per-call output cap | `4096` |
 | `MTG_CRITIC_MAX_USD_PER_JOB` | Per-job cost cap (shared across rounds) | `1.50` |
+| `OPENAI_EVAL_MODEL` | Judge model for `qa/run_eval.py` | `gpt-6-luna` |
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
 | `MTG_API_KEY` | Comma-separated API keys; enables `X-API-Key` auth on optimize/prose/evaluate/save | (unset → auth off) |
 | `MTG_USE_PGVECTOR` | Use the pgvector NN path for `/similar` when the `card_embeddings` table exists | `false` |
