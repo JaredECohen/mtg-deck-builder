@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { trackDeckShared } from "@/lib/analytics";
 import {
   deleteSavedDeck,
   fetchDeckHistory,
@@ -89,6 +90,7 @@ export function useSaveDeck(deck: DeckResponse | null) {
           key_cards: keyCardsFor(target)
         });
         setSaved(result);
+        trackDeckShared(result.format);
         return result;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Saving deck failed");

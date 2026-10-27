@@ -11,6 +11,8 @@ import path from "node:path";
 
 import matter from "gray-matter";
 
+// Canonical host is the apex. www.mtgdecklab.app is a Vercel-level 308 to
+// this origin, so metadataBase, the sitemap, and RSS stay on this host.
 export const SITE_URL = "https://mtgdecklab.app";
 export const SITE_NAME = "MTG Deck Lab";
 export const AUTHOR = "Jared Cohen";

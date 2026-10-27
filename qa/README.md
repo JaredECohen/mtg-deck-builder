@@ -98,5 +98,5 @@ DATABASE_URL=sqlite:////tmp/full.db api/.venv/bin/python qa/run_eval.py
 - Runs the 10 hand-written scenarios in `deck_scenarios.json`.
 - Uses a live API on `MTG_API_BASE`, `:8010` or `:8000` when one is healthy. Otherwise it runs in-process.
 - Set `DATABASE_URL` for the in-process path. Without it the app opens the default `var/` database.
-- When `OPENAI_API_KEY` is set, `OPENAI_EVAL_MODEL` (default `gpt-5-mini`) judges each deck. Without a key the LLM part is skipped and only the heuristic scores are reported.
+- When `OPENAI_API_KEY` is set, `OPENAI_EVAL_MODEL` (default `gpt-6-luna`, from `api/app/config.py`) judges each deck. Without a key the LLM part is skipped and only the heuristic scores are reported. `gpt-6-luna` is OpenAI's replacement for `gpt-4.1-mini` (shutdown 2027-01-14). The previous default, `gpt-5-mini`, shuts down 2026-12-11.
 - Rewrites `qa/REPORT.md` in full on every run.

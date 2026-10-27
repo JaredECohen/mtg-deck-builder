@@ -5,7 +5,7 @@ import { ADSENSE_CLIENT } from "@/lib/ads";
 
 export const metadata: Metadata = {
   title: "Privacy | MTG Deck Lab",
-  description: "What MTG Deck Lab stores, what it shares, and the cookies used by advertising.",
+  description: "What MTG Deck Lab stores, what it shares, how anonymous usage is counted, and the cookies used by advertising.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -49,6 +49,18 @@ export default function PrivacyPage() {
           endpoint, the response status and timing, not your IP address.
         </li>
       </ul>
+
+      <h2>Analytics</h2>
+      <p>
+        We use Vercel Web Analytics to understand which pages are visited and which deck-building steps people
+        complete, such as generating, refining, exporting, or sharing a deck, opening a guide, or opening a TCGplayer
+        cart. It does not use cookies and it does not identify you.
+      </p>
+      <p>
+        Those events include only a format, an export target, or a guide&apos;s public address and category. They do
+        not include the text you type, deck names, card lists, email addresses, or share links. The page address
+        stored with a visit has the brief and share-token parameters removed.
+      </p>
 
       <h2>What we share</h2>
       <ul>
