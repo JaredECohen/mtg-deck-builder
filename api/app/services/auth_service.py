@@ -147,7 +147,16 @@ class AuthService:
             row = session.query(LoginToken).filter(LoginToken.token_hash == _hash_token(token)).first()
             if row is None or row.used_at is not None or _parse(row.expires_at) <= now:
                 return None
-            row.used_at = _iso(now)
+            # Claim the link with a conditional update so two requests racing on
+            # the same token cannot both mint a session.
+            claimed = (
+                session.query(LoginToken)
+                .filter(LoginToken.id == row.id, LoginToken.used_at.is_(None))
+                .update({LoginToken.used_at: _iso(now)}, synchronize_session=False)
+            )
+            if claimed != 1:
+                session.rollback()
+                return None
             user = session.query(UserAccount).filter(UserAccount.email == row.email).first()
             if user is None:
                 user = UserAccount(id=uuid.uuid4().hex, email=row.email, created_at=_iso(now))

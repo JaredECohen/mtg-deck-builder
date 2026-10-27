@@ -136,6 +136,10 @@ def _ensure_saved_deck_columns(engine) -> None:
     with engine.begin() as conn:
         for name, ddl in missing.items():
             conn.execute(text(f"ALTER TABLE saved_decks ADD COLUMN {name} {ddl}"))
+        if "visibility" in missing:
+            # Rows saved before visibility existed were shared by link only. Their
+            # owners never chose to be indexed, so keep them out of the sitemap.
+            conn.execute(text("UPDATE saved_decks SET visibility = 'unlisted'"))
         if "ix_saved_decks_visibility" not in index_names and "visibility" in existing | set(missing):
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_saved_decks_visibility ON saved_decks (visibility)"
@@ -380,7 +384,13 @@ class DeckHistoryService:
         session = self._session()
         try:
             row = session.query(SavedDeck).filter(SavedDeck.share_token == token).first()
-            return self._to_dict(row) if row else None
+            if row is None:
+                return None
+            # The id is what rename and delete take. Anonymous decks all belong to
+            # the site's API key, so a share link must not hand it out.
+            data = self._to_dict(row)
+            data.pop("id", None)
+            return data
         finally:
             session.close()
 

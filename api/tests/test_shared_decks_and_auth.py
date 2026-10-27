@@ -232,6 +232,42 @@ def test_magic_link_is_single_use_and_hidden_without_debug(isolated, monkeypatch
     assert client.get("/v1/auth/me", headers={"X-User-Session": session}).status_code == 401
 
 
+def test_magic_link_claimed_by_another_request_mints_no_second_session(isolated, monkeypatch):
+    _, accounts = isolated
+    monkeypatch.setenv("MTG_AUTH_DEBUG", "1")
+    requested = client.post("/v1/auth/magic-link", json={"email": "race@example.com"})
+    token = parse_qs(urlparse(requested.json()["debug_url"]).query)["token"][0]
+
+    # Simulate a concurrent verify that claims the link after this request read
+    # it (used_at still unset) and before this request claims it.
+    real_session = accounts._session
+
+    def racing_session():
+        session = real_session()
+        original_query = session.query
+        token_queries = 0
+
+        def query(*entities):
+            nonlocal token_queries
+            if entities and entities[0] is auth_module.LoginToken:
+                token_queries += 1
+                if token_queries == 2:
+                    session.execute(text("UPDATE login_tokens SET used_at = 'claimed'"))
+            return original_query(*entities)
+
+        session.query = query
+        return session
+
+    monkeypatch.setattr(accounts, "_session", racing_session)
+    assert accounts.verify(token) is None
+    monkeypatch.setattr(accounts, "_session", real_session)
+    check = real_session()
+    try:
+        assert check.query(auth_module.AuthSession).count() == 0
+    finally:
+        check.close()
+
+
 def test_expired_magic_link_is_rejected(isolated, monkeypatch):
     monkeypatch.setenv("MTG_AUTH_DEBUG", "1")
     requested = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}).json()
@@ -333,7 +369,9 @@ def test_added_columns_migrate_in_place():
     deck = history.get_by_share_token("tok1")
     assert deck is not None
     assert deck["name"] == "Old"
-    assert deck["visibility"] == "public"
+    # Saved before decks could be public: stays a link-only share.
+    assert deck["visibility"] == "unlisted"
+    assert history.public_index() == []
     assert deck["card_notes"] == []
     assert deck["mana_curve"] == []
     assert deck["key_cards"] == []
