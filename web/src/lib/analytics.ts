@@ -10,6 +10,7 @@ export const ANALYTICS_EVENT_PROPS = {
   deck_refined: ["format"],
   deck_exported: ["target", "format"],
   deck_shared: ["format"],
+  deck_page_viewed: ["format"],
   tcgplayer_cart_clicked: ["format"],
   guide_viewed: ["slug", "category"],
 } as const;
@@ -118,6 +119,11 @@ export function trackDeckShared(format: string) {
   send("deck_shared", { format });
 }
 
+/** A shared deck page was opened. Format only — the share token stays out of analytics. */
+export function trackDeckPageViewed(format: string) {
+  send("deck_page_viewed", { format });
+}
+
 export function trackTcgplayerCartClicked(format: string) {
   send("tcgplayer_cart_clicked", { format });
 }
@@ -135,7 +141,7 @@ function queryValueAllowed(key: string, value: string): boolean {
   return true;
 }
 
-/** Page URL with prompt and share-token query params removed. Null if it cannot be parsed. */
+/** Page URL with prompts and share tokens removed from the query string and from `/d/<token>`. Null if it cannot be parsed. */
 export function redactAnalyticsUrl(raw: string): string | null {
   let url: URL;
   try {
@@ -147,6 +153,8 @@ export function redactAnalyticsUrl(raw: string): string | null {
     const value = url.searchParams.get(key) ?? "";
     if (!queryValueAllowed(key, value)) url.searchParams.delete(key);
   }
+  // The share token is the path on /d/<token>, not a query param.
+  if (url.pathname === "/d/" || url.pathname.startsWith("/d/")) url.pathname = "/d";
   const absolute = /^https?:\/\//i.test(raw);
   if (!absolute) return `${url.pathname}${url.search}${url.hash}`;
   return url.toString();

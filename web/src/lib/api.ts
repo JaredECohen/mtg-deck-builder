@@ -101,6 +101,10 @@ export type DeckEvaluation = {
 
 export type { DeckDiffResult };
 
+export type DeckVisibility = "public" | "unlisted";
+
+export type SavedCardNote = { name: string; role: string; reason: string };
+
 export type SavedDeck = {
   id: string;
   share_token: string;
@@ -113,6 +117,13 @@ export type SavedDeck = {
   evaluation: Partial<DeckEvaluation> | Record<string, never>;
   created_at: string;
   updated_at: string;
+  visibility?: DeckVisibility;
+  colors?: string[];
+  price_usd?: number | null;
+  card_notes?: SavedCardNote[];
+  mana_curve?: { mana_value: number; card_count: number }[];
+  card_types?: Record<string, string>;
+  key_cards?: string[];
 };
 
 export type SimilarCardsResponse = {
@@ -346,6 +357,13 @@ export async function saveDeck(payload: {
   commander?: string;
   notes?: string;
   evaluation?: Partial<DeckEvaluation>;
+  visibility?: DeckVisibility;
+  colors?: string[];
+  price_usd?: number | null;
+  card_notes?: SavedCardNote[];
+  mana_curve?: { mana_value: number; card_count: number }[];
+  card_types?: Record<string, string>;
+  key_cards?: string[];
 }): Promise<SavedDeck> {
   const response = await fetch(`${API_BASE}/v1/decks/save`, {
     method: "POST",
@@ -374,6 +392,18 @@ export async function fetchSavedDeck(id: string): Promise<SavedDeck> {
 export async function deleteSavedDeck(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`, { method: "DELETE" });
   await jsonOrThrow<{ deleted: string }>(response, "Could not delete the saved deck");
+}
+
+export async function updateSavedDeck(
+  id: string,
+  patch: { name?: string; visibility?: DeckVisibility }
+): Promise<SavedDeck> {
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(patch)
+  });
+  return jsonOrThrow<SavedDeck>(response, "Could not update the saved deck");
 }
 
 /** Similar cards, optionally restricted to cards legal in `format` and inside `colors`. */

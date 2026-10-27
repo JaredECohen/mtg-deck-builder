@@ -10,6 +10,10 @@ def create_schema() -> None:
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
     _ensure_tournament_deck_columns(engine)
+    # Saved-deck columns added after the table first shipped, plus the
+    # raw-API-key owner hash. Import lazily so this module stays light.
+    from app.services.deck_history_service import ensure_saved_deck_schema
+    ensure_saved_deck_schema(engine)
 
 
 def _ensure_tournament_deck_columns(engine) -> None:

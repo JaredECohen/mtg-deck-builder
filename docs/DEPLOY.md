@@ -65,6 +65,11 @@ fly logs --app mtg-deck-lab-api   # watch the bootstrap JSON, then "caches warme
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `TCGPLAYER_AFFILIATE_URL` are
 optional. Without the LLM keys, the deterministic fallbacks run.
 
+Optional sign-in uses the same machine. Set `RESEND_API_KEY`,
+`AUTH_FROM_EMAIL` and `MTG_PUBLIC_SITE_URL` with `fly secrets set` when you
+want magic-link email. The site works without them. Details are in the
+Vercel section below. Do not set `MTG_AUTH_DEBUG` here.
+
 Check it:
 
 ```bash
@@ -92,6 +97,23 @@ address to escape the limit.
    | `API_BASE` | `https://mtg-deck-lab-api.fly.dev` |
    | `MTG_API_KEY` | the same key as the Fly secret. Do **not** prefix it with `NEXT_PUBLIC_` |
    | `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | same as `TCGPLAYER_AFFILIATE_URL` (optional) |
+
+   Optional sign-in (personal deck library). The site works without these.
+   Set them on the **API** (Fly), not as `NEXT_PUBLIC_`:
+
+   | Name | Value |
+   | --- | --- |
+   | `RESEND_API_KEY` | API key from [Resend](https://resend.com) |
+   | `AUTH_FROM_EMAIL` | verified sender, e.g. `MTG Deck Lab <noreply@mtgdecklab.app>` |
+   | `MTG_PUBLIC_SITE_URL` | `https://mtgdecklab.app` (the link in the email) |
+
+   Verify the sending domain in Resend before expecting mail to arrive.
+   Do **not** set `MTG_AUTH_DEBUG` in production. That flag returns the
+   sign-in link in the API response and, if also set on Vercel, shows it
+   on the sign-in page. Leave both unset so the link only goes out by email.
+
+   No new Vercel variables are required for sign-in. The web server already
+   holds `API_BASE` and `MTG_API_KEY`, and it keeps the session cookie.
 
 3. Deploy. Pushes to `main` deploy to production, and PRs get preview URLs.
    Previews use the same API. Set Preview-scoped variables if you want them

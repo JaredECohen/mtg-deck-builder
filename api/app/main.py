@@ -5,7 +5,7 @@ import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
@@ -27,15 +27,20 @@ from app.models import (
     ExportDeckRequest,
     FormatName,
     GenerateDeckRequest,
+    MagicLinkRequest,
     MetaSummaryResponse,
     ParseDecklistRequest,
     ParsedDecklistResponse,
     RefineDeckRequest,
     SaveDeckRequest,
+    UpdateDeckRequest,
     ValidateDeckRequest,
     ValidationResult,
+    VerifyLinkRequest,
 )
 from app.rate_limiter import (
+    auth_email_limiter,
+    auth_ip_limiter,
     deck_rate_limiter,
     evaluate_rate_limiter,
     prose_rate_limiter,
@@ -55,6 +60,8 @@ from app.services.optimizer_service import (
 from app.workers import JobNotFound, get_job_queue
 
 
+import app.services.auth_service as auth_module
+from app.services.auth_service import normalize_email
 from app.services.deck_history_service import DeckHistoryService, owner_id
 from app.services.vector_retrieval import CardVectorRetriever
 
@@ -405,13 +412,39 @@ def diff_deck(request: DiffDeckRequest) -> dict:
     return diff_decks(request.before, request.after).to_dict()
 
 
+def _extra_secrets(session_token: str | None, api_key: str | None) -> list[str]:
+    """Request-scoped secrets to strip from deck text before it is stored."""
+    return [value for value in (session_token, api_key) if value]
+
+
+def current_owner(
+    key: str | None = Depends(require_api_key),
+    x_user_session: str | None = Header(default=None),
+) -> str | None:
+    """Personal library when a session is present, otherwise the API-key owner.
+
+    A signed-in browser still sends the site's API key through the proxy.
+    The session wins so that deck is not filed under the shared server key.
+    """
+    account = auth_module.owner_for_session(x_user_session)
+    if account:
+        return account
+    return owner_id(key)
+
+
 @app.post("/v1/decks/save")
 def save_deck(
     request: SaveDeckRequest,
+    x_user_session: str | None = Header(default=None),
     key: str | None = Depends(require_api_key),
+    owner: str | None = Depends(current_owner),
 ) -> dict:
-    """Persist a deck to history and mint a share token. When auth is
-    enabled a hash of the API key becomes the deck's owner."""
+    """Persist a deck and mint a share token.
+
+    With no user session, the owner is a hash of the API key (or unset when
+    API-key auth is off) — the anonymous flow. With a session, the deck goes
+    into that person's library.
+    """
     return deck_history.save(
         name=request.name,
         format_id=request.format,
@@ -420,28 +453,67 @@ def save_deck(
         commander=request.commander,
         notes=request.notes,
         evaluation=request.evaluation,
-        owner=owner_id(key),
+        owner=owner,
+        visibility=request.visibility,
+        colors=list(request.colors),
+        price_usd=request.price_usd,
+        card_notes=[note.model_dump() for note in request.card_notes],
+        mana_curve=[point.model_dump() for point in request.mana_curve],
+        card_types=dict(request.card_types),
+        key_cards=list(request.key_cards),
+        secret_values=_extra_secrets(x_user_session, key),
     )
 
 
 @app.get("/v1/decks/history")
 def deck_history_list(
     limit: int = 50,
-    key: str | None = Depends(require_api_key),
+    owner: str | None = Depends(current_owner),
 ) -> dict:
-    return {"decks": deck_history.history(owner=owner_id(key), limit=max(1, min(limit, 200)))}
+    return {"decks": deck_history.history(owner=owner, limit=max(1, min(limit, 200)))}
+
+
+@app.get("/v1/decks/public")
+def list_public_decks(limit: int = 500, offset: int = 0) -> dict:
+    """Indexable share tokens for the sitemap. Unlisted decks are omitted,
+    and the payload is only the token plus a timestamp — no list, notes,
+    owner, or account data."""
+    return {"decks": deck_history.public_index(limit=limit, offset=offset)}
 
 
 @app.get("/v1/decks/saved/{deck_id}")
 def get_saved_deck(
     deck_id: str,
-    key: str | None = Depends(require_api_key),
+    owner: str | None = Depends(current_owner),
 ) -> dict:
     """Owner-only read by id. Public reads go through the share token."""
-    deck = deck_history.get(deck_id, owner=owner_id(key))
+    deck = deck_history.get(deck_id, owner=owner)
     if deck is None:
         raise HTTPException(status_code=404, detail="saved deck not found")
     return deck
+
+
+@app.patch("/v1/decks/saved/{deck_id}")
+def update_saved_deck(
+    deck_id: str,
+    request: UpdateDeckRequest,
+    x_user_session: str | None = Header(default=None),
+    key: str | None = Depends(require_api_key),
+    owner: str | None = Depends(current_owner),
+) -> dict:
+    """Rename a deck or change whether its page is indexable."""
+    if request.name is None and request.visibility is None:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    updated = deck_history.update(
+        deck_id,
+        owner=owner,
+        name=request.name,
+        visibility=request.visibility,
+        secret_values=_extra_secrets(x_user_session, key),
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="saved deck not found")
+    return updated
 
 
 @app.get("/v1/decks/shared/{token}")
@@ -455,11 +527,75 @@ def get_shared_deck(token: str) -> dict:
 @app.delete("/v1/decks/saved/{deck_id}")
 def delete_saved_deck(
     deck_id: str,
-    key: str | None = Depends(require_api_key),
+    owner: str | None = Depends(current_owner),
 ) -> dict:
-    if not deck_history.delete(deck_id, owner=owner_id(key)):
+    if not deck_history.delete(deck_id, owner=owner):
         raise HTTPException(status_code=404, detail="saved deck not found")
     return {"deleted": deck_id}
+
+
+@app.post("/v1/auth/magic-link")
+def request_magic_link(
+    request: MagicLinkRequest,
+    req: Request,
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    """Email a one-time sign-in link. The response does not reveal whether
+    the address already has an account. The link itself is only included
+    when MTG_AUTH_DEBUG is set."""
+    if not auth_ip_limiter.is_allowed(f"magic-ip:{client_key(req)}"):
+        raise HTTPException(status_code=429, detail="Too many sign-in requests. Wait a bit and try again.")
+    email = normalize_email(request.email)
+    if email is None:
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
+    if not auth_email_limiter.is_allowed(f"magic-email:{email}"):
+        raise HTTPException(status_code=429, detail="Too many sign-in requests. Wait a bit and try again.")
+    return auth_module.auth_service.request_magic_link(email)
+
+
+@app.post("/v1/auth/verify")
+def verify_magic_link(
+    request: VerifyLinkRequest,
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    result = auth_module.auth_service.verify(request.token)
+    if result is None:
+        raise HTTPException(status_code=400, detail="That sign-in link is invalid or expired.")
+    return result
+
+
+@app.get("/v1/auth/me")
+def auth_me(
+    x_user_session: str | None = Header(default=None),
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    user = auth_module.auth_service.user_for_session(x_user_session)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    return {"user": user}
+
+
+@app.post("/v1/auth/logout")
+def auth_logout(
+    x_user_session: str | None = Header(default=None),
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    auth_module.auth_service.revoke(x_user_session)
+    return {"ok": True}
+
+
+@app.delete("/v1/auth/me")
+def delete_account(
+    x_user_session: str | None = Header(default=None),
+    _key: str | None = Depends(require_api_key),
+) -> dict:
+    """Delete the signed-in account and every deck in that library."""
+    user = auth_module.auth_service.user_for_session(x_user_session)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    deck_history.delete_all_for_owner(f"user:{user['id']}")
+    auth_module.auth_service.delete_user(user["id"])
+    return {"deleted": True}
 
 
 @app.post("/v1/decks/parse", response_model=ParsedDecklistResponse)

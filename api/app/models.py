@@ -294,6 +294,22 @@ class DiffDeckRequest(BaseModel):
     after: CardRefList
 
 
+class SavedCardNote(BaseModel):
+    name: Annotated[str, Field(max_length=200)]
+    role: Annotated[str, Field(max_length=80)] = ""
+    reason: Annotated[str, Field(max_length=2_000)] = ""
+
+
+class SavedCurvePoint(BaseModel):
+    mana_value: int = Field(ge=0, le=20)
+    card_count: int = Field(ge=0, le=500)
+
+
+_PrimaryCardType = Literal[
+    "Creature", "Planeswalker", "Instant", "Sorcery", "Enchantment", "Artifact", "Battle", "Land", "Other"
+]
+
+
 class SaveDeckRequest(BaseModel):
     name: Annotated[str, Field(max_length=200)] = "Untitled deck"
     format: FormatName
@@ -302,6 +318,28 @@ class SaveDeckRequest(BaseModel):
     commander: CardName | None = None
     notes: PromptText = ""
     evaluation: dict = Field(default_factory=dict)
+    # public pages are indexable. unlisted links still open the deck and
+    # are marked noindex, and they are left out of the sitemap.
+    visibility: Literal["public", "unlisted"] = "public"
+    colors: list[Annotated[str, Field(max_length=1)]] = Field(default_factory=list, max_length=5)
+    price_usd: float | None = Field(default=None, ge=0, le=1_000_000)
+    card_notes: list[SavedCardNote] = Field(default_factory=list, max_length=250)
+    mana_curve: list[SavedCurvePoint] = Field(default_factory=list, max_length=21)
+    card_types: dict[Annotated[str, Field(max_length=200)], _PrimaryCardType] = Field(default_factory=dict)
+    key_cards: list[Annotated[str, Field(max_length=200)]] = Field(default_factory=list, max_length=8)
+
+
+class UpdateDeckRequest(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    visibility: Literal["public", "unlisted"] | None = None
+
+
+class MagicLinkRequest(BaseModel):
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+
+
+class VerifyLinkRequest(BaseModel):
+    token: Annotated[str, Field(min_length=20, max_length=200)]
 
 
 class EvaluateDeckRequest(BaseModel):
