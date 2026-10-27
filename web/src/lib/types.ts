@@ -552,6 +552,47 @@ export type SideboardPlanData = {
   notes: string[];
 };
 
+export type PreconSummary = {
+  id: string;
+  name: string;
+  commander: string | null;
+  commanders: string[];
+  color_identity: string[];
+  release_date: string | null;
+  set_code: string | null;
+  format: "commander";
+};
+
+export type PreconSwap = {
+  rank: number;
+  cut: string;
+  cut_explanation: string;
+  add: string;
+  add_explanation: string;
+  add_price_usd: number;
+  score: number;
+};
+
+export type PreconUpgradeResponse = {
+  precon_id: string | null;
+  name: string;
+  commander: string | null;
+  commanders: string[];
+  budget_usd: number;
+  total_cost_usd: number;
+  swaps: PreconSwap[];
+  legality: {
+    is_legal: boolean;
+    errors: string[];
+    warnings: string[];
+    score: ScoreBreakdown;
+  };
+  bracket: BracketAssessment;
+  tcgplayer_cart_url: string | null;
+  warnings: string[];
+  upgraded_mainboard: CardRef[];
+};
+
 export type OptimizerJobResult = {
   deck: { name: string; type_line: string; cmc: number }[];
   fitness: Record<string, unknown>;

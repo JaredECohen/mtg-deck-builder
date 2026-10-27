@@ -5,7 +5,7 @@ that produces tournament-grade decks for all five major formats. FastAPI
 backend, Next.js frontend, structured `DeckRationale` output narrated by an
 optional LLM coach.
 
-**Current state:** 291 backend tests passing, frontend TypeScript clean
+**Current state:** 486 backend tests passing, frontend TypeScript clean
 (`next build` green), end-to-end optimizer flow live behind a feature
 flag, multi-format meta + deck-evaluation engine + embedding retrieval
 wired.
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 python -m app.scripts.seed_sample_cards
 python -m app.scripts.ingest_tournament_decks
 python -m app.scripts.build_archetypes
-python -m app.scripts.build_card_profiles      # populates the profile cache
+python -m app.scripts.build_card_profiles      # every card; --modern-only to opt out
 uvicorn app.main:app --reload
 ```
 
@@ -53,7 +53,7 @@ rate limits stay per client.
 
 ```bash
 cd api
-python -m pytest -q     # ~390 tests, ~40 s, no skips
+python -m pytest -q     # 486 tests, about 30 s, no skips
 ```
 
 Tests always run against `api/tests/fixtures/cards.db.gz`: a deterministic
@@ -101,6 +101,15 @@ export MTG_USE_OPTIMIZER_DEFAULT=true
 
 The wrapper returns the same `DeckResponse` shape and falls back to the
 legacy generator on any error so prod traffic isn't affected by a bad deploy.
+A fixture-database comparison is in [qa/OPTIMIZER_COMPARISON.md](qa/OPTIMIZER_COMPARISON.md).
+The default stays off until that comparison is re-run on the full card
+database and the optimizer clearly wins.
+
+`POST /v1/commander/precon-upgrade` turns an official precon (or a pasted
+list) and a dollar budget into ranked one-for-one swaps, a Commander
+legality check, a bracket estimate, and a TCGplayer cart for the adds.
+`GET /v1/commander/precons` searches the precon catalog. The workshop's
+"Upgrade a precon" tab calls both.
 
 ## Simulator architecture
 
@@ -160,7 +169,7 @@ cached so generation stays fast and deterministic.
 | `MTG_CRITIC_MAX_TOKENS_PER_CALL` | Per-call output cap | `4096` |
 | `MTG_CRITIC_MAX_USD_PER_JOB` | Per-job cost cap (shared across rounds) | `1.50` |
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
-| `MTG_API_KEY` | Comma-separated API keys; enables `X-API-Key` auth on optimize/prose/evaluate/save | (unset → auth off) |
+| `MTG_API_KEY` | Comma-separated API keys; enables `X-API-Key` auth on optimize/prose/evaluate/save/precon-upgrade | (unset → auth off) |
 | `MTG_USE_PGVECTOR` | Use the pgvector NN path for `/similar` when the `card_embeddings` table exists | `false` |
 | `TCGPLAYER_AFFILIATE_URL` | TCGplayer affiliate deep-link prefix from Impact (e.g. `https://tcgplayer.pxf.io/c/123456/789012/21018`); every TCGplayer link served by the API is wrapped for attribution | (unset → untracked links) |
 | `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | Same prefix, inlined into the frontend for client-built "Shop This Deck" and mass-entry links | (unset) |
@@ -198,8 +207,9 @@ createdb mtg_deck_builder
 python -m app.scripts.seed_sample_cards
 python -m app.scripts.ingest_scryfall              # full Scryfall ingest (optional)
 python -m app.scripts.ingest_tournament_decks
+python -m app.scripts.ingest_official_decks --download   # MTGJSON precons; see docs/DATA_SOURCES.md
 python -m app.scripts.build_archetypes
-python -m app.scripts.build_card_profiles          # parses oracle text → card_profiles
+python -m app.scripts.build_card_profiles          # every card; --modern-only to opt out
 python -m app.scripts.build_card_embeddings        # dense embeddings → card_embeddings
 ```
 
