@@ -81,7 +81,10 @@ def test_save_list_share_and_delete_roundtrip(isolated_history):
 
     # Fetch by id and by share token.
     assert client.get(f"/v1/decks/saved/{saved['id']}").json()["name"] == "Modern Burn"
-    assert client.get(f"/v1/decks/shared/{saved['share_token']}").json()["id"] == saved["id"]
+    shared = client.get(f"/v1/decks/shared/{saved['share_token']}").json()
+    assert shared["name"] == "Modern Burn"
+    # A share link must not reveal the id that rename and delete take.
+    assert "id" not in shared
 
     # Delete.
     assert client.delete(f"/v1/decks/saved/{saved['id']}").status_code == 200

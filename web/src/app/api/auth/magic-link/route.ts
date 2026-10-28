@@ -11,11 +11,18 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ detail: "Enter a valid email address." }, { status: 400 });
   }
 
+  // The API limits sign-in requests per client IP. Without the visitor's address
+  // every request would count against this server's IP, and 20 requests an hour
+  // from anyone would lock sign-in for everybody.
+  const headers = apiKeyHeaders({ "content-type": "application/json" });
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+
   let upstream: Response;
   try {
     upstream = await fetch(`${apiBase()}/v1/auth/magic-link`, {
       method: "POST",
-      headers: apiKeyHeaders({ "content-type": "application/json" }),
+      headers,
       body: JSON.stringify({ email }),
       cache: "no-store",
       signal: AbortSignal.timeout(15_000)
