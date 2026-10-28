@@ -75,8 +75,10 @@ logs an error at startup.
 `MTG_AUTH_DAILY_EMAIL_CAP` (default 200) is the most magic-link emails the
 process will try to send in a UTC day. Counters are stored in SQLite, so a
 restart does not clear them. Override the cap with `fly secrets set` if you
-need to. Each address is also limited to 5 per hour and 10 per day, and each
-client network to 20 per hour and 15 per day. IPv6 addresses share a budget
+need to. Each address is also limited to 5 per hour and 10 per day, each
+address-and-network pair to 5 per day, and each client network to 20 per
+hour and 15 per day. A new link replaces only an older unused link from
+the same browser. IPv6 addresses share a budget
 per /64. Ten networks at the daily cap (150) stay under the default global
 cap, so they cannot shut sign-in off for everyone. A request that hits one
 of these limits does not delete a link that is still waiting to be used.
@@ -100,7 +102,9 @@ address to escape the limit.
 The web server does not forward the browser's `X-Forwarded-For`. On Vercel
 (`VERCEL` is set) it sends one address from `x-vercel-forwarded-for`, or
 `x-real-ip` when that header is absent. Off Vercel those headers are ignored
-and the socket address is sent instead. A visitor cannot pick their
+and the socket address is sent instead. Production logs that fallback, and
+a Fly fallback to `Fly-Client-IP` when no platform address was forwarded,
+at most once a minute so a missing client IP is visible without a log flood. A visitor cannot pick their
 rate-limit bucket by setting `X-Forwarded-For` on the request.
 
 ## 2. Vercel (web)

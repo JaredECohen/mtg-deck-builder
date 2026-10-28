@@ -552,16 +552,53 @@ def test_wrong_preauth_does_not_consume_the_magic_link(isolated, monkeypatch):
     assert accepted.status_code == 200, accepted.text
 
 
-def test_new_magic_link_invalidates_older_unused_links(isolated, monkeypatch):
+def test_new_magic_link_replaces_only_the_same_browsers_pending_link(isolated, monkeypatch):
     monkeypatch.setenv("MTG_AUTH_DEBUG", "1")
-    first_headers, first_preauth = _link_headers()
-    first = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=first_headers)
-    first_token = parse_qs(urlparse(first.json()["debug_url"]).query)["token"][0]
-    second_headers, second_preauth = _link_headers()
-    second = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=second_headers)
-    second_token = parse_qs(urlparse(second.json()["debug_url"]).query)["token"][0]
-    assert client.post("/v1/auth/verify", json={"token": first_token, "preauth": first_preauth}).status_code == 400
-    assert client.post("/v1/auth/verify", json={"token": second_token, "preauth": second_preauth}).status_code == 200
+    alice_headers, alice_preauth = _link_headers()
+    alice = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=alice_headers)
+    alice_token = parse_qs(urlparse(alice.json()["debug_url"]).query)["token"][0]
+    bob_headers, bob_preauth = _link_headers()
+    bob = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=bob_headers)
+    bob_token = parse_qs(urlparse(bob.json()["debug_url"]).query)["token"][0]
+    # Another browser's request does not wipe the in-flight link.
+    assert client.post("/v1/auth/verify", json={"token": alice_token, "preauth": alice_preauth}).status_code == 200
+    # The same browser's next request replaces only its own unused link.
+    again_headers, _same = _link_headers(preauth=bob_preauth)
+    again = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=again_headers)
+    again_token = parse_qs(urlparse(again.json()["debug_url"]).query)["token"][0]
+    assert client.post("/v1/auth/verify", json={"token": bob_token, "preauth": bob_preauth}).status_code == 400
+    assert client.post("/v1/auth/verify", json={"token": again_token, "preauth": bob_preauth}).status_code == 200
+
+
+def test_one_network_cannot_use_the_whole_email_budget(isolated, monkeypatch):
+    monkeypatch.setenv("MTG_API_KEY", "server-key-123")
+    monkeypatch.setenv("MTG_AUTH_DEBUG", "1")
+    monkeypatch.setattr(auth_module, "EMAIL_NETWORK_DAILY_LIMIT", 1)
+    monkeypatch.setattr(auth_module, "EMAIL_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "EMAIL_DAILY_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "IP_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "IP_DAILY_LIMIT", 100)
+    monkeypatch.setenv("MTG_AUTH_DAILY_EMAIL_CAP", "1000")
+
+    def post(ip: str, preauth: str | None = None):
+        headers, secret = _link_headers("server-key-123", preauth)
+        headers["X-Forwarded-For"] = ip
+        response = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=headers)
+        return response, secret
+
+    first, first_preauth = post("203.0.113.10")
+    assert first.status_code == 200, first.text
+    token = parse_qs(urlparse(first.json()["debug_url"]).query)["token"][0]
+    blocked, _blocked_preauth = post("203.0.113.10")
+    assert blocked.status_code == 429
+    # The throttled request did not delete the pending link.
+    assert client.post(
+        "/v1/auth/verify",
+        json={"token": token, "preauth": first_preauth},
+        headers={"X-API-Key": "server-key-123"},
+    ).status_code == 200
+    other_network, _other = post("203.0.113.11")
+    assert other_network.status_code == 200, other_network.text
 
 
 def test_purge_removes_expired_tokens_and_sessions(isolated, monkeypatch):
@@ -769,6 +806,7 @@ def test_ten_addresses_cannot_exhaust_the_global_daily_cap(monkeypatch):
     monkeypatch.delenv("MTG_AUTH_DAILY_EMAIL_CAP", raising=False)
     assert auth_module.IP_DAILY_LIMIT * 10 < auth_module.daily_email_cap()
     assert auth_module.EMAIL_DAILY_LIMIT < auth_module.daily_email_cap()
+    assert auth_module.EMAIL_NETWORK_DAILY_LIMIT < auth_module.EMAIL_DAILY_LIMIT
 
 
 def test_throttled_sign_in_keeps_the_pending_link(isolated, monkeypatch):

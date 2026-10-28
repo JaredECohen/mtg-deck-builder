@@ -14,12 +14,43 @@ export function socketAddressOf(request: Request): string | null {
   return typeof remote === "string" ? remote : null;
 }
 
+const lastFallbackLog = new Map<string, number>();
+const FALLBACK_LOG_MS = 60_000;
+
+export function resetClientIpFallbackLog(): void {
+  lastFallbackLog.clear();
+}
+
+function productionLogs(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+}
+
+/** Warn when production has no platform client IP. At most once a minute per reason. */
+export function noteClientIpFallback(
+  reason: "vercel-unset" | "missing",
+  now = Date.now(),
+  log: (message: string) => void = (message) => console.warn(message),
+  enabled = productionLogs(),
+): void {
+  if (!enabled) return;
+  const previous = lastFallbackLog.get(reason) ?? 0;
+  if (previous !== 0 && now - previous < FALLBACK_LOG_MS) return;
+  lastFallbackLog.set(reason, now);
+  log(
+    reason === "vercel-unset"
+      ? "client IP fell back to the socket address because VERCEL is unset"
+      : "client IP is missing; rate limits may share one bucket",
+  );
+}
+
 /**
  * Client IP to report to the API.
  *
  * On Vercel, `x-vercel-forwarded-for` is set by the edge and is not spoofable,
  * with `x-real-ip` as the fallback. Anywhere else those headers are ignored
  * and the socket address is used. The browser's `X-Forwarded-For` is never read.
+ * A missing platform IP, or VERCEL being unset, is logged at most once a minute
+ * in production.
  */
 export function trustedClientAddress(
   headers: { get(name: string): string | null },
@@ -27,7 +58,12 @@ export function trustedClientAddress(
   onVercel = Boolean(process.env.VERCEL),
 ): string | null {
   if (onVercel) {
-    return firstAddress(headers.get("x-vercel-forwarded-for")) ?? firstAddress(headers.get("x-real-ip"));
+    const platform = firstAddress(headers.get("x-vercel-forwarded-for")) ?? firstAddress(headers.get("x-real-ip"));
+    if (platform) return platform;
+    noteClientIpFallback("missing");
+    return null;
   }
-  return firstAddress(socketAddress);
+  const socket = firstAddress(socketAddress);
+  noteClientIpFallback(socket ? "vercel-unset" : "missing");
+  return socket;
 }

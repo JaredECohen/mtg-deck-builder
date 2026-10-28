@@ -96,6 +96,22 @@ TRUST_FORWARDED = os.getenv("MTG_TRUST_FORWARDED", "").lower() in {"1", "true", 
 # can't override it), while req.client is Fly's internal proxy address.
 ON_FLY = bool(os.getenv("FLY_APP_NAME"))
 
+_last_ip_fallback_log: dict[str, float] = {}
+_IP_FALLBACK_LOG_SECONDS = 60.0
+
+
+def _note_client_ip_fallback(reason: str) -> None:
+    """Warn when a production request has no platform client IP. At most once a minute per reason."""
+    production = bool(os.getenv("FLY_APP_NAME", "").strip()) or os.getenv("ENV", "").strip().lower() == "production"
+    if not production:
+        return
+    now = time.monotonic()
+    previous = _last_ip_fallback_log.get(reason, 0.0)
+    if previous and now - previous < _IP_FALLBACK_LOG_SECONDS:
+        return
+    _last_ip_fallback_log[reason] = now
+    logger.warning("client IP fell back to %s; rate limits may share one bucket", reason)
+
 
 def client_key(req: Request) -> str:
     """Rate-limit identity.
@@ -113,8 +129,12 @@ def client_key(req: Request) -> str:
         if first:
             return first
     if ON_FLY and req.headers.get("fly-client-ip"):
+        _note_client_ip_fallback("fly-client-ip")
         return req.headers["fly-client-ip"]
-    return req.client.host if req.client else "unknown"
+    if req.client and req.client.host:
+        return req.client.host
+    _note_client_ip_fallback("missing")
+    return "unknown"
 
 
 # Whole-response cache for identical generate requests (spec §25 "cache
@@ -586,7 +606,7 @@ def request_magic_link(
         raise HTTPException(status_code=400, detail="Enter a valid email address.")
     if not valid_preauth(x_preauth):
         raise HTTPException(status_code=400, detail="Sign-in could not be started. Try again.")
-    if not auth_module.auth_service.consume_email_send(email):
+    if not auth_module.auth_service.consume_email_send(email, client_key(req)):
         # Budgets are checked before a new link is stored, so a throttle
         # cannot delete a link that is still waiting to be confirmed.
         raise HTTPException(status_code=429, detail=limited)

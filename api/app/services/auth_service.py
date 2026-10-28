@@ -9,7 +9,8 @@ deletes the session row, which revokes the cookie immediately.
 
 A magic link is bound to a pre-auth cookie set when the link was requested.
 ``verify`` consumes the link only when that cookie matches, and each login
-mints a new session id. Asking for a new link invalidates older unused ones.
+mints a new session id. A new link replaces only an older unused link from the
+same browser (the same pre-auth cookie).
 
 Mail is sent through Resend when ``RESEND_API_KEY`` and ``AUTH_FROM_EMAIL``
 are set. ``MTG_AUTH_DEBUG=1`` includes the link in the API response for local
@@ -50,6 +51,8 @@ LOGIN_TTL = timedelta(minutes=20)
 SESSION_TTL = timedelta(days=30)
 EMAIL_LIMIT = 5
 EMAIL_DAILY_LIMIT = 10
+# One network cannot use the whole per-address daily budget.
+EMAIL_NETWORK_DAILY_LIMIT = 5
 IP_LIMIT = 20
 # Ten addresses at this daily cap stay under the default 200/day global cap.
 IP_DAILY_LIMIT = 15
@@ -289,8 +292,8 @@ class AuthService:
         finally:
             session.close()
 
-    def consume_email_send(self, email: str) -> bool:
-        """Persist per-email hour and day budgets plus the global daily cap.
+    def consume_email_send(self, email: str, client_ip: str | None = None) -> bool:
+        """Persist per-email, per-email-per-network, and global send budgets.
 
         A refusal rolls back every counter touched by this call. It does not
         touch login tokens; a throttled request must leave a pending link in place.
@@ -300,9 +303,11 @@ class AuthService:
         session = self._session()
         try:
             email_hash = _hash_token(email)
+            network = _hash_token(email + "\n" + rate_limit_ip(client_ip))
             allowed = [
                 _bump(session, "email:" + email_hash, _hour_window(now), EMAIL_LIMIT),
                 _bump(session, "email-day:" + email_hash, _day_window(now), EMAIL_DAILY_LIMIT),
+                _bump(session, "email-net:" + network, _day_window(now), EMAIL_NETWORK_DAILY_LIMIT),
                 _bump(session, "global-email", _day_window(now), daily_email_cap()),
             ]
             if not all(allowed):
@@ -316,7 +321,8 @@ class AuthService:
     def request_magic_link(self, email: str, preauth: str) -> dict:
         """Create a one-time link for ``email`` bound to ``preauth``.
 
-        Older unused links for this address are deleted in the same transaction.
+        Only an older unused link with this same pre-auth hash is deleted, so
+        another browser cannot wipe a link that is still in flight.
         Call this only after the route has allowed the request (rate limit, valid address).
         """
         if not valid_preauth(preauth):
@@ -327,16 +333,18 @@ class AuthService:
         session = self._session()
         try:
             self._maybe_purge(session)
+            preauth_hash = _hash_token(preauth)
             session.query(LoginToken).filter(
                 LoginToken.email == email,
                 LoginToken.used_at.is_(None),
+                LoginToken.preauth_hash == preauth_hash,
             ).delete(synchronize_session=False)
             session.add(
                 LoginToken(
                     id=uuid.uuid4().hex,
                     email=email,
                     token_hash=_hash_token(token),
-                    preauth_hash=_hash_token(preauth),
+                    preauth_hash=preauth_hash,
                     expires_at=_iso(now + LOGIN_TTL),
                     used_at=None,
                 )

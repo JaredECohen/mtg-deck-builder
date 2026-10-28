@@ -129,6 +129,34 @@ def test_forwarded_for_is_trusted_from_the_keyed_proxy(monkeypatch):
     assert main_module.client_key(_Spoofed()) == "198.51.100.9"
 
 
+def test_fly_client_ip_fallback_is_logged_once_a_minute(monkeypatch, caplog):
+    monkeypatch.setattr(main_module, "ON_FLY", True)
+    monkeypatch.setattr(main_module, "TRUST_FORWARDED", False)
+    monkeypatch.delenv("MTG_API_KEY", raising=False)
+    monkeypatch.setenv("ENV", "production")
+    main_module._last_ip_fallback_log.clear()
+
+    class _Fly:
+        headers = {"fly-client-ip": "203.0.113.8"}
+
+        class client:  # noqa: N801
+            host = "10.0.0.1"
+
+    caplog.set_level("WARNING")
+    assert main_module.client_key(_Fly()) == "203.0.113.8"
+    assert main_module.client_key(_Fly()) == "203.0.113.8"
+    assert caplog.text.count("fly-client-ip") == 1
+    main_module._last_ip_fallback_log["fly-client-ip"] = 0.0
+    assert main_module.client_key(_Fly()) == "203.0.113.8"
+    assert caplog.text.count("fly-client-ip") == 2
+
+    monkeypatch.delenv("ENV", raising=False)
+    caplog.clear()
+    main_module._last_ip_fallback_log.clear()
+    assert main_module.client_key(_Fly()) == "203.0.113.8"
+    assert "fly-client-ip" not in caplog.text
+
+
 def test_identical_generate_requests_are_served_from_cache(monkeypatch):
     first = client.post("/v1/decks/generate", json=_BODY).json()
     calls = []
