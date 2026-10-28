@@ -27,6 +27,7 @@ import logging
 import re
 import secrets
 import uuid
+import weakref
 from datetime import datetime, timezone
 
 from sqlalchemy import inspect, or_, text
@@ -38,7 +39,9 @@ from app.services.secret_scrub import scrub_secrets
 # Track which engines have had the schema created (keyed by id) so the
 # lazy create_all runs once per engine — not once globally, which would
 # skip table creation for a second engine (e.g. an isolated test DB).
-_ready_engines: set[int] = set()
+# Weak refs, not id(engine). CPython reuses ids after the engine is collected,
+# and a stale int would skip CREATE TABLE on the next empty database.
+_ready_engines: weakref.WeakSet = weakref.WeakSet()
 
 
 def _now() -> str:
@@ -162,13 +165,13 @@ def _ensure_saved_deck_columns(engine) -> None:
 
 def ensure_saved_deck_schema(engine) -> None:
     """Create or migrate ``saved_decks`` on ``engine``. Safe to call twice."""
-    if id(engine) in _ready_engines:
+    if engine in _ready_engines:
         return
     _set_aside_legacy_table(engine)
     Base.metadata.create_all(engine, tables=[SavedDeck.__table__])
     _ensure_saved_deck_columns(engine)
     _hash_raw_owners(engine)
-    _ready_engines.add(id(engine))
+    _ready_engines.add(engine)
 
 
 def _json_list(value: object) -> list:

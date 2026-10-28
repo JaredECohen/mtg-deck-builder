@@ -423,7 +423,7 @@ def test_user_owner_ids_are_not_hashed_on_startup():
     history.save(name="Legacy key", format_id="modern", mainboard=[], owner="raw-secret-key")
     with engine.begin() as conn:
         conn.execute(text("UPDATE saved_decks SET owner = 'raw-secret-key' WHERE name = 'Legacy key'"))
-    history_module._ready_engines.discard(id(engine))
+    history_module._ready_engines.discard(engine)
     assert history.history(owner="user:abc123")[0]["name"] == "Library"
     with engine.connect() as conn:
         owners = dict(conn.execute(text("SELECT name, owner FROM saved_decks")).all())

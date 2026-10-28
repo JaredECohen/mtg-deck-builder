@@ -201,7 +201,7 @@ def test_raw_key_owners_are_hashed_on_startup():
     svc.save(name="pre-fix", format_id="modern", mainboard=[], owner="raw-secret-key")
     # Simulate a row written before hashing existed, then a restart.
     import app.services.deck_history_service as history_module
-    history_module._ready_engines.discard(id(engine))
+    history_module._ready_engines.discard(engine)
     with engine.begin() as conn:
         conn.execute(text("UPDATE saved_decks SET owner = 'raw-secret-key'"))
     assert svc.history(owner=owner_id("raw-secret-key"))[0]["name"] == "pre-fix"
