@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 
 import { decodedApiPath, isAuthPath, requiresSession } from "@/lib/backend-proxy-policy";
-import { trustedClientAddress } from "@/lib/client-address";
+import { socketAddressOf, trustedClientAddress } from "@/lib/client-address";
 import { SESSION_COOKIE, sessionCookie } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
@@ -73,7 +73,7 @@ async function forward(request: Request): Promise<Response> {
     if (value) headers.set(name, value);
   }
   // Platform client IP only. A browser-supplied X-Forwarded-For is not forwarded.
-  const clientIp = trustedClientAddress(request.headers);
+  const clientIp = trustedClientAddress(request.headers, socketAddressOf(request));
   if (clientIp) headers.set("x-forwarded-for", clientIp);
   const apiKey = process.env.MTG_API_KEY;
   if (apiKey) headers.set("x-api-key", apiKey);

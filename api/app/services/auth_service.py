@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -39,7 +40,6 @@ from app.db_models import AuthRateBucket, AuthSession, Base, LoginToken, UserAcc
 
 logger = logging.getLogger(__name__)
 
-_ready_engines: set[int] = set()
 _last_purge_at = 0.0
 _PURGE_EVERY_SECONDS = 3600
 
@@ -49,7 +49,10 @@ _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,200}$")
 LOGIN_TTL = timedelta(minutes=20)
 SESSION_TTL = timedelta(days=30)
 EMAIL_LIMIT = 5
+EMAIL_DAILY_LIMIT = 10
 IP_LIMIT = 20
+# Ten addresses at this daily cap stay under the default 200/day global cap.
+IP_DAILY_LIMIT = 15
 _USER_PREFIX = "user:"
 PREAUTH_MISMATCH = "preauth_mismatch"
 
@@ -156,8 +159,12 @@ def _ensure_login_token_columns(engine) -> None:
 
 
 def _ensure_schema(engine) -> None:
-    if id(engine) in _ready_engines:
-        return
+    """Create auth tables if they are missing.
+
+    Do not remember engines by ``id(engine)``. CPython reuses that id after the
+    engine is collected, and the next empty database would skip ``CREATE TABLE``.
+    ``create_all`` is ``CREATE TABLE IF NOT EXISTS`` plus a column check.
+    """
     Base.metadata.create_all(
         engine,
         tables=[
@@ -168,28 +175,47 @@ def _ensure_schema(engine) -> None:
         ],
     )
     _ensure_login_token_columns(engine)
-    _ready_engines.add(id(engine))
 
 
-def _bucket_allows(row: AuthRateBucket | None, window: str, limit: int) -> bool:
-    if row is None or row.window_start != window:
-        return True
-    return row.count < limit
+def rate_limit_ip(value: str | None) -> str:
+    """Identity used for the per-IP sign-in budget.
+
+    IPv6 is grouped by /64 so a single network cannot rotate hosts to escape
+    the cap. IPv4-mapped IPv6 is counted as the embedded IPv4 address.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return "unknown"
+    try:
+        parsed = ipaddress.ip_address(raw)
+    except ValueError:
+        return raw
+    if isinstance(parsed, ipaddress.IPv6Address):
+        mapped = parsed.ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
+        prefix = ipaddress.IPv6Network((parsed, 64), strict=False).network_address
+        return f"{prefix}/64"
+    return str(parsed)
 
 
 def _bump(session, bucket: str, window: str, limit: int) -> bool:
-    row = session.get(AuthRateBucket, bucket)
-    if not _bucket_allows(row, window, limit):
-        return False
-    if row is None:
-        session.add(AuthRateBucket(bucket=bucket, window_start=window, count=1))
-        return True
-    if row.window_start != window:
-        row.window_start = window
-        row.count = 1
-        return True
-    row.count += 1
-    return True
+    """Atomic fixed-window increment. False when this window is already full."""
+    row = session.execute(
+        text(
+            "INSERT INTO auth_rate_buckets (bucket, window_start, count) "
+            "VALUES (:bucket, :window, 1) "
+            "ON CONFLICT(bucket) DO UPDATE SET "
+            "count = CASE WHEN auth_rate_buckets.window_start != :window "
+            "THEN 1 ELSE auth_rate_buckets.count + 1 END, "
+            "window_start = :window "
+            "WHERE auth_rate_buckets.window_start != :window "
+            "OR auth_rate_buckets.count < :limit "
+            "RETURNING count"
+        ),
+        {"bucket": bucket, "window": window, "limit": limit},
+    ).first()
+    return row is not None
 
 
 class AuthService:
@@ -244,37 +270,42 @@ class AuthService:
             session.close()
 
     def consume_ip(self, client_ip: str) -> bool:
-        """Persist the per-IP sign-in budget. False when the hour is exhausted."""
+        """Persist the per-IP hour and day budgets. False when either is exhausted."""
         self._ensure()
         session = self._session()
         try:
             self._maybe_purge(session)
-            allowed = _bump(
-                session,
-                "ip:" + _hash_token(client_ip or "unknown"),
-                _hour_window(_now()),
-                IP_LIMIT,
-            )
+            identity = _hash_token(rate_limit_ip(client_ip))
+            now = _now()
+            allowed = [
+                _bump(session, "ip:" + identity, _hour_window(now), IP_LIMIT),
+                _bump(session, "ip-day:" + identity, _day_window(now), IP_DAILY_LIMIT),
+            ]
+            if not all(allowed):
+                session.rollback()
+                return False
             session.commit()
-            return allowed
+            return True
         finally:
             session.close()
 
     def consume_email_send(self, email: str) -> bool:
-        """Persist the per-email hour budget and the global daily send cap."""
+        """Persist per-email hour and day budgets plus the global daily cap.
+
+        A refusal rolls back every counter touched by this call. It does not
+        touch login tokens; a throttled request must leave a pending link in place.
+        """
         self._ensure()
         now = _now()
         session = self._session()
         try:
-            email_key = "email:" + _hash_token(email)
-            day_key = "global-email"
-            if not _bucket_allows(session.get(AuthRateBucket, email_key), _hour_window(now), EMAIL_LIMIT):
-                return False
-            if not _bucket_allows(session.get(AuthRateBucket, day_key), _day_window(now), daily_email_cap()):
-                return False
-            if not _bump(session, email_key, _hour_window(now), EMAIL_LIMIT):
-                return False
-            if not _bump(session, day_key, _day_window(now), daily_email_cap()):
+            email_hash = _hash_token(email)
+            allowed = [
+                _bump(session, "email:" + email_hash, _hour_window(now), EMAIL_LIMIT),
+                _bump(session, "email-day:" + email_hash, _day_window(now), EMAIL_DAILY_LIMIT),
+                _bump(session, "global-email", _day_window(now), daily_email_cap()),
+            ]
+            if not all(allowed):
                 session.rollback()
                 return False
             session.commit()

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { trustedClientAddress } from "@/lib/client-address";
+import { socketAddressOf, trustedClientAddress } from "@/lib/client-address";
 import { PREAUTH_COOKIE, apiBase, apiKeyHeaders, authDebugEnabled, preauthCookie } from "@/lib/session-cookie";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function POST(request: Request): Promise<Response> {
   const headers = apiKeyHeaders({ "content-type": "application/json", "x-preauth": preauth });
   // The API limits sign-in requests per client IP. Report the platform's view
   // of that IP. Never forward the browser's X-Forwarded-For: the client can set it.
-  const clientIp = trustedClientAddress(request.headers);
+  const clientIp = trustedClientAddress(request.headers, socketAddressOf(request));
   if (clientIp) headers.set("x-forwarded-for", clientIp);
 
   let upstream: Response;

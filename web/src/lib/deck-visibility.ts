@@ -1,6 +1,6 @@
 export type DeckVisibilityChoice = "public" | "unlisted";
 
-/** What the save button sends. The API's own default is unlisted. */
-export function visibilityForNewDeck(hideFromSearch: boolean): DeckVisibilityChoice {
-  return hideFromSearch ? "unlisted" : "public";
+/** Public only when the user opts in. The unchecked save button stays unlisted. */
+export function visibilityForNewDeck(publishPublic: boolean): DeckVisibilityChoice {
+  return publishPublic ? "public" : "unlisted";
 }

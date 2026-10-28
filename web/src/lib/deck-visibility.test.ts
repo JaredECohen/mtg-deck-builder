@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { visibilityForNewDeck } from "./deck-visibility";
 
-test("the save control sends public unless the user hides the deck", () => {
-  assert.equal(visibilityForNewDeck(false), "public");
-  assert.equal(visibilityForNewDeck(true), "unlisted");
+test("a new deck stays unlisted unless the user chooses public", () => {
+  assert.equal(visibilityForNewDeck(false), "unlisted");
+  assert.equal(visibilityForNewDeck(true), "public");
 });

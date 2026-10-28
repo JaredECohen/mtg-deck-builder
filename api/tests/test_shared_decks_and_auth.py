@@ -730,3 +730,111 @@ def test_pytest_is_not_a_runtime_dependency():
     assert "requirements-dev" not in docker
     ci = (api.parent / ".github" / "workflows" / "ci.yml").read_text()
     assert "requirements-dev.txt" in ci
+
+
+def test_fresh_engine_gets_auth_rate_buckets_even_when_its_id_was_cached():
+    """id(engine) is reused after GC. A cache of those ids skips CREATE TABLE."""
+    engine = _engine()
+    stale = getattr(auth_module, "_ready_engines", None)
+    if isinstance(stale, set):
+        stale.add(id(engine))
+    accounts = AuthService(session_factory=sessionmaker(bind=engine, future=True))
+    assert accounts.consume_ip("203.0.113.60") is True
+    with engine.connect() as conn:
+        found = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='auth_rate_buckets'"
+        )).scalar()
+    assert found == "auth_rate_buckets"
+
+
+def test_ipv6_sign_in_limit_groups_a_slash_64(isolated, monkeypatch):
+    monkeypatch.setenv("MTG_API_KEY", "server-key-123")
+    monkeypatch.setattr(auth_module, "IP_LIMIT", 1)
+    monkeypatch.setattr(auth_module, "IP_DAILY_LIMIT", 100)
+    assert auth_module.rate_limit_ip("2001:db8:85a3::1") == auth_module.rate_limit_ip("2001:db8:85a3::ffff")
+    assert auth_module.rate_limit_ip("2001:db8:85a3::1") != auth_module.rate_limit_ip("2001:db8:85a4::1")
+    assert auth_module.rate_limit_ip("::ffff:192.0.2.1") == "192.0.2.1"
+
+    def post(ip: str, email: str):
+        headers, _preauth = _link_headers("server-key-123")
+        headers["X-Forwarded-For"] = ip
+        return client.post("/v1/auth/magic-link", json={"email": email}, headers=headers)
+
+    assert post("2001:db8:85a3::1", "a@example.com").status_code == 200
+    assert post("2001:db8:85a3::ffff", "b@example.com").status_code == 429
+    assert post("2001:db8:85a4::1", "c@example.com").status_code == 200
+
+
+def test_ten_addresses_cannot_exhaust_the_global_daily_cap(monkeypatch):
+    monkeypatch.delenv("MTG_AUTH_DAILY_EMAIL_CAP", raising=False)
+    assert auth_module.IP_DAILY_LIMIT * 10 < auth_module.daily_email_cap()
+    assert auth_module.EMAIL_DAILY_LIMIT < auth_module.daily_email_cap()
+
+
+def test_throttled_sign_in_keeps_the_pending_link(isolated, monkeypatch):
+    monkeypatch.setenv("MTG_AUTH_DEBUG", "1")
+    monkeypatch.setattr(auth_module, "EMAIL_DAILY_LIMIT", 1)
+    monkeypatch.setattr(auth_module, "EMAIL_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "IP_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "IP_DAILY_LIMIT", 100)
+    monkeypatch.setenv("MTG_AUTH_DAILY_EMAIL_CAP", "1000")
+    headers, preauth = _link_headers()
+    first = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=headers)
+    assert first.status_code == 200, first.text
+    token = parse_qs(urlparse(first.json()["debug_url"]).query)["token"][0]
+    again, _again_preauth = _link_headers()
+    rejected = client.post("/v1/auth/magic-link", json={"email": "pilot@example.com"}, headers=again)
+    assert rejected.status_code == 429
+    verified = client.post("/v1/auth/verify", json={"token": token, "preauth": preauth})
+    assert verified.status_code == 200, verified.text
+
+
+def test_per_ip_daily_cap_is_separate_from_the_hourly_cap(isolated, monkeypatch):
+    monkeypatch.setenv("MTG_API_KEY", "server-key-123")
+    monkeypatch.setattr(auth_module, "IP_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "IP_DAILY_LIMIT", 2)
+    monkeypatch.setattr(auth_module, "EMAIL_LIMIT", 100)
+    monkeypatch.setattr(auth_module, "EMAIL_DAILY_LIMIT", 100)
+    monkeypatch.setenv("MTG_AUTH_DAILY_EMAIL_CAP", "1000")
+
+    def post(email: str):
+        headers, _preauth = _link_headers("server-key-123")
+        headers["X-Forwarded-For"] = "203.0.113.77"
+        return client.post("/v1/auth/magic-link", json={"email": email}, headers=headers)
+
+    assert post("one@example.com").status_code == 200
+    assert post("two@example.com").status_code == 200
+    assert post("three@example.com").status_code == 429
+    other, _preauth = _link_headers("server-key-123")
+    other["X-Forwarded-For"] = "203.0.113.78"
+    assert client.post("/v1/auth/magic-link", json={"email": "four@example.com"}, headers=other).status_code == 200
+
+
+def test_rate_bucket_bump_stops_at_the_limit_and_rolls_back(isolated, monkeypatch):
+    _, accounts = isolated
+    accounts._ensure()
+    session = accounts._session()
+    try:
+        assert auth_module._bump(session, "email:test", "2026-10-28T06", 2) is True
+        assert auth_module._bump(session, "email:test", "2026-10-28T06", 2) is True
+        assert auth_module._bump(session, "email:test", "2026-10-28T06", 2) is False
+        session.commit()
+        count = session.execute(text("SELECT count FROM auth_rate_buckets WHERE bucket = 'email:test'")).scalar()
+        assert count == 2
+        assert auth_module._bump(session, "email:test", "2026-10-28T07", 2) is True
+        session.commit()
+    finally:
+        session.close()
+
+    monkeypatch.setenv("MTG_AUTH_DAILY_EMAIL_CAP", "1")
+    assert accounts.consume_email_send("a@example.com") is True
+    assert accounts.consume_email_send("b@example.com") is False
+    check = accounts._session()
+    try:
+        rows = dict(check.execute(text("SELECT bucket, count FROM auth_rate_buckets")).all())
+    finally:
+        check.close()
+    kept = "email:" + hashlib.sha256(b"a@example.com").hexdigest()
+    dropped = "email:" + hashlib.sha256(b"b@example.com").hexdigest()
+    assert rows[kept] == 1
+    assert dropped not in rows

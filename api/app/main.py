@@ -587,6 +587,8 @@ def request_magic_link(
     if not valid_preauth(x_preauth):
         raise HTTPException(status_code=400, detail="Sign-in could not be started. Try again.")
     if not auth_module.auth_service.consume_email_send(email):
+        # Budgets are checked before a new link is stored, so a throttle
+        # cannot delete a link that is still waiting to be confirmed.
         raise HTTPException(status_code=429, detail=limited)
     return auth_module.auth_service.request_magic_link(email, x_preauth or "")
 
