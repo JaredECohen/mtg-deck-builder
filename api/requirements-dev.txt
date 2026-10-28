@@ -1,0 +1,3 @@
+-r requirements.txt
+# pytest 9.0.3+ fixes GHSA-6w46-j5rx-g56g; 8.x cannot.
+pytest==9.1.1

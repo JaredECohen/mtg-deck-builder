@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 
-import { SESSION_COOKIE, apiBase, apiKeyHeaders } from "@/lib/session-cookie";
+import { SESSION_COOKIE, apiBase, apiKeyHeaders, sessionCookie } from "@/lib/session-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ export async function GET(): Promise<Response> {
       cache: "no-store",
       signal: AbortSignal.timeout(8_000)
     });
+    if (upstream.status === 401) {
+      const response = NextResponse.json({ user: null, reauth: true });
+      response.cookies.set(SESSION_COOKIE, "", sessionCookie(0));
+      return response;
+    }
     if (!upstream.ok) return Response.json({ user: null });
     const body = (await upstream.json()) as { user?: { id?: unknown; email?: unknown } };
     const id = body.user?.id;

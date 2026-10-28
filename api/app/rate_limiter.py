@@ -61,7 +61,5 @@ evaluate_rate_limiter = InMemoryRateLimiter(requests_per_minute=20)
 # that still stops scraping and request floods.
 public_rate_limiter = InMemoryRateLimiter(requests_per_minute=240)
 
-# Sign-in links are cheap to request and expensive to mail. Per email and
-# per IP, counted over an hour rather than a minute.
-auth_email_limiter = InMemoryRateLimiter(requests_per_minute=5, window_seconds=3600)
-auth_ip_limiter = InMemoryRateLimiter(requests_per_minute=20, window_seconds=3600)
+# Sign-in email budgets live in the database (see AuthService), not here.
+# An in-memory window would reset on every deploy and on the weekly restart.

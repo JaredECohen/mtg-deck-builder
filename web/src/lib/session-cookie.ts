@@ -1,14 +1,55 @@
 export const SESSION_COOKIE = "decklab_session";
+export const PREAUTH_COOKIE = "decklab_preauth";
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
+export const PREAUTH_MAX_AGE = 20 * 60;
+
+export function cookieSecure(): boolean {
+  return process.env.NODE_ENV === "production";
+}
 
 export function sessionCookie(maxAge = THIRTY_DAYS) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: cookieSecure(),
     sameSite: "lax" as const,
     path: "/",
     maxAge
   };
+}
+
+/** Short-lived cookie set when a magic link is requested. Sent only to the confirm page. */
+export function preauthCookie(maxAge = PREAUTH_MAX_AGE) {
+  return {
+    httpOnly: true,
+    secure: cookieSecure(),
+    sameSite: "lax" as const,
+    path: "/auth/verify",
+    maxAge
+  };
+}
+
+const OPAQUE_TOKEN = /^[A-Za-z0-9_-]{20,200}$/;
+
+export function isOpaqueToken(value: string | null | undefined): value is string {
+  return typeof value === "string" && OPAQUE_TOKEN.test(value);
+}
+
+export function readCookie(request: Request, name: string): string | null {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf("=");
+    if (eq === -1 || trimmed.slice(0, eq) !== name) continue;
+    let value = trimmed.slice(eq + 1);
+    try {
+      value = decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+    return value;
+  }
+  return null;
 }
 
 export function apiBase(): string {
@@ -23,6 +64,9 @@ export function apiKeyHeaders(extra?: Record<string, string>): Headers {
 }
 
 export function authDebugEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  if ((process.env.ENV ?? "").toLowerCase() === "production") return false;
+  if ((process.env.FLY_APP_NAME ?? "").trim()) return false;
   return ["1", "true", "yes"].includes((process.env.MTG_AUTH_DEBUG ?? "").toLowerCase());
 }
 

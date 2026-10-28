@@ -18,10 +18,13 @@ export function isAuthPath(decoded: string): boolean {
 }
 
 /**
- * Every anonymous deck is owned by the site's own API key, so without a session
- * the API cannot tell one visitor from another. Listing or editing a library
- * therefore needs a signed-in session. An anonymous browser can still read or
- * delete a deck by the id it was given when it saved it.
+ * Listing a library, renaming a deck, or publishing it needs a signed-in
+ * session. The cookie check here is only a shape check: a made-up value still
+ * matches. The API rejects that value with 401 instead of falling back to the
+ * shared API-key owner.
+ *
+ * Anonymous delete is still forwarded. The API requires the per-deck edit
+ * secret returned once when that deck was saved; the id alone is not enough.
  */
 export function requiresSession(method: string, decoded: string): boolean {
   const verb = method.toUpperCase();

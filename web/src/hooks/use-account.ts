@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { accountFromMePayload } from "@/lib/account-payload";
+
 export type AccountState =
   | { status: "loading" }
   | { status: "out" }
@@ -15,9 +17,12 @@ export function useAccount(): AccountState {
     fetch("/api/auth/me")
       .then(async (response) => {
         if (!response.ok) return null;
-        const body = (await response.json()) as { user?: { id?: unknown; email?: unknown } };
-        if (typeof body.user?.id !== "string" || typeof body.user.email !== "string") return null;
-        return { id: body.user.id, email: body.user.email };
+        const account = accountFromMePayload(await response.json().catch(() => null));
+        if (account === "reauth" && window.location.pathname !== "/signin") {
+          window.location.assign("/signin?error=expired");
+          return null;
+        }
+        return account === "reauth" ? null : account;
       })
       .catch(() => null)
       .then((user) => {

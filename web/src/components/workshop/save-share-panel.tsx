@@ -17,6 +17,7 @@ import {
 import type { DeckEvaluation } from "@/lib/api";
 import { deleteSavedDeck } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { visibilityForNewDeck } from "@/lib/deck-visibility";
 import type { DeckResponse } from "@/lib/types";
 
 type Props = {
@@ -63,7 +64,7 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
   }, []);
 
   async function onSave() {
-    const result = await save(evaluation, hideFromSearch ? "unlisted" : "public");
+    const result = await save(evaluation, visibilityForNewDeck(hideFromSearch));
     if (result && account.status !== "in") setLocalDecks(rememberLocalDeck(result));
     if (result && account.status === "in" && listOpen) void savedList.load();
   }
@@ -71,7 +72,7 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
   async function removeLocal(item: LocalDeck) {
     setLocalError(null);
     try {
-      await deleteSavedDeck(item.id);
+      await deleteSavedDeck(item.id, item.edit_secret);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete the saved deck";
       if (!/not found/i.test(message)) {

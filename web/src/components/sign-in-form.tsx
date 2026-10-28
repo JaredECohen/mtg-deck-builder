@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
-type Props = { invalidLink: boolean };
+type Props = { notice?: "invalid" | "expired" | null };
 
-export function SignInForm({ invalidLink }: Props) {
+export function SignInForm({ notice = null }: Props) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -38,8 +38,11 @@ export function SignInForm({ invalidLink }: Props) {
 
   return (
     <form className="sign-in-form" onSubmit={(event) => void onSubmit(event)}>
-      {invalidLink ? (
+      {notice === "invalid" ? (
         <p className="workflow-error" role="alert">That sign-in link is invalid or has expired. Request a new one.</p>
+      ) : null}
+      {notice === "expired" ? (
+        <p className="workflow-error" role="alert">Your sign-in expired. Request a new link to open your library again.</p>
       ) : null}
       <label className="label" htmlFor="sign-in-email">Email</label>
       <input

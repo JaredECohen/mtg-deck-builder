@@ -68,7 +68,14 @@ optional. Without the LLM keys, the deterministic fallbacks run.
 Optional sign-in uses the same machine. Set `RESEND_API_KEY`,
 `AUTH_FROM_EMAIL` and `MTG_PUBLIC_SITE_URL` with `fly secrets set` when you
 want magic-link email. The site works without them. Details are in the
-Vercel section below. Do not set `MTG_AUTH_DEBUG` here.
+Vercel section below. Do not set `MTG_AUTH_DEBUG` here. If it is set anyway,
+the API ignores it whenever `FLY_APP_NAME` is set or `ENV=production`, and
+logs an error at startup.
+
+`MTG_AUTH_DAILY_EMAIL_CAP` (default 200) is the most magic-link emails the
+process will try to send in a UTC day. Per-address (5 per hour) and per-IP
+(20 per hour) counters are stored in SQLite with that cap, so a restart does
+not clear them. Override the cap with `fly secrets set` if you need to.
 
 Check it:
 
@@ -85,6 +92,11 @@ the key.
 the Vercel proxy has that key. Everything else is limited by `Fly-Client-IP`.
 Because of this, someone calling the Fly URL directly can't spoof their
 address to escape the limit.
+
+The web server does not forward the browser's `X-Forwarded-For`. It sends one
+address, from `x-vercel-forwarded-for` (or `x-real-ip` when that header is
+absent). A visitor cannot pick their rate-limit bucket by setting
+`X-Forwarded-For` on the request.
 
 ## 2. Vercel (web)
 
@@ -110,10 +122,18 @@ address to escape the limit.
    Verify the sending domain in Resend before expecting mail to arrive.
    Do **not** set `MTG_AUTH_DEBUG` in production. That flag returns the
    sign-in link in the API response and, if also set on Vercel, shows it
-   on the sign-in page. Leave both unset so the link only goes out by email.
+   on the sign-in page. The API refuses the flag when `FLY_APP_NAME` is set
+   or `ENV=production`, and logs an error at startup if the variable is
+   present. The web UI also hides the debug link when `NODE_ENV` is
+   `production`. Leave both unset so the link only goes out by email.
 
+   `MTG_AUTH_DAILY_EMAIL_CAP` is an API setting (Fly), not a Vercel variable.
    No new Vercel variables are required for sign-in. The web server already
-   holds `API_BASE` and `MTG_API_KEY`, and it keeps the session cookie.
+   holds `API_BASE` and `MTG_API_KEY`. It keeps the session cookie, and it
+   sets a short-lived httpOnly cookie named `decklab_preauth` when a sign-in
+   link is requested. That cookie is not a secret you configure. Anonymous
+   deck deletes use a per-deck secret the API returns once to the browser;
+   that is not an environment variable either.
 
 3. Deploy. Pushes to `main` deploy to production, and PRs get preview URLs.
    Previews use the same API. Set Preview-scoped variables if you want them

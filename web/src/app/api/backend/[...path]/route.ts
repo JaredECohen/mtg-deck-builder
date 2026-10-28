@@ -10,7 +10,11 @@
 // back through this route. Listing or editing a library needs that session
 // (see requiresSession). Status, content type and body come back as-is.
 
+import { NextResponse } from "next/server";
+
 import { decodedApiPath, isAuthPath, requiresSession } from "@/lib/backend-proxy-policy";
+import { trustedClientAddress } from "@/lib/client-address";
+import { SESSION_COOKIE, sessionCookie } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,12 +72,16 @@ async function forward(request: Request): Promise<Response> {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  // The backend's per-client rate limit only trusts this when configured to.
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+  // Platform client IP only. A browser-supplied X-Forwarded-For is not forwarded.
+  const clientIp = trustedClientAddress(request.headers);
+  if (clientIp) headers.set("x-forwarded-for", clientIp);
   const apiKey = process.env.MTG_API_KEY;
   if (apiKey) headers.set("x-api-key", apiKey);
   if (session) headers.set("x-user-session", session);
+  const editSecret = request.headers.get("x-deck-edit-secret");
+  if (editSecret && /^[A-Za-z0-9_-]{20,200}$/.test(editSecret)) {
+    headers.set("x-deck-edit-secret", editSecret);
+  }
 
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -105,6 +113,24 @@ async function forward(request: Request): Promise<Response> {
     return errorResponse(502, "The deck service is unreachable. Is the API running?");
   }
 
+  if (upstream.status === 401 && session) {
+    const text = await upstream.text();
+    let reauth = false;
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown };
+      reauth = parsed.detail === "Sign in required.";
+    } catch {
+      reauth = false;
+    }
+    const deniedHeaders = new Headers();
+    const deniedType = upstream.headers.get("content-type");
+    if (deniedType) deniedHeaders.set("content-type", deniedType);
+    deniedHeaders.set("cache-control", "no-store");
+    const denied = new NextResponse(text, { status: 401, headers: deniedHeaders });
+    if (reauth) denied.cookies.set(SESSION_COOKIE, "", sessionCookie(0));
+    return denied;
+  }
+
   const responseHeaders = new Headers();
   const contentType = upstream.headers.get("content-type");
   if (contentType) responseHeaders.set("content-type", contentType);
@@ -127,8 +153,6 @@ export async function DELETE(request: Request): Promise<Response> {
 export async function PATCH(request: Request): Promise<Response> {
   return forward(request);
 }
-
-const SESSION_COOKIE = "decklab_session";
 
 function sessionToken(request: Request): string | null {
   const header = request.headers.get("cookie");

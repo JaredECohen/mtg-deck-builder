@@ -24,7 +24,7 @@ export default async function SignInPage({
         library you can reopen, rename, and delete from any browser.
       </p>
       <p className="muted">We email you a one-time link. There is no password.</p>
-      <SignInForm invalidLink={error === "invalid"} />
+      <SignInForm notice={error === "invalid" ? "invalid" : error === "expired" ? "expired" : null} />
       <p>
         <Link href="/">Back to the Deck Lab</Link>
       </p>
