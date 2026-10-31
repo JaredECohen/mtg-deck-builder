@@ -1,4 +1,9 @@
-import { apiBase, apiKeyHeaders, authDebugEnabled } from "@/lib/session-cookie";
+import { randomBytes } from "node:crypto";
+
+import { NextResponse } from "next/server";
+
+import { socketAddressOf, trustedClientAddress } from "@/lib/client-address";
+import { PREAUTH_COOKIE, apiBase, apiKeyHeaders, authDebugEnabled, preauthCookie } from "@/lib/session-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +16,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ detail: "Enter a valid email address." }, { status: 400 });
   }
 
-  // The API limits sign-in requests per client IP. Without the visitor's address
-  // every request would count against this server's IP, and 20 requests an hour
-  // from anyone would lock sign-in for everybody.
-  const headers = apiKeyHeaders({ "content-type": "application/json" });
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+  // Bind the link to this browser. The value is an httpOnly cookie, not part of
+  // the JSON the page can read, and it is not put in the email.
+  const preauth = randomBytes(32).toString("base64url");
+  const headers = apiKeyHeaders({ "content-type": "application/json", "x-preauth": preauth });
+  // The API limits sign-in requests per client IP. Report the platform's view
+  // of that IP. Never forward the browser's X-Forwarded-For: the client can set it.
+  const clientIp = trustedClientAddress(request.headers, socketAddressOf(request));
+  if (clientIp) headers.set("x-forwarded-for", clientIp);
 
   let upstream: Response;
   try {
@@ -41,5 +48,7 @@ export async function POST(request: Request): Promise<Response> {
   }
   const payload: { ok: true; debug_url?: string } = { ok: true };
   if (authDebugEnabled() && typeof body?.debug_url === "string") payload.debug_url = body.debug_url;
-  return Response.json(payload);
+  const response = NextResponse.json(payload);
+  response.cookies.set(PREAUTH_COOKIE, preauth, preauthCookie());
+  return response;
 }

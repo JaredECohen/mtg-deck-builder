@@ -318,9 +318,9 @@ class SaveDeckRequest(BaseModel):
     commander: CardName | None = None
     notes: PromptText = ""
     evaluation: dict = Field(default_factory=dict)
-    # public pages are indexable. unlisted links still open the deck and
-    # are marked noindex, and they are left out of the sitemap.
-    visibility: Literal["public", "unlisted"] = "public"
+    # Omitted visibility stays out of the sitemap. The web UI sends "public"
+    # unless the user checks "Hide from search engines".
+    visibility: Literal["public", "unlisted"] = "unlisted"
     colors: list[Annotated[str, Field(max_length=1)]] = Field(default_factory=list, max_length=5)
     price_usd: float | None = Field(default=None, ge=0, le=1_000_000)
     card_notes: list[SavedCardNote] = Field(default_factory=list, max_length=250)
@@ -340,6 +340,11 @@ class MagicLinkRequest(BaseModel):
 
 class VerifyLinkRequest(BaseModel):
     token: Annotated[str, Field(min_length=20, max_length=200)]
+    # Cookie minted when the link was requested. Missing or wrong does not
+    # consume the token. Optional so a bad value is a 400, not a 422.
+    preauth: Annotated[str, Field(max_length=200)] | None = None
+    # Session cookie already on this browser. Login revokes it and issues a new id.
+    previous_session: Annotated[str, Field(max_length=200)] | None = None
 
 
 class EvaluateDeckRequest(BaseModel):

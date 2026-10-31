@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test src/lib/analytics.test.ts src/lib/backend-proxy-policy.test.ts",
+    "test": "tsx --test src/lib/analytics.test.ts src/lib/backend-proxy-policy.test.ts src/lib/client-address.test.ts src/lib/deck-visibility.test.ts src/lib/sign-in-redirect.test.ts src/lib/account-payload.test.ts src/lib/session-cookie.test.ts src/lib/magic-link-verify.test.ts src/app/api/auth/magic-link/route.test.ts",
     "check:guides": "node scripts/check-guides.mjs"
   },
   "dependencies": {

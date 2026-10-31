@@ -26,6 +26,8 @@ _SENSITIVE_KEYS = {
     "secret",
     "session",
     "session_token",
+    "preauth",
+    "edit_secret",
     "token",
     "access_token",
     "refresh_token",

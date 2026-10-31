@@ -18,6 +18,7 @@ import type {
   PreconSummary,
   PreconUpgradeResponse
 } from "@/lib/types";
+import { signInPathForStatus } from "@/lib/sign-in-redirect";
 
 // Every request goes through the same-origin proxy (app/api/backend), which
 // forwards to the API and adds the server-side API key. No key is in the bundle.
@@ -46,14 +47,17 @@ function errorDetail(detail: unknown): string | null {
 
 async function jsonOrThrow<T>(response: Response, fallback: string): Promise<T> {
   if (!response.ok) {
+    // Non-JSON (e.g. HTML error pages) parses to null and uses the fallback.
+    const body = await response.json().catch(() => null);
+    const signIn = signInPathForStatus(response.status, body?.detail);
+    if (signIn && typeof window !== "undefined") window.location.assign(signIn);
     if (response.status === 401 || response.status === 403) {
+      if (signIn) throw new Error("Your sign-in expired. Sign in again.");
       throw new Error("The deck service needs an API key. Set MTG_API_KEY for the web server.");
     }
     if (response.status === 429) {
       throw new Error("Too many requests right now. Wait a moment and try again.");
     }
-    // Non-JSON (e.g. HTML error pages) parses to null and uses the fallback.
-    const body = await response.json().catch(() => null);
     throw new Error(errorDetail(body?.detail) ?? body?.error ?? body?.message ?? fallback);
   }
   return (await response.json()) as T;
@@ -126,6 +130,8 @@ export type SavedDeck = {
   mana_curve?: { mana_value: number; card_count: number }[];
   card_types?: Record<string, string>;
   key_cards?: string[];
+  /** Present only on the save response for an anonymous deck. Not returned again. */
+  edit_secret?: string;
 };
 
 export type SimilarCardsResponse = {
@@ -391,8 +397,10 @@ export async function fetchSavedDeck(id: string): Promise<SavedDeck> {
   return jsonOrThrow<SavedDeck>(response, "Saved deck not found");
 }
 
-export async function deleteSavedDeck(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`, { method: "DELETE" });
+export async function deleteSavedDeck(id: string, editSecret?: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (editSecret) headers["x-deck-edit-secret"] = editSecret;
+  const response = await fetch(`${API_BASE}/v1/decks/saved/${encodeURIComponent(id)}`, { method: "DELETE", headers });
   await jsonOrThrow<{ deleted: string }>(response, "Could not delete the saved deck");
 }
 

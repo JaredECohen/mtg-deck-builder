@@ -17,6 +17,7 @@ import {
 import type { DeckEvaluation } from "@/lib/api";
 import { deleteSavedDeck } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { visibilityForNewDeck } from "@/lib/deck-visibility";
 import type { DeckResponse } from "@/lib/types";
 
 type Props = {
@@ -53,7 +54,7 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
   const account = useAccount();
   const savedList = useSavedDeckList();
   const [listOpen, setListOpen] = useState(false);
-  const [hideFromSearch, setHideFromSearch] = useState(false);
+  const [publishPublic, setPublishPublic] = useState(false);
   const [localDecks, setLocalDecks] = useState<LocalDeck[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
   const link = saved ? shareUrl(saved.share_token) : "";
@@ -63,7 +64,7 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
   }, []);
 
   async function onSave() {
-    const result = await save(evaluation, hideFromSearch ? "unlisted" : "public");
+    const result = await save(evaluation, visibilityForNewDeck(publishPublic));
     if (result && account.status !== "in") setLocalDecks(rememberLocalDeck(result));
     if (result && account.status === "in" && listOpen) void savedList.load();
   }
@@ -71,7 +72,7 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
   async function removeLocal(item: LocalDeck) {
     setLocalError(null);
     try {
-      await deleteSavedDeck(item.id);
+      await deleteSavedDeck(item.id, item.edit_secret);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete the saved deck";
       if (!/not found/i.test(message)) {
@@ -95,10 +96,10 @@ export function SaveSharePanel({ deck, evaluation }: Props) {
             <input
               id={hideId}
               type="checkbox"
-              checked={hideFromSearch}
-              onChange={(event) => setHideFromSearch(event.target.checked)}
+              checked={publishPublic}
+              onChange={(event) => setPublishPublic(event.target.checked)}
             />
-            Hide from search engines (the link still works)
+            Let search engines find this page (the link works either way)
           </label>
           <button type="button" className="button secondary button-compact" onClick={() => void onSave()} disabled={saving}>
             {saving ? "Saving…" : "Save deck"}

@@ -27,7 +27,7 @@ wired.
 cd api
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps plus pytest; requirements.txt is the server image
 python -m app.scripts.seed_sample_cards
 python -m app.scripts.ingest_tournament_decks
 python -m app.scripts.build_archetypes
@@ -53,8 +53,11 @@ rate limits stay per client.
 
 ```bash
 cd api
-python -m pytest -q     # 486 tests, about 30 s, no skips
+python -m pytest -q     # install requirements-dev.txt first; about 30 s, no skips
 ```
+
+`requirements-dev.txt` includes `requirements.txt` and pytest. The Fly image
+installs only `requirements.txt`, so pytest is not in the runtime image.
 
 Tests always run against `api/tests/fixtures/cards.db.gz`: a deterministic
 cut of about 2k cards from the full Scryfall ingest, plus the full archetype

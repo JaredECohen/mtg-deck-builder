@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { trackDeckShared } from "@/lib/analytics";
+import { visibilityForNewDeck } from "@/lib/deck-visibility";
 import {
   deleteSavedDeck,
   fetchDeckHistory,
@@ -22,6 +23,7 @@ export type LocalDeck = {
   format: string;
   created_at: string;
   visibility: DeckVisibility;
+  edit_secret?: string;
 };
 
 /** Public page for a shared deck. */
@@ -63,7 +65,7 @@ export function useSaveDeck(deck: DeckResponse | null) {
   }, [deck]);
 
   const save = useCallback(
-    async (evaluation?: DeckEvaluation | null, visibility: DeckVisibility = "public") => {
+    async (evaluation?: DeckEvaluation | null, visibility: DeckVisibility = visibilityForNewDeck(false)) => {
       if (!deck) return null;
       const target = deck;
       setSaving(true);
@@ -123,7 +125,8 @@ export function rememberLocalDeck(deck: SavedDeck): LocalDeck[] {
     name: deck.name,
     format: deck.format,
     created_at: deck.created_at,
-    visibility: deck.visibility === "unlisted" ? "unlisted" : "public"
+    visibility: deck.visibility === "unlisted" ? "unlisted" : "public",
+    ...(typeof deck.edit_secret === "string" ? { edit_secret: deck.edit_secret } : {})
   };
   const next = [entry, ...readLocalDecks().filter((row) => row.id !== deck.id)].slice(0, 30);
   window.localStorage.setItem(LOCAL_KEY, JSON.stringify(next));

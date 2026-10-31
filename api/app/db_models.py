@@ -118,6 +118,9 @@ class SavedDeck(Base):
     mana_curve: Mapped[list[dict[str, object]]] = mapped_column(JSON, default=list)
     card_types: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
     key_cards: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # sha256 of a secret returned once on anonymous save. Delete requires it.
+    # User libraries leave this empty; the session is the proof.
+    edit_secret_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class UserAccount(Base):
@@ -138,6 +141,8 @@ class LoginToken(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(String(320), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # sha256 of the pre-auth cookie set when this link was requested.
+    preauth_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[str] = mapped_column(String(40))
     used_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
@@ -152,6 +157,16 @@ class AuthSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[str] = mapped_column(String(40))
+
+
+class AuthRateBucket(Base):
+    """Fixed-window counter for sign-in limits. Survives a process restart."""
+
+    __tablename__ = "auth_rate_buckets"
+
+    bucket: Mapped[str] = mapped_column(String(80), primary_key=True)
+    window_start: Mapped[str] = mapped_column(String(40))
+    count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class CardEmbedding(Base):

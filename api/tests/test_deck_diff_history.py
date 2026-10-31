@@ -75,9 +75,10 @@ def test_save_list_share_and_delete_roundtrip(isolated_history):
     assert saved["name"] == "Modern Burn"
     assert saved["share_token"]
 
-    # Appears in history.
-    history = client.get("/v1/decks/history").json()["decks"]
-    assert any(d["id"] == saved["id"] for d in history)
+    # History is a signed-in library. An anonymous id is not listed.
+    history = client.get("/v1/decks/history")
+    assert history.status_code == 401
+    assert saved["id"] not in history.text
 
     # Fetch by id and by share token.
     assert client.get(f"/v1/decks/saved/{saved['id']}").json()["name"] == "Modern Burn"
@@ -86,8 +87,13 @@ def test_save_list_share_and_delete_roundtrip(isolated_history):
     # A share link must not reveal the id that rename and delete take.
     assert "id" not in shared
 
-    # Delete.
-    assert client.delete(f"/v1/decks/saved/{saved['id']}").status_code == 200
+    assert "edit_secret" not in shared
+    assert saved["edit_secret"] not in client.get(f"/v1/decks/shared/{saved['share_token']}").text
+    assert client.delete(f"/v1/decks/saved/{saved['id']}").status_code == 404
+    assert client.delete(
+        f"/v1/decks/saved/{saved['id']}",
+        headers={"X-Deck-Edit-Secret": saved["edit_secret"]},
+    ).status_code == 200
     assert client.get(f"/v1/decks/saved/{saved['id']}").status_code == 404
 
 
@@ -100,10 +106,11 @@ def test_history_scoped_by_owner(isolated_history, monkeypatch):
     monkeypatch.setenv("MTG_API_KEY", "alice-key")
     payload = {"name": "Alice deck", "format": "modern",
                "mainboard": [{"name": "Lightning Bolt", "quantity": 4}]}
-    client.post("/v1/decks/save", json=payload, headers={"X-API-Key": "alice-key"})
-    # Alice sees her deck.
-    alice = client.get("/v1/decks/history", headers={"X-API-Key": "alice-key"}).json()["decks"]
-    assert len(alice) == 1 and alice[0]["name"] == "Alice deck"
+    saved = client.post("/v1/decks/save", json=payload, headers={"X-API-Key": "alice-key"})
+    # The API key alone is not a signed-in user, so history does not list the deck id.
+    alice = client.get("/v1/decks/history", headers={"X-API-Key": "alice-key"})
+    assert alice.status_code == 401
+    assert saved.json()["id"] not in alice.text
 
 
 _DECK = {"name": "Keyed deck", "format": "modern",
@@ -116,10 +123,13 @@ def test_no_response_ever_contains_the_api_key_or_owner(isolated_history, monkey
     saved = client.post("/v1/decks/save", json=_DECK, headers=alice)
     responses = [
         saved,
-        client.get("/v1/decks/history", headers=alice),
         client.get(f"/v1/decks/saved/{saved.json()['id']}", headers=alice),
         client.get(f"/v1/decks/shared/{saved.json()['share_token']}"),
     ]
+    history = client.get("/v1/decks/history", headers=alice)
+    assert history.status_code == 401
+    assert "alice-key" not in history.text
+    assert saved.json()["id"] not in history.text
     for response in responses:
         assert response.status_code == 200, response.text
         assert "alice-key" not in response.text
@@ -144,9 +154,9 @@ def test_saved_by_id_requires_key_and_ownership(isolated_history, monkeypatch):
     assert client.get(url, headers={"X-API-Key": "bob-key"}).status_code == 404
     assert client.delete(url, headers={"X-API-Key": "bob-key"}).status_code == 404
     assert client.get(url, headers={"X-API-Key": "alice-key"}).status_code == 200
-    # Bob's history does not include Alice's deck.
-    bob = client.get("/v1/decks/history", headers={"X-API-Key": "bob-key"}).json()["decks"]
-    assert bob == []
+    bob = client.get("/v1/decks/history", headers={"X-API-Key": "bob-key"})
+    assert bob.status_code == 401
+    assert saved["id"] not in bob.text
     # The share link stays public.
     assert client.get(f"/v1/decks/shared/{saved['share_token']}").status_code == 200
 
@@ -191,7 +201,7 @@ def test_raw_key_owners_are_hashed_on_startup():
     svc.save(name="pre-fix", format_id="modern", mainboard=[], owner="raw-secret-key")
     # Simulate a row written before hashing existed, then a restart.
     import app.services.deck_history_service as history_module
-    history_module._ready_engines.discard(id(engine))
+    history_module._ready_engines.discard(engine)
     with engine.begin() as conn:
         conn.execute(text("UPDATE saved_decks SET owner = 'raw-secret-key'"))
     assert svc.history(owner=owner_id("raw-secret-key"))[0]["name"] == "pre-fix"

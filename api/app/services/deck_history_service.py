@@ -21,10 +21,13 @@ omitted from the sitemap so the site can send noindex).
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
+import re
 import secrets
 import uuid
+import weakref
 from datetime import datetime, timezone
 
 from sqlalchemy import inspect, or_, text
@@ -36,7 +39,9 @@ from app.services.secret_scrub import scrub_secrets
 # Track which engines have had the schema created (keyed by id) so the
 # lazy create_all runs once per engine — not once globally, which would
 # skip table creation for a second engine (e.g. an isolated test DB).
-_ready_engines: set[int] = set()
+# Weak refs, not id(engine). CPython reuses ids after the engine is collected,
+# and a stale int would skip CREATE TABLE on the next empty database.
+_ready_engines: weakref.WeakSet = weakref.WeakSet()
 
 
 def _now() -> str:
@@ -47,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 _KEY_PREFIX = "key:"
 _USER_PREFIX = "user:"
+_SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{20,200}$")
 
 _COLORS = ("W", "U", "B", "R", "G", "C")
 _CARD_TYPES = {
@@ -71,7 +77,18 @@ _ADDED_COLUMNS = {
     "mana_curve": "JSON",
     "card_types": "JSON",
     "key_cards": "JSON",
+    "edit_secret_hash": "VARCHAR(64)",
 }
+
+
+def _edit_secret_matches(stored: str | None, presented: str | None) -> bool:
+    """Constant-time check of a per-deck edit secret. Legacy rows have no hash."""
+    if not stored or not presented or not _SECRET_RE.match(presented):
+        return False
+    digest = hashlib.sha256(presented.encode("utf-8")).hexdigest()
+    if len(digest) != len(stored):
+        return False
+    return hmac.compare_digest(digest, stored)
 
 
 def owner_id(api_key: str | None) -> str | None:
@@ -148,13 +165,13 @@ def _ensure_saved_deck_columns(engine) -> None:
 
 def ensure_saved_deck_schema(engine) -> None:
     """Create or migrate ``saved_decks`` on ``engine``. Safe to call twice."""
-    if id(engine) in _ready_engines:
+    if engine in _ready_engines:
         return
     _set_aside_legacy_table(engine)
     Base.metadata.create_all(engine, tables=[SavedDeck.__table__])
     _ensure_saved_deck_columns(engine)
     _hash_raw_owners(engine)
-    _ready_engines.add(id(engine))
+    _ready_engines.add(engine)
 
 
 def _json_list(value: object) -> list:
@@ -306,7 +323,7 @@ class DeckHistoryService:
         notes: str = "",
         evaluation: dict | None = None,
         owner: str | None = None,
-        visibility: str = "public",
+        visibility: str = "unlisted",
         colors: list[str] | None = None,
         price_usd: float | None = None,
         card_notes: list[dict] | None = None,
@@ -320,6 +337,12 @@ class DeckHistoryService:
         board = [dict(card) for card in mainboard]
         side = [dict(card) for card in (sideboard or [])]
         types = clean_card_types(card_types)
+        # Anonymous decks (including the site's shared API key) all share one
+        # owner, so the id alone must not be enough to delete them.
+        edit_secret = None if (owner or "").startswith(_USER_PREFIX) else secrets.token_urlsafe(32)
+        extras = list(secret_values or [])
+        if edit_secret:
+            extras.append(edit_secret)
         content = scrub_secrets(
             {
                 "name": name or "Untitled deck",
@@ -334,11 +357,11 @@ class DeckHistoryService:
                 "card_types": types,
                 "key_cards": clean_key_cards(key_cards, board, types),
             },
-            extra=secret_values,
+            extra=extras,
         )
         assert isinstance(content, dict)
         if visibility not in {"public", "unlisted"}:
-            visibility = "public"
+            visibility = "unlisted"
         row = SavedDeck(
             id=uuid.uuid4().hex,
             share_token=secrets.token_urlsafe(12),
@@ -359,12 +382,17 @@ class DeckHistoryService:
             mana_curve=content["mana_curve"] if isinstance(content["mana_curve"], list) else [],
             card_types=content["card_types"] if isinstance(content["card_types"], dict) else {},
             key_cards=content["key_cards"] if isinstance(content["key_cards"], list) else [],
+            edit_secret_hash=hashlib.sha256(edit_secret.encode("utf-8")).hexdigest() if edit_secret else None,
         )
         session = self._session()
         try:
             session.add(row)
             session.commit()
-            return self._to_dict(row)
+            payload = self._to_dict(row)
+            # Returned once. Later reads omit it; only the hash is stored.
+            if edit_secret:
+                payload["edit_secret"] = edit_secret
+            return payload
         finally:
             session.close()
 
@@ -456,13 +484,19 @@ class DeckHistoryService:
         finally:
             session.close()
 
-    def delete(self, deck_id: str, *, owner: str | None = None) -> bool:
+    def delete(self, deck_id: str, *, owner: str | None = None, edit_secret: str | None = None) -> bool:
         self._ensure()
         session = self._session()
         try:
             row = session.get(SavedDeck, deck_id)
             if not _can_access(row, owner):
                 return False
+            assert row is not None
+            # A signed-in library is proved by the session. Anonymous rows,
+            # including ones saved before edit secrets existed, are not.
+            if not (row.owner or "").startswith(_USER_PREFIX):
+                if not _edit_secret_matches(row.edit_secret_hash, edit_secret):
+                    return False
             session.delete(row)
             session.commit()
             return True

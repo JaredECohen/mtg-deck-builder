@@ -42,8 +42,6 @@ from app.models import (
     VerifyLinkRequest,
 )
 from app.rate_limiter import (
-    auth_email_limiter,
-    auth_ip_limiter,
     deck_rate_limiter,
     evaluate_rate_limiter,
     prose_rate_limiter,
@@ -64,7 +62,7 @@ from app.workers import JobNotFound, get_job_queue
 
 
 import app.services.auth_service as auth_module
-from app.services.auth_service import normalize_email
+from app.services.auth_service import log_auth_debug_configuration, normalize_email, valid_preauth
 from app.services.deck_history_service import DeckHistoryService, owner_id
 from app.services.vector_retrieval import CardVectorRetriever
 
@@ -83,6 +81,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+log_auth_debug_configuration()
 
 # Behind a reverse proxy (the Next.js /api/backend proxy, a load balancer)
 # every request arrives from the proxy's address, so per-client rate limits
@@ -97,16 +96,45 @@ TRUST_FORWARDED = os.getenv("MTG_TRUST_FORWARDED", "").lower() in {"1", "true", 
 # can't override it), while req.client is Fly's internal proxy address.
 ON_FLY = bool(os.getenv("FLY_APP_NAME"))
 
+_last_ip_fallback_log: dict[str, float] = {}
+_IP_FALLBACK_LOG_SECONDS = 60.0
+
+
+def _note_client_ip_fallback(reason: str) -> None:
+    """Warn when a production request has no platform client IP. At most once a minute per reason."""
+    production = bool(os.getenv("FLY_APP_NAME", "").strip()) or os.getenv("ENV", "").strip().lower() == "production"
+    if not production:
+        return
+    now = time.monotonic()
+    previous = _last_ip_fallback_log.get(reason, 0.0)
+    if previous and now - previous < _IP_FALLBACK_LOG_SECONDS:
+        return
+    _last_ip_fallback_log[reason] = now
+    logger.warning("client IP fell back to %s; rate limits may share one bucket", reason)
+
 
 def client_key(req: Request) -> str:
+    """Rate-limit identity.
+
+    A client-supplied ``X-Forwarded-For`` is ignored unless this process is
+    explicitly configured to trust it, or the request presents a valid API key.
+    Only the web proxy holds that key, and it sets the header from the
+    platform client IP (``x-vercel-forwarded-for`` or ``x-real-ip``), not from
+    the browser's header. Direct callers are limited by ``Fly-Client-IP`` or
+    the socket peer.
+    """
     if TRUST_FORWARDED or is_valid_key(req.headers.get("x-api-key")):
         forwarded = req.headers.get("x-forwarded-for", "")
         first = forwarded.split(",", 1)[0].strip()
         if first:
             return first
     if ON_FLY and req.headers.get("fly-client-ip"):
+        _note_client_ip_fallback("fly-client-ip")
         return req.headers["fly-client-ip"]
-    return req.client.host if req.client else "unknown"
+    if req.client and req.client.host:
+        return req.client.host
+    _note_client_ip_fallback("missing")
+    return "unknown"
 
 
 # Whole-response cache for identical generate requests (spec §25 "cache
@@ -417,19 +445,38 @@ def _extra_secrets(session_token: str | None, api_key: str | None) -> list[str]:
     return [value for value in (session_token, api_key) if value]
 
 
+def _session_header(x_user_session: str | None) -> str:
+    return (x_user_session or "").strip()
+
+
 def current_owner(
     key: str | None = Depends(require_api_key),
     x_user_session: str | None = Header(default=None),
 ) -> str | None:
     """Personal library when a session is present, otherwise the API-key owner.
 
-    A signed-in browser still sends the site's API key through the proxy.
-    The session wins so that deck is not filed under the shared server key.
+    A presented session that is missing, unknown, or expired is a 401. It must
+    not fall back to the shared API-key owner: that owner is every anonymous
+    save on the public site.
     """
-    account = auth_module.owner_for_session(x_user_session)
-    if account:
+    token = _session_header(x_user_session)
+    if token:
+        account = auth_module.owner_for_session(token)
+        if not account:
+            raise HTTPException(status_code=401, detail="Sign in required.")
         return account
     return owner_id(key)
+
+
+def require_signed_in_user(
+    _key: str | None = Depends(require_api_key),
+    x_user_session: str | None = Header(default=None),
+) -> str:
+    """History, rename, and publish belong to a real account, not the shared key."""
+    account = auth_module.owner_for_session(_session_header(x_user_session))
+    if not account:
+        raise HTTPException(status_code=401, detail="Sign in required.")
+    return account
 
 
 @app.post("/v1/decks/save")
@@ -468,8 +515,9 @@ def save_deck(
 @app.get("/v1/decks/history")
 def deck_history_list(
     limit: int = 50,
-    owner: str | None = Depends(current_owner),
+    owner: str = Depends(require_signed_in_user),
 ) -> dict:
+    """The signed-in library only. Anonymous decks are not listed, so their ids stay put."""
     return {"decks": deck_history.history(owner=owner, limit=max(1, min(limit, 200)))}
 
 
@@ -499,7 +547,7 @@ def update_saved_deck(
     request: UpdateDeckRequest,
     x_user_session: str | None = Header(default=None),
     key: str | None = Depends(require_api_key),
-    owner: str | None = Depends(current_owner),
+    owner: str = Depends(require_signed_in_user),
 ) -> dict:
     """Rename a deck or change whether its page is indexable."""
     if request.name is None and request.visibility is None:
@@ -528,8 +576,10 @@ def get_shared_deck(token: str) -> dict:
 def delete_saved_deck(
     deck_id: str,
     owner: str | None = Depends(current_owner),
+    x_deck_edit_secret: str | None = Header(default=None),
 ) -> dict:
-    if not deck_history.delete(deck_id, owner=owner):
+    """User libraries delete with the session. Anonymous decks need the edit secret."""
+    if not deck_history.delete(deck_id, owner=owner, edit_secret=x_deck_edit_secret):
         raise HTTPException(status_code=404, detail="saved deck not found")
     return {"deleted": deck_id}
 
@@ -538,19 +588,29 @@ def delete_saved_deck(
 def request_magic_link(
     request: MagicLinkRequest,
     req: Request,
+    x_preauth: str | None = Header(default=None),
     _key: str | None = Depends(require_api_key),
 ) -> dict:
     """Email a one-time sign-in link. The response does not reveal whether
     the address already has an account. The link itself is only included
-    when MTG_AUTH_DEBUG is set."""
-    if not auth_ip_limiter.is_allowed(f"magic-ip:{client_key(req)}"):
-        raise HTTPException(status_code=429, detail="Too many sign-in requests. Wait a bit and try again.")
+    when MTG_AUTH_DEBUG is set, and never when this process is production.
+
+    ``X-Preauth`` is the cookie the web server set for this browser. The link
+    will not sign anyone in without it. Budgets are stored in the database.
+    """
+    limited = "Too many sign-in requests. Wait a bit and try again."
+    if not auth_module.auth_service.consume_ip(client_key(req)):
+        raise HTTPException(status_code=429, detail=limited)
     email = normalize_email(request.email)
     if email is None:
         raise HTTPException(status_code=400, detail="Enter a valid email address.")
-    if not auth_email_limiter.is_allowed(f"magic-email:{email}"):
-        raise HTTPException(status_code=429, detail="Too many sign-in requests. Wait a bit and try again.")
-    return auth_module.auth_service.request_magic_link(email)
+    if not valid_preauth(x_preauth):
+        raise HTTPException(status_code=400, detail="Sign-in could not be started. Try again.")
+    if not auth_module.auth_service.consume_email_send(email, client_key(req)):
+        # Budgets are checked before a new link is stored, so a throttle
+        # cannot delete a link that is still waiting to be confirmed.
+        raise HTTPException(status_code=429, detail=limited)
+    return auth_module.auth_service.request_magic_link(email, x_preauth or "")
 
 
 @app.post("/v1/auth/verify")
@@ -558,8 +618,19 @@ def verify_magic_link(
     request: VerifyLinkRequest,
     _key: str | None = Depends(require_api_key),
 ) -> dict:
-    result = auth_module.auth_service.verify(request.token)
-    if result is None:
+    result = auth_module.auth_service.verify(request.token, request.preauth, request.previous_session)
+    if result == auth_module.PREAUTH_MISMATCH:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "preauth_mismatch",
+                "message": (
+                    "This sign-in link was requested on another device. "
+                    "Request a new link from this browser."
+                ),
+            },
+        )
+    if not isinstance(result, dict):
         raise HTTPException(status_code=400, detail="That sign-in link is invalid or expired.")
     return result
 
