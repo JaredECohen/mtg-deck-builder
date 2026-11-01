@@ -19,14 +19,28 @@ type Catalog = {
   decks?: object;
 };
 
-let listsPromise: Promise<Catalog> | null = null;
+const listsCache: { current: Promise<Catalog> | null } = { current: null };
+
+/**
+ * Share one in-flight import, but drop it if the import fails so the next
+ * call can try again. A cached rejection would fail every later ?example=.
+ */
+export function loadCachedPromise<T>(cache: { current: Promise<T> | null }, start: () => Promise<T>): Promise<T> {
+  if (!cache.current) {
+    const pending = start().catch((error: unknown) => {
+      if (cache.current === pending) cache.current = null;
+      throw error;
+    });
+    cache.current = pending;
+  }
+  return cache.current;
+}
 
 /** Loaded only when an ?example= id is actually resolved, not with the builder shell. */
 export function loadExampleLists(): Promise<Catalog> {
-  if (!listsPromise) {
-    listsPromise = import("../data/example-deck-lists.json").then((mod) => (mod.default ?? mod) as Catalog);
-  }
-  return listsPromise;
+  return loadCachedPromise(listsCache, () =>
+    import("../data/example-deck-lists.json").then((mod) => (mod.default ?? mod) as Catalog),
+  );
 }
 
 function isCardList(value: unknown): value is ExampleCard[] {

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exampleBuilderHref, getExampleDeck, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
+import { exampleBuilderHref, getExampleDeck, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
 
 test("?example= prepopulates the official burn list", async () => {
   const deck = await prepopulateFromExample("mono-red-burn");
@@ -50,7 +50,7 @@ test("the builder imports the slim list only when an example id is resolved", ()
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/workshop/analyze-workflow.tsx"),
     "utf8",
   );
-  assert.match(workflow, /exampleId \? await prepopulateFromExample\(exampleId\) : null/);
+  assert.match(workflow, /if \(exampleId\) \{[\s\S]*prepopulateFromExample\(exampleId\)/);
 });
 
 test("a product token is not in the sleeveable list", async () => {
@@ -88,6 +88,39 @@ test("loading an example does not adopt or replace the saved draft", async () =>
   assert.equal(restored.commander, "Atraxa, Praetors' Voice");
   assert.equal(restored.notes, "keep this");
   assert.equal(restored.mainboard[0]?.name, "My Draft Card");
+});
+
+test("a failed example-list import can be retried and the saved draft still loads", async () => {
+  const cache: { current: Promise<string> | null } = { current: null };
+  let calls = 0;
+  const start = () => {
+    calls += 1;
+    return Promise.reject(new Error("chunk failed"));
+  };
+  await assert.rejects(() => loadCachedPromise(cache, start), /chunk failed/);
+  assert.equal(cache.current, null);
+  await assert.rejects(() => loadCachedPromise(cache, start), /chunk failed/);
+  assert.equal(calls, 2);
+
+  const seed = resolveAnalyzeSeed({
+    example: null,
+    draft: {
+      format: "commander",
+      mainboard: [{ name: "My Draft Card", quantity: 1 }],
+      notes: "keep this",
+    },
+    defaultNotes: "fallback",
+  });
+  assert.equal(seed.persistDraft, true);
+  assert.equal(seed.format, "commander");
+  assert.equal(seed.notes, "keep this");
+  assert.equal(seed.mainboard[0]?.name, "My Draft Card");
+
+  const workflow = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/workshop/analyze-workflow.tsx"),
+    "utf8",
+  );
+  assert.match(workflow, /catch \{[\s\S]*example = null;/);
 });
 
 test("the analyze workflow refuses to autosave an example over the draft", () => {

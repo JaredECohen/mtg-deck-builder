@@ -66,7 +66,15 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
         if (!cancelled) setDraftHydrated(true);
         return;
       }
-      const example = exampleId ? await prepopulateFromExample(exampleId) : null;
+      let example = null;
+      if (exampleId) {
+        try {
+          example = await prepopulateFromExample(exampleId);
+        } catch {
+          // The list chunk failed. Drop the example and keep the saved draft.
+          example = null;
+        }
+      }
       if (cancelled) return;
       const seed = resolveAnalyzeSeed({
         example,

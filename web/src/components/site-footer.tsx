@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_FOOTER_SLOT } from "@/lib/ads";
+import { syncFooterAds } from "@/lib/footer-ads";
 
 export function SiteFooter() {
+  const pathname = usePathname();
   // Fail closed until this page's server HTML opts in with [data-ads="on"].
+  // Re-check on every client navigation; the layout does not remount.
   const [showAds, setShowAds] = useState(false);
   useEffect(() => {
-    setShowAds(document.querySelector("[data-ads='on']") !== null);
-  }, []);
+    setShowAds(syncFooterAds(document));
+  }, [pathname]);
   return (
     <footer className="site-footer">
       {showAds ? <AdSlot slot={ADSENSE_FOOTER_SLOT} allowed /> : null}
