@@ -1,11 +1,14 @@
 import "./globals.css";
 
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import { AdsProvider } from "@/components/ads-provider";
 import { SiteAnalytics } from "@/components/site-analytics";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { pageAllowsAds } from "@/lib/ads-policy";
 import { ADSENSE_CLIENT } from "@/lib/ads";
 import { SITE_URL } from "@/lib/blog";
 
@@ -18,7 +21,9 @@ export const metadata: Metadata = {
   ...(ADSENSE_CLIENT ? { other: { "google-adsense-account": ADSENSE_CLIENT } } : {}),
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const showAds = pageAllowsAds(pathname);
   return (
     <html lang="en">
       <head>
@@ -27,8 +32,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="impact-site-verification" {...{ value: "0cca02c1-3e06-41f9-b6c2-5deba4489091" }} />
         {/* A literal <script> in the server HTML, not next/script: that only
             emits a <link rel="preload"> and injects the tag client-side, and
-            AdSense's "code snippet" verification reads the raw HTML. */}
-        {ADSENSE_CLIENT ? (
+            AdSense's "code snippet" verification reads the raw HTML.
+            Unreviewed and other noindex routes omit it entirely. */}
+        {showAds && ADSENSE_CLIENT ? (
           <script
             async
             crossOrigin="anonymous"
@@ -37,10 +43,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         ) : null}
       </head>
       <body>
-        <SiteHeader />
-        {children}
-        <SiteFooter />
-        <SiteAnalytics />
+        <AdsProvider allow={showAds}>
+          <SiteHeader />
+          {children}
+          <SiteFooter showAds={showAds} />
+          <SiteAnalytics />
+        </AdsProvider>
       </body>
     </html>
   );

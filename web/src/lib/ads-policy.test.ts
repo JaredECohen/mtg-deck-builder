@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import test from "node:test";
+
+import { HiddenInArticleAd, mdxComponentsForPost } from "../components/blog/mdx-components";
+import { shouldRenderAdSlot } from "./ads";
+import { pageAllowsAds } from "./ads-policy";
+
+test("unreviewed and noindex routes do not allow ads", () => {
+  assert.equal(pageAllowsAds("/blog/your-first-game-of-magic"), false);
+  assert.equal(pageAllowsAds("/blog/should-you-play-aggro"), true);
+  assert.equal(pageAllowsAds("/blog/deck-archetypes"), true);
+  assert.equal(pageAllowsAds("/signin"), false);
+  assert.equal(pageAllowsAds("/library"), false);
+  assert.equal(pageAllowsAds("/auth/verify"), false);
+  assert.equal(pageAllowsAds("/"), true);
+});
+
+test("an unreviewed post's MDX map renders no ad unit", () => {
+  const components = mdxComponentsForPost(false);
+  assert.equal(components.InArticleAd, HiddenInArticleAd);
+  const html = renderToStaticMarkup(createElement(components.InArticleAd));
+  assert.equal(html, "");
+  assert.doesNotMatch(html, /adsbygoogle|data-ad-client|data-ad-slot/);
+  assert.notEqual(mdxComponentsForPost(true).InArticleAd, HiddenInArticleAd);
+});
+
+test("an ad slot stays off unless the page allows it and both ids are set", () => {
+  assert.equal(shouldRenderAdSlot({ allowed: false, client: "ca-pub-1234567890", slot: "1234567890" }), false);
+  assert.equal(shouldRenderAdSlot({ allowed: true, client: "", slot: "1234567890" }), false);
+  assert.equal(shouldRenderAdSlot({ allowed: true, client: "ca-pub-1234567890", slot: "" }), false);
+  assert.equal(shouldRenderAdSlot({ allowed: true, client: "ca-pub-1234567890", slot: "1234567890" }), true);
+});

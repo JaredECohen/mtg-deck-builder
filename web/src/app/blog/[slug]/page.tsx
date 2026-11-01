@@ -5,7 +5,7 @@ import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 
 import { PostCard } from "@/components/blog/post-card";
-import { mdxComponents } from "@/components/blog/mdx-components";
+import { mdxComponentsForPost } from "@/components/blog/mdx-components";
 import { GuideView } from "@/components/guide-view";
 import {
   AUTHOR,
@@ -29,6 +29,9 @@ type Params = { params: Promise<{ slug: string }> };
 
 // Scheduled posts aren't in the build's static params; they render on first
 // request once their date arrives (getPost hides them until then).
+// Dynamic so the root layout can see the path and skip the ad script on
+// unreviewed (noindex) guides. A static shell would bake the script in.
+export const dynamic = "force-dynamic";
 export const dynamicParams = true;
 export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS
 
@@ -156,7 +159,7 @@ function Article({ post }: { post: Post }) {
         <div className="blog-prose">
           <MDXRemote
             source={post.body}
-            components={mdxComponents}
+            components={mdxComponentsForPost(post.reviewed)}
             options={{ mdxOptions: { remarkPlugins: [remarkGfm] } }}
           />
         </div>

@@ -55,6 +55,11 @@ export function InArticleAd() {
   return <AdSlot slot={ADSENSE_IN_ARTICLE_SLOT} className="blog-ad" />;
 }
 
+/** Unreviewed guides keep the MDX tag but must not mount an ad unit. */
+export function HiddenInArticleAd() {
+  return null;
+}
+
 /** Official product list, with a button that opens the builder prefilled via ?example=. */
 export function DeckBlock({ id }: { id: string }) {
   const deck = getCatalogDeck(id);
@@ -199,3 +204,9 @@ export const mdxComponents = {
   InArticleAd,
   Callout,
 };
+
+/** Reviewed posts keep the ad break. Every other post renders the tag as nothing. */
+export function mdxComponentsForPost(reviewed: boolean) {
+  if (reviewed) return mdxComponents;
+  return { ...mdxComponents, InArticleAd: HiddenInArticleAd };
+}

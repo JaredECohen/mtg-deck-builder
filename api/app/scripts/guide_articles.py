@@ -70,9 +70,10 @@ def sources_sentence(deck: dict) -> str:
     listed = ", ".join(parts)
     # produced_mana counts every permanent that can add a color, including creatures.
     if any(sources.get(color, 0) > lands for color in "WUBRG"):
+        joined = " and ".join(parts) if len(parts) <= 2 else ", ".join(parts[:-1]) + f", and {parts[-1]}"
         return (
-            f"{deck['name']} has {listed} mana sources, not lands. "
-            f"The list plays {lands} land cards; mana creatures are included in the source count."
+            f"{deck['name']} plays {lands} lands. "
+            f"It can produce mana with {joined} sources, because some creatures also add mana."
         )
     return f"{deck['name']} has {listed} mana sources and {lands} land cards."
 

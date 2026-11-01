@@ -3,10 +3,10 @@ import Link from "next/link";
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_FOOTER_SLOT } from "@/lib/ads";
 
-export function SiteFooter() {
+export function SiteFooter({ showAds = true }: { showAds?: boolean }) {
   return (
     <footer className="site-footer">
-      <AdSlot slot={ADSENSE_FOOTER_SLOT} className="site-footer-ad" />
+      {showAds ? <AdSlot slot={ADSENSE_FOOTER_SLOT} className="site-footer-ad" /> : null}
       <nav className="site-footer-links" aria-label="Site">
         <Link href="/">Deck Builder</Link>
         <Link href="/blog">Guides</Link>
