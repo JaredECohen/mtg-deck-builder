@@ -2,9 +2,10 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
-const AdsAllowedContext = createContext(true);
+// Fail closed. A page opts in with <AdsProvider allow>; otherwise no slot renders.
+const AdsAllowedContext = createContext(false);
 
-/** Pages that are unreviewed or noindex set allow to false for the whole tree. */
+/** Unreviewed, missing, and noindex pages leave this false. */
 export function AdsProvider({ allow, children }: { allow: boolean; children: ReactNode }) {
   return <AdsAllowedContext.Provider value={allow}>{children}</AdsAllowedContext.Provider>;
 }

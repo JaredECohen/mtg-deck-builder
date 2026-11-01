@@ -47,6 +47,26 @@ test("a thin reviewed guide fails the rubric", () => {
   assert.ok(problems.some((line) => line.includes("Fan Content")));
 });
 
+test("a reviewed guide must name the Fan Content notice and MTGJSON", () => {
+  const base = {
+    data: { reviewed: true, author: "Jared Cohen", updated: "2026-11-01" },
+    exampleIds: IDS,
+  };
+  const noNotice = reviewPost({
+    ...base,
+    file: "no-notice.mdx",
+    body: reviewedBody().replace("<FanContentNotice />", ""),
+  });
+  assert.ok(noNotice.some((line) => line.includes("Fan Content")));
+
+  const noMtgjson = reviewPost({
+    ...base,
+    file: "no-mtgjson.mdx",
+    body: reviewedBody().replaceAll("MTGJSON", "the deck file"),
+  });
+  assert.ok(noMtgjson.some((line) => line.includes("MTGJSON")));
+});
+
 test("a sourced guide with a real deck id passes", () => {
   const problems = reviewPost({
     file: "ok.mdx",

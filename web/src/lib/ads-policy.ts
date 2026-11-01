@@ -11,8 +11,10 @@ export function pageAllowsAds(pathname: string): boolean {
   const path = (pathname.split("?")[0] || "/").replace(/\/+$/, "") || "/";
   if (NO_ADS_PATHS.has(path)) return false;
   const slug = path.match(/^\/blog\/([^/]+)$/)?.[1];
-  if (!slug || isCategory(slug)) return true;
+  if (!slug) return true;
+  if (isCategory(slug)) return true;
+  // No published post: 404, archived, draft, or still scheduled. Fail closed.
   const post = getPost(slug);
-  if (!post) return true;
+  if (!post) return false;
   return post.reviewed;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { EnableAds } from "@/components/enable-ads";
 import { SITE_NAME } from "@/lib/blog";
 
 export const metadata: Metadata = {
@@ -14,6 +15,7 @@ const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
 export default function ContactPage() {
   return (
     <main className="shell legal-page">
+      <EnableAds />
       <h1>Contact</h1>
       <p>
         Questions, bug reports and feedback are all welcome. Feedback on generated decks is especially useful: if a deck

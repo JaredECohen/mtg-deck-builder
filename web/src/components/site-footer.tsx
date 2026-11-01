@@ -1,12 +1,20 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_FOOTER_SLOT } from "@/lib/ads";
 
-export function SiteFooter({ showAds = true }: { showAds?: boolean }) {
+export function SiteFooter() {
+  // Fail closed until this page's server HTML opts in with [data-ads="on"].
+  const [showAds, setShowAds] = useState(false);
+  useEffect(() => {
+    setShowAds(document.querySelector("[data-ads='on']") !== null);
+  }, []);
   return (
     <footer className="site-footer">
-      {showAds ? <AdSlot slot={ADSENSE_FOOTER_SLOT} className="site-footer-ad" /> : null}
+      {showAds ? <AdSlot slot={ADSENSE_FOOTER_SLOT} allowed /> : null}
       <nav className="site-footer-links" aria-label="Site">
         <Link href="/">Deck Builder</Link>
         <Link href="/blog">Guides</Link>

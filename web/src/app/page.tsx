@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
+import { EnableAds } from "@/components/enable-ads";
 import { indexablePosts } from "@/lib/blog";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
@@ -81,6 +82,7 @@ export default function HomePage() {
   };
   return (
     <main className="shell">
+      <EnableAds />
       <header className="hero hero-compact">
         <div className="hero-copy">
           <div className="eyebrow">Meta-aware deckbuilding</div>

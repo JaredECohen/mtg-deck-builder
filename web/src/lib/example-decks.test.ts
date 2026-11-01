@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import { exampleBuilderHref, getExampleDeck, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
 
-test("?example= prepopulates the official burn list", () => {
-  const deck = prepopulateFromExample("mono-red-burn");
+test("?example= prepopulates the official burn list", async () => {
+  const deck = await prepopulateFromExample("mono-red-burn");
   assert.ok(deck);
   assert.equal(deck.format, "pioneer");
   assert.equal(deck.commander, "");
@@ -17,16 +17,16 @@ test("?example= prepopulates the official burn list", () => {
   assert.equal(exampleBuilderHref("mono-red-burn"), "/?example=mono-red-burn#builder");
 });
 
-test("an unknown example id does not invent a deck", () => {
-  assert.equal(prepopulateFromExample("not-a-real-deck"), null);
-  assert.equal(prepopulateFromExample(null), null);
-  assert.equal(prepopulateFromExample(""), null);
+test("an unknown example id does not invent a deck", async () => {
+  assert.equal(await prepopulateFromExample("not-a-real-deck"), null);
+  assert.equal(await prepopulateFromExample(null), null);
+  assert.equal(await prepopulateFromExample(""), null);
 });
 
-test("prototype keys are not decks and do not throw", () => {
+test("prototype keys are not decks and do not throw", async () => {
   for (const id of ["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty"]) {
-    assert.equal(getExampleDeck(id), null);
-    assert.equal(prepopulateFromExample(id), null);
+    assert.equal(await getExampleDeck(id), null);
+    assert.equal(await prepopulateFromExample(id), null);
   }
   const inherited = Object.create({
     toString: {
@@ -41,14 +41,20 @@ test("prototype keys are not decks and do not throw", () => {
   assert.equal(readExampleDeck({ "bad-shape": { name: "Nope" } }, "bad-shape"), null);
 });
 
-test("the builder imports the slim list, not the priced catalog", () => {
+test("the builder imports the slim list only when an example id is resolved", () => {
   const source = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "example-decks.ts"), "utf8");
-  assert.match(source, /example-deck-lists\.json/);
+  assert.match(source, /import\(\s*["']\.\.\/data\/example-deck-lists\.json["']\s*\)/);
+  assert.doesNotMatch(source, /import\s+\w+\s+from\s+["'][^"']*example-deck-lists\.json["']/);
   assert.equal(source.includes("example-decks.json"), false);
+  const workflow = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/workshop/analyze-workflow.tsx"),
+    "utf8",
+  );
+  assert.match(workflow, /exampleId \? await prepopulateFromExample\(exampleId\) : null/);
 });
 
-test("a product token is not in the sleeveable list", () => {
-  const deck = prepopulateFromExample("veloci-ramp-tor");
+test("a product token is not in the sleeveable list", async () => {
+  const deck = await prepopulateFromExample("veloci-ramp-tor");
   assert.ok(deck);
   assert.equal(
     deck.mainboard.some((card) => card.name === "Dinosaur Egg"),
@@ -56,8 +62,8 @@ test("a product token is not in the sleeveable list", () => {
   );
 });
 
-test("loading an example does not adopt or replace the saved draft", () => {
-  const example = prepopulateFromExample("mono-red-burn");
+test("loading an example does not adopt or replace the saved draft", async () => {
+  const example = await prepopulateFromExample("mono-red-burn");
   assert.ok(example);
   const draft = {
     format: "commander" as const,

@@ -58,24 +58,33 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const { analyze, reset: resetAnalyzer } = analyzer;
 
   useEffect(() => {
+    let cancelled = false;
     // A shared link replaces the local draft instead of merging with it.
-    if (sharedToken) {
+    // The example list is fetched only when ?example= is present.
+    async function hydrate() {
+      if (sharedToken) {
+        if (!cancelled) setDraftHydrated(true);
+        return;
+      }
+      const example = exampleId ? await prepopulateFromExample(exampleId) : null;
+      if (cancelled) return;
+      const seed = resolveAnalyzeSeed({
+        example,
+        draft: loadManualDraft(),
+        defaultNotes: DEFAULT_NOTES,
+      });
+      persistDraft.current = seed.persistDraft;
+      if (seed.format) setFormat(seed.format);
+      setManualMainboard(seed.mainboard);
+      setManualSideboard(seed.sideboard);
+      setManualCommander(seed.commander);
+      setManualNotes(seed.notes);
       setDraftHydrated(true);
-      return;
     }
-    const example = exampleId ? prepopulateFromExample(exampleId) : null;
-    const seed = resolveAnalyzeSeed({
-      example,
-      draft: loadManualDraft(),
-      defaultNotes: DEFAULT_NOTES,
-    });
-    persistDraft.current = seed.persistDraft;
-    if (seed.format) setFormat(seed.format);
-    setManualMainboard(seed.mainboard);
-    setManualSideboard(seed.sideboard);
-    setManualCommander(seed.commander);
-    setManualNotes(seed.notes);
-    setDraftHydrated(true);
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
     // Only on mount: later token changes are handled by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

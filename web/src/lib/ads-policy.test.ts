@@ -17,6 +17,11 @@ test("unreviewed and noindex routes do not allow ads", () => {
   assert.equal(pageAllowsAds("/"), true);
 });
 
+test("a blog slug with no published post does not allow ads", () => {
+  assert.equal(pageAllowsAds("/blog/this-guide-does-not-exist"), false);
+  assert.equal(pageAllowsAds("/blog/secrets-of-strixhaven-mtg-set-guide"), false);
+});
+
 test("an unreviewed post's MDX map renders no ad unit", () => {
   const components = mdxComponentsForPost(false);
   assert.equal(components.InArticleAd, HiddenInArticleAd);

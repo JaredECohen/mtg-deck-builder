@@ -13,8 +13,18 @@ declare global {
 
 // A manual AdSense display unit. Renders nothing until both the publisher ID
 // and this unit's slot ID are configured.
-export function AdSlot({ slot, className }: { slot: string; className?: string }) {
-  const allowed = useAdsAllowed();
+export function AdSlot({
+  slot,
+  className,
+  allowed: allowedProp,
+}: {
+  slot: string;
+  className?: string;
+  /** Set when the caller already decided. Otherwise the provider (default false) wins. */
+  allowed?: boolean;
+}) {
+  const contextAllowed = useAdsAllowed();
+  const allowed = allowedProp ?? contextAllowed;
   const pushed = useRef(false);
   const render = shouldRenderAdSlot({ allowed, client: ADSENSE_CLIENT, slot });
 

@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 
+import { AdsProvider } from "@/components/ads-provider";
 import { PostCard } from "@/components/blog/post-card";
 import { mdxComponentsForPost } from "@/components/blog/mdx-components";
+import { EnableAds } from "@/components/enable-ads";
 import { GuideView } from "@/components/guide-view";
 import {
   AUTHOR,
@@ -21,6 +23,7 @@ import {
   type CategoryId,
   type Post,
 } from "@/lib/blog";
+import { pageAllowsAds } from "@/lib/ads-policy";
 
 // One dynamic segment serves both /blog/<category> hubs and /blog/<article>.
 // Category ids and article slugs never collide (articles carry keywords).
@@ -29,9 +32,6 @@ type Params = { params: Promise<{ slug: string }> };
 
 // Scheduled posts aren't in the build's static params; they render on first
 // request once their date arrives (getPost hides them until then).
-// Dynamic so the root layout can see the path and skip the ad script on
-// unreviewed (noindex) guides. A static shell would bake the script in.
-export const dynamic = "force-dynamic";
 export const dynamicParams = true;
 export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS
 
@@ -77,11 +77,24 @@ export default async function BlogSlugPage({ params }: Params) {
   if (isCategory(slug)) {
     // A category with no published guide yet (e.g. before its first scheduled date) isn't a page.
     if (!postsInCategory(slug).length) notFound();
-    return <CategoryHub category={slug} />;
+    return (
+      <AdsProvider allow>
+        <EnableAds />
+        <CategoryHub category={slug} />
+      </AdsProvider>
+    );
   }
   const post = getPost(slug);
   if (!post) notFound();
-  return <Article post={post} />;
+  // Archived, draft, and not-yet-published slugs never reach here: getPost
+  // omits them, and pageAllowsAds is false for that miss.
+  const allowAds = pageAllowsAds(`/blog/${slug}`);
+  return (
+    <AdsProvider allow={allowAds}>
+      {allowAds ? <EnableAds /> : null}
+      <Article post={post} />
+    </AdsProvider>
+  );
 }
 
 function CategoryHub({ category }: { category: CategoryId }) {

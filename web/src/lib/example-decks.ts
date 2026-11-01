@@ -1,4 +1,3 @@
-import catalog from "@/data/example-deck-lists.json";
 import type { ManualDraft } from "@/lib/manual-draft";
 import type { FormatName } from "@/lib/types";
 
@@ -20,7 +19,15 @@ type Catalog = {
   decks?: object;
 };
 
-const data = catalog as Catalog;
+let listsPromise: Promise<Catalog> | null = null;
+
+/** Loaded only when an ?example= id is actually resolved, not with the builder shell. */
+export function loadExampleLists(): Promise<Catalog> {
+  if (!listsPromise) {
+    listsPromise = import("../data/example-deck-lists.json").then((mod) => (mod.default ?? mod) as Catalog);
+  }
+  return listsPromise;
+}
 
 function isCardList(value: unknown): value is ExampleCard[] {
   if (!Array.isArray(value)) return false;
@@ -45,14 +52,15 @@ export function readExampleDeck(decks: object, id: string | null | undefined): E
   return record;
 }
 
-export function listExampleDeckIds(): string[] {
-  const decks = data.decks;
+export async function listExampleDeckIds(): Promise<string[]> {
+  const decks = (await loadExampleLists()).decks;
   if (!decks || typeof decks !== "object") return [];
   return Object.keys(decks).filter((id) => readExampleDeck(decks, id) !== null);
 }
 
-export function getExampleDeck(id: string | null | undefined): ExampleDeck | null {
-  const decks = data.decks;
+export async function getExampleDeck(id: string | null | undefined): Promise<ExampleDeck | null> {
+  if (!id) return null;
+  const decks = (await loadExampleLists()).decks;
   if (!decks || typeof decks !== "object") return null;
   return readExampleDeck(decks, id);
 }
@@ -62,14 +70,17 @@ export function exampleBuilderHref(id: string): string {
   return `/?example=${encodeURIComponent(id)}#builder`;
 }
 
-export function prepopulateFromExample(id: string | null | undefined): {
+export type PopulatedExample = {
   format: FormatName;
   mainboard: ExampleCard[];
   sideboard: ExampleCard[];
   commander: string;
   name: string;
-} | null {
-  const deck = getExampleDeck(id);
+};
+
+export async function prepopulateFromExample(id: string | null | undefined): Promise<PopulatedExample | null> {
+  if (!id) return null;
+  const deck = await getExampleDeck(id);
   if (!deck) return null;
   return {
     format: deck.format,
@@ -95,7 +106,7 @@ export type AnalyzeSeed = {
  * draft, and must not be written back over that draft.
  */
 export function resolveAnalyzeSeed(options: {
-  example: ReturnType<typeof prepopulateFromExample>;
+  example: PopulatedExample | null;
   draft: ManualDraft | null;
   defaultNotes: string;
 }): AnalyzeSeed {
