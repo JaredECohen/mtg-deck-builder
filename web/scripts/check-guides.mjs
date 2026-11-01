@@ -32,7 +32,10 @@ const posts = files.map((file) => {
   const { data, content } = matter(fs.readFileSync(path.join(BLOG_DIR, file), "utf8"));
   return { file, slug: file.replace(/\.mdx$/, ""), data, body: content, date: asDate(data.date) };
 });
-const live = posts.filter((post) => post.data.draft !== true);
+// Archived guides stay in the repo but cannot publish. They still count as
+// real slugs so an old link is not a typo; they do not count as live targets.
+const knownSlugs = new Set(posts.map((post) => post.slug));
+const live = posts.filter((post) => post.data.draft !== true && post.data.archived !== true);
 const dateOf = new Map(live.map((post) => [post.slug, post.date]));
 const firstDate = live.reduce((min, post) => (post.date < min ? post.date : min), "9999-12-31");
 
@@ -50,16 +53,18 @@ for (const post of live) {
   if (!CATEGORIES.has(String(data.category))) fail(`unknown category "${data.category}"`);
 
   // The launch batch shares its first day; after that, one article per day.
-  if (date !== firstDate) {
+  // Reviewed guides are the quality batch and may share a day with each other
+  // or with an older unreviewed guide.
+  if (date !== firstDate && data.reviewed !== true) {
     if (byDate.has(date)) fail(`shares publish date ${date} with ${byDate.get(date)}`);
     byDate.set(date, post.file);
   }
 
   for (const [, slug] of body.matchAll(/\]\(\/blog\/([a-z0-9-]+)(?:#[^)]*)?\)/g)) {
-    if (!CATEGORIES.has(slug) && !dateOf.has(slug)) fail(`broken link /blog/${slug}`);
+    if (!CATEGORIES.has(slug) && !knownSlugs.has(slug)) fail(`broken link /blog/${slug}`);
   }
   for (const slug of Array.isArray(data.related) ? data.related : []) {
-    if (!dateOf.has(slug)) fail(`related slug "${slug}" doesn't exist`);
+    if (!knownSlugs.has(slug)) fail(`related slug "${slug}" doesn't exist`);
   }
   // Every guide needs at least one link that works on its publish day.
   const liveLinks = [...body.matchAll(/\]\(\/blog\/([a-z0-9-]+)/g)].filter(

@@ -3,7 +3,9 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_IN_ARTICLE_SLOT } from "@/lib/ads";
+import { AFFILIATE_DISCLOSURE, isAffiliateUrl, tcgplayerMassEntryUrl } from "@/lib/affiliate";
 import { getPost, isCategory, slugify } from "@/lib/blog";
+import { exampleBuilderHref, getExampleDeck } from "@/lib/example-decks";
 import type { FormatName } from "@/lib/types";
 
 const FORMATS: FormatName[] = ["standard", "modern", "pioneer", "legacy", "commander"];
@@ -50,6 +52,92 @@ export function DeckLabCTA({
 /** In-article ad break. Renders nothing until AdSense and its slot are configured. */
 export function InArticleAd() {
   return <AdSlot slot={ADSENSE_IN_ARTICLE_SLOT} className="blog-ad" />;
+}
+
+/** Official product list, with a button that opens the builder prefilled via ?example=. */
+export function DeckBlock({ id }: { id: string }) {
+  const deck = getExampleDeck(id);
+  if (!deck) {
+    return <p>Example deck “{id}” is not in the priced catalog.</p>;
+  }
+  const buyUrl = tcgplayerMassEntryUrl([
+    ...deck.mainboard,
+    ...deck.sideboard,
+    ...(deck.commander ? [{ name: deck.commander, quantity: 1 }] : []),
+  ]);
+  const showDisclosure = isAffiliateUrl(buyUrl);
+  const kill = deck.analysis.goldfish.avg_kill_turn;
+  return (
+    <section className="deck-block" aria-label={deck.name}>
+      <h3 className="deck-block-title">{deck.name}</h3>
+      <p className="deck-block-meta">
+        {deck.type}, released {deck.release_date}. Product-printing total ${deck.analysis.total_cost_usd.toFixed(2)}{" "}
+        (MTGJSON AllPricesToday, 2026-11-01).
+        {kill != null
+          ? ` Goldfish average winning turn ${kill} over ${deck.analysis.goldfish.games} games.`
+          : ` Goldfish win rate ${(deck.analysis.goldfish.win_rate * 100).toFixed(0)}% over ${deck.analysis.goldfish.games} games.`}
+      </p>
+      {deck.commander ? (
+        <p>
+          <strong>Commander:</strong> {deck.commander}
+        </p>
+      ) : null}
+      <div className="deck-block-list">
+        <ul>
+          {deck.mainboard.map((card) => (
+            <li key={card.name}>
+              {card.quantity} {card.name}
+            </li>
+          ))}
+        </ul>
+        {deck.sideboard.length ? (
+          <>
+            <p>
+              <strong>Sideboard</strong>
+            </p>
+            <ul>
+              {deck.sideboard.map((card) => (
+                <li key={`side-${card.name}`}>
+                  {card.quantity} {card.name}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
+      <p className="deck-block-actions">
+        <Link className="button blog-cta-button" href={exampleBuilderHref(deck.id)}>
+          Open this list in the deck builder
+        </Link>
+      </p>
+      <p className="deck-block-sources">
+        <a href={buyUrl}>Price this list on TCGplayer</a>
+        {deck.source_url ? (
+          <>
+            {" · "}
+            <a href={deck.source_url}>Wizards source</a>
+          </>
+        ) : null}
+        {" · "}
+        <a href={deck.mtgjson_deck_url}>MTGJSON deck file</a>
+      </p>
+      {showDisclosure ? <p className="affiliate-disclosure">{AFFILIATE_DISCLOSURE}</p> : null}
+    </section>
+  );
+}
+
+/** Wizards Fan Content Policy notice. Shown on every reviewed guide. */
+export function FanContentNotice() {
+  return (
+    <aside className="blog-callout">
+      <strong className="blog-callout-title">Fan Content</strong>
+      <p>
+        This is unofficial Fan Content permitted under the{" "}
+        <a href="https://company.wizards.com/en/legal/fancontentpolicy">Fan Content Policy</a>. Not approved/endorsed
+        by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+      </p>
+    </aside>
+  );
 }
 
 export function Callout({ title, children }: { title?: string; children: ReactNode }) {
@@ -99,6 +187,8 @@ export const mdxComponents = {
   a: Anchor,
   table: Table,
   DeckLabCTA,
+  DeckBlock,
+  FanContentNotice,
   InArticleAd,
   Callout,
 };

@@ -142,6 +142,7 @@ test("page URLs keep a normal guide path and a safe format hash link", () => {
     "https://mtgdecklab.app/blog/mtg-formats-explained"
   );
   assert.equal(redactAnalyticsUrl("/?format=modern#builder"), "/?format=modern#builder");
+  assert.equal(redactAnalyticsUrl("/?example=mono-red-burn#builder"), "/?example=mono-red-burn#builder");
   assert.equal(redactAnalyticsUrl("/?format=not-a-format&brief=hello"), "/");
   assert.equal(redactAnalyticsUrl("https://mtgdecklab.app/?utm_campaign=" + "a".repeat(200)), "https://mtgdecklab.app/");
 });

@@ -53,6 +53,18 @@ The snapshot committed in `api/app/data/official_decks.json` is names and
 quantities only. The weekly refresh (`bootstrap_data --refresh-cards`)
 re-downloads it onto the data volume and re-ingests.
 
+### Guide facts (prices, legality, goldfish)
+
+Reviewed guides cite a separate cache, `api/app/data/guide_card_cache.json`,
+built by `python -m app.scripts.build_guide_facts`.
+
+- Decklists: the MTGJSON deck file for each product (`/api/v5/decks/{file}.json`), same MIT license as above. The Wizards `source` URL on that file is what the guide links.
+- Prices: `AllPricesToday.json.gz`, nonfoil `paper.tcgplayer.retail` for that printing, ManaPool nonfoil retail from the same file when TCGplayer has none.
+- Legality, type line, mana value, oracle text, and `produced_mana`: Scryfall `oracle_cards` bulk. One download, then a local filter. No per-card crawl.
+- Clocks: the in-repo goldfish (`app.sim.goldfish`), 120 games, seed 1729. Not a third-party site.
+
+Rebuild with the script. Do not paste prices from a retailer page.
+
 ## Not used
 
 ### MTGGoldfish

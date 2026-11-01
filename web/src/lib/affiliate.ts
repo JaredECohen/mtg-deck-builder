@@ -7,6 +7,12 @@
 
 const AFFILIATE_PREFIX = process.env.NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL ?? "";
 
+/** True when a URL is actually wrapped for a commission, not a plain store link. */
+export function isAffiliateUrl(url: string, prefix: string = AFFILIATE_PREFIX): boolean {
+  if (!prefix || !url) return false;
+  return url.startsWith(prefix) || url.includes("pxf.io") || url.includes("partner.tcgplayer.com");
+}
+
 const SEARCH_BASE = "https://www.tcgplayer.com/search/magic/product";
 const MASS_ENTRY_BASE = "https://www.tcgplayer.com/massentry";
 

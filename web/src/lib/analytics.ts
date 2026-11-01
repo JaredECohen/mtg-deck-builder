@@ -36,7 +36,15 @@ const MAX_VALUE_LENGTH = 80;
 
 // Query keys that may remain on a page-view URL. `brief` is the deck prompt
 // and `deck` is the share token, so both are intentionally absent.
-const QUERY_ALLOWLIST = new Set(["format", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]);
+const QUERY_ALLOWLIST = new Set([
+  "format",
+  "example",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+]);
 const MAX_QUERY_VALUE_LENGTH = 64;
 
 export type AnalyticsProps = Record<string, string>;

@@ -52,8 +52,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title: `${post.title} | ${SITE_NAME}`,
     description: post.description,
     keywords: post.keywords,
-    authors: [{ name: AUTHOR }],
+    authors: [{ name: post.author || AUTHOR }],
     alternates: { canonical: `/blog/${post.slug}` },
+    robots: post.reviewed ? { index: true, follow: true } : { index: false, follow: true },
     openGraph: {
       type: "article",
       title: post.title,
@@ -130,7 +131,7 @@ function Article({ post }: { post: Post }) {
           <h1 className="headline">{post.title}</h1>
           <p className="subhead">{post.description}</p>
           <p className="blog-byline muted">
-            By {AUTHOR} · {SITE_NAME} · Published <time dateTime={post.date}>{formatDate(post.date)}</time>
+            By {post.author || AUTHOR} · {SITE_NAME} · Published <time dateTime={post.date}>{formatDate(post.date)}</time>
             {post.updated !== post.date ? (
               <>
                 {" "}

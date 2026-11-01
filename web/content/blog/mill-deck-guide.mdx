@@ -1,110 +1,114 @@
 ---
-title: "Mill Decks Explained: How Milling Works, Decking Rules and Strategy"
-description: "Mill decks explained: how milling wins by emptying a library, the rule that you lose drawing from an empty library, self-mill vs. opponent mill, pros and cons."
+title: "Can a Mill Deck Win Before Combat Does?"
+description: "Can a mill deck win before combat in Magic: The Gathering? Captain N'ghathrod's precon goldfishes turn 10.69 by attacking. The sim does not mill the opponent."
 date: 2027-01-04
+updated: 2026-11-01
+author: Jared Cohen
+reviewed: true
 category: deck-archetypes
-keywords: ["mill deck mtg", "how does milling work mtg", "decking rule mtg", "self-mill vs mill"]
-related: ["mtg-deck-archetypes-explained", "reanimator-deck-guide", "mtg-control-deck-guide", "how-to-play-against-aggro"]
-draft: false
+keywords: ["mill deck mtg", "captain nghathrod precon", "anowon mill", "does mill win"]
+related: ["reanimator-deck-guide", "mtg-combo-decks-explained", "mtg-control-deck-guide", "mtg-deck-archetypes-explained"]
 ---
 
-In Magic: The Gathering (MTG), a mill deck wins by emptying the opponent's library instead of reducing their life total to 0. "Milling" means putting cards from the top of a library into the graveyard. Once a player's library is empty, they lose the next time they would draw a card, so a mill deck only has to remove every card and then wait for a draw.
+## Short answer
 
-The word comes from Millstone, an old artifact that milled two cards at a time. Today, milling is both a win condition and a tool other decks use to fill their own graveyard. This guide covers how decking works, the two sides of milling and what makes mill strong or weak. For how mill sits among other strategies, see the [deck archetypes overview](/blog/mtg-deck-archetypes-explained).
+A mill deck wins before combat only if it puts cards from the opponent's library into the graveyard faster than combat would reduce their life total, and this simulator will not tell you that. In Magic: The Gathering (MTG), mill is an effect that moves cards from a library to a graveyard. The player loses when they try to draw from an empty library. The Deck Lab goldfish does not mill the opponent. It attacks. So the clocks below are combat clocks on decks that were printed to mill. Read them as the backup plan, then go count mill cards yourself.
 
-## How decking works
+Mind Flayarrrs, Captain N'ghathrod, prices at $135.80 where a TCGplayer nonfoil price existed. Several cards in the product had no such price, so the total undercounts, and the top priced names are Mindcrank, Brainstealer Dragon, and Spellskite. Mindcrank is an actual mill engine. The dragon is a creature the combat goldfish can use. The average winning combat game is turn 10.69. That does not mean the mill plan wins on turn 10. It means the creatures do. Sneak Attack, Anowon, the Ruin Thief, is the other official mill-leaning precon, at $69.98, and a visible slice of that receipt is the basic lands in the product. Anowon's mill is tied to rogue combat damage. The combat clock and the mill plan are the same attacks. That is a different design from a Mindcrank deck, which can mill without attacking.
 
-Running out of cards is called being "decked." The rule is specific, and the details matter.
-
-- **You don't lose when your library is empty.** You lose when you're required to draw a card and can't.
-- **The loss happens as a state-based action.** If you attempted to draw from an empty library since the last time the game checked, you lose the next time it checks, which happens almost immediately.
-- **Every draw counts.** Your normal draw step is the most common way to get decked, but a card that makes you draw two or three cards does it too. If you have to draw two and have one card left, you lose.
-
-So an opponent with zero cards in their library is still in the game until they have to draw. In most games that's their next draw step, which gives them one more turn of actions with whatever is already in their hand and on the battlefield.
-
-### What milling is
-
-Milling moves cards from the top of a library directly to the graveyard. Modern cards use the keyword "mill," as in "target player mills three cards." Milled cards are not drawn, so milling a player doesn't make them lose on its own. It just shrinks their library until a draw finishes them.
+If your group is four players with 40 life and 99-card libraries, one Mindcrank does not end the table. Count how many cards you mill per turn and how many turns you expect to live. The combat number, roughly turn 11, is how long the creature backup takes against one player who never interacts. A table full of interaction is shorter. The [reanimator guide](/blog/reanimator-deck-guide) is what to do with the graveyard you just filled, if the cards were yours. Mill fills theirs.
 
 <InArticleAd />
 
-## The two sides of milling
+## When to choose this
 
-Milling has two very different uses.
+| Situation | Lean in | Walk away |
+| --- | --- | --- |
+| The mill happens even when you do not attack | Mindcrank is the expensive engine on the N'ghathrod list | Do not describe the turn-10 combat clock as the mill clock |
+| The mill happens because you attacked with rogues | Anowon, and the combat goldfish is closer to the real plan | A pure mill deck that folds when it cannot attack |
+| You need a number for the library | Count mill per turn by hand. The sim will not | 120 games of attacking will not empty a library |
+| Basics are a large line cost | Anowon's product prices the lands in the box | A cheap Swamp is not the number in this total |
 
-### Opponent mill: milling as a win condition
+The table is the decision. The deck sections under it are the measurements the decision is allowed to use. If a number is not in those sections, it is not a number this guide is claiming.
 
-This is the classic mill deck. Your whole plan is to empty the opponent's library. A 60-card deck has 53 cards in the library after the opening seven, minus one draw per turn. That's a lot of cards, so mill decks need either big mill effects or many repeated small ones.
+## Example decks
 
-Long-standing mill cards include:
+<DeckBlock id="mind-flayarrrs" />
 
-- **Glimpse the Unthinkable:** a two-mana sorcery in blue and black that makes a player mill ten cards.
-- **Hedron Crab:** a one-mana creature that makes a player mill three cards whenever you play a land.
-- **Traumatize:** a five-mana sorcery that mills half of a player's library, rounded down.
-- **Mesmeric Orb:** an artifact that makes each player mill a card whenever a permanent they control becomes untapped. It hits you too, so it pairs best with a deck that wins fast.
+### Mind Flayarrrs
 
-There's also the famous combo of **Painter's Servant** and **Grindstone**. Painter's Servant makes every card the same color, and Grindstone keeps repeating its mill as long as the two milled cards share a color. Together they mill an opponent's entire library in one activation.
+Mind Flayarrrs, commanded by Captain N'ghathrod is an official Commander Deck released 2022-06-10. The decklist and the Wizards source link come from MTGJSON file MindFlayarrrs_CLB. Source: https://magic.wizards.com/en/articles/archive/feature/commander-legends-battle-baldurs-gate-commander-decklists-2022-05-30.
 
-### Self-mill: milling yourself on purpose
+Read this carefully. The goldfish kills with combat damage. It does not mill the opponent. A fast combat clock here is not evidence that the mill plan is fast.
 
-Self-mill puts your own cards into your graveyard to use them from there. It's not a way to win directly but a resource engine for graveyard strategies.
+The nonland mana curve is 1 at mana value 0, 1 at mana value 1, 15 at mana value 2, 15 at mana value 3, 10 at mana value 4, 10 at mana value 5, 5 at mana value 6, 4 at mana value 7 or more. The list runs 38 lands in the library (the commander is not one of them).
 
-- **Reanimator** mills big creatures and brings them back cheaply. The [Reanimator guide](/blog/reanimator-deck-guide) covers that plan.
-- **Flashback and similar mechanics** let you cast cards from the graveyard, so milling them is like drawing them.
-- **Dredge** lets you replace a draw by milling cards and returning the dredge card to your hand. Golgari Grave-Troll and Life from the Loam are classic dredge cards.
-- **Cards that count your graveyard,** like creatures that grow with each card there, get bigger as you mill.
+Colored sources, using Scryfall produced_mana and counting basic lands as the color on their type line, restricted to this deck's colors: 25 blue, 27 black.
 
-Self-mill creatures like Stitcher's Supplier and Satyr Wayfinder are common in these decks. They put cards into your graveyard and leave a body behind to block or sacrifice.
+MTGJSON AllPricesToday (2026-11-01) prices the exact printing in the product at $135.80 for main deck, sideboard, and commander, using TCGplayer nonfoil retail when it exists. The three most expensive nonbasic names are 1 Mindcrank at $13.32 total, 1 Brainstealer Dragon at $10.72 total, 1 Spellskite at $7.57 total, which is 23.3% of the priced total. Basic lands in the product add $5.49 on their own, because the price is the printing Wizards put in the deck, not the cheapest Plains on the market. These cards had no TCGplayer nonfoil price on that printing, so the total undercounts: Zellix, Sanity Flayer, Haunted One, Captain N'ghathrod.
 
-The risk of self-mill is decking yourself. It rarely happens with moderate self-mill, but decks that mill large chunks of their own library need to watch the count, especially in long games.
+Across 120 goldfish games (seed 1729, midrange policy, opponent at 40 life) it won 90.8% and the average winning game ended on turn 10.69 (median 10). There is no opponent interaction in that number. A goldfish clock is a ceiling on speed, not a match win rate.
 
-## How a mill deck plays
+Budget benchmarks, not upgrade advice: the cheapest same-type card within one mana value in the other official lists we priced, still legal in the format. Mindcrank at $13.32 versus Dimir Locket at $0.19 (a $13.13 gap on one copy); Brainstealer Dragon at $10.72 versus Timothar, Baron of Bats at $0.25 (a $10.47 gap on one copy); Spellskite at $7.57 versus Marang River Prowler at $0.08 (a $7.49 gap on one copy). Those stand-ins do not do the same job. The gap is how much you are paying for the specific card, not a sleeve-in recommendation.
 
-Most opponent-mill decks are built like control decks. They mill a few cards a turn while using removal, counterspells and blockers to survive. The [control deck guide](/blog/mtg-control-deck-guide) covers that style of play.
+Scryfall's oracle-cards bulk dated 2026-11-01 still lists every card in this product as legal in commander.
 
-A typical game:
+Every figure in this section is from that fetch: decklist and printing from MTGJSON on 2026-11-01, legality and mana production from the Scryfall oracle-cards bulk updated 2026-11-01, prices from MTGJSON AllPricesToday dated 2026-11-01, and the clock from the Deck Lab goldfish (120 games, seed 1729) after basic lands were taught to add their own color.
 
-1. **Early:** play cheap repeatable mill like Hedron Crab, and use removal to slow the opponent's creatures.
-2. **Middle:** keep surviving while repeated mill adds up. Every card you mill is a card they never draw.
-3. **Late:** finish with a big mill spell, then hold on for one more turn until they have to draw.
+<DeckBlock id="sneak-attack" />
 
-Track their library size as the game goes. Knowing exactly how many cards are left tells you how many more turns you need to survive and when a big spell will finish the job.
+### Sneak Attack
 
-### Mill in Commander
+Sneak Attack, commanded by Anowon, the Ruin Thief is an official Commander Deck released 2020-09-25. The decklist and the Wizards source link come from MTGJSON file SneakAttack_ZNC. Source: https://magic.wizards.com/en/articles/archive/card-preview/zendikar-rising-commander-decklists-2020-09-09.
 
-In Commander, each player starts with a 99-card library, so milling someone out takes far more cards than in a 60-card format. Mill decks in Commander lean on big effects and repeated triggers, and often need a way to hit several opponents at once. Self-mill is extremely popular there, since graveyard strategies thrive in long games.
+Read this carefully. The goldfish kills with combat damage. It does not mill the opponent. A fast combat clock here is not evidence that the mill plan is fast.
+
+The nonland mana curve is 5 at mana value 1, 14 at mana value 2, 9 at mana value 3, 15 at mana value 4, 7 at mana value 5, 5 at mana value 6, 6 at mana value 7 or more. The list runs 38 lands in the library (the commander is not one of them).
+
+Colored sources, using Scryfall produced_mana and counting basic lands as the color on their type line, restricted to this deck's colors: 26 blue, 26 black.
+
+MTGJSON AllPricesToday (2026-11-01) prices the exact printing in the product at $69.98 for main deck, sideboard, and commander, using TCGplayer nonfoil retail when it exists. The three most expensive nonbasic names are 1 Sygg, River Cutthroat at $4.72 total, 1 Notorious Throng at $3.44 total, 1 Obelisk of Urd at $3.38 total, which is 16.5% of the priced total. Basic lands in the product add $22.80 on their own, because the price is the printing Wizards put in the deck, not the cheapest Plains on the market. These cards had no TCGplayer nonfoil price on that printing, so the total undercounts: Anowon, the Ruin Thief.
+
+Across 120 goldfish games (seed 1729, aggro policy, opponent at 40 life) it won 90.0% and the average winning game ended on turn 11.66 (median 11.0). There is no opponent interaction in that number. A goldfish clock is a ceiling on speed, not a match win rate.
+
+Budget benchmarks, not upgrade advice: the cheapest same-type card within one mana value in the other official lists we priced, still legal in the format. Sygg, River Cutthroat at $4.72 versus Phyrexian Rager at $0.14 (a $4.58 gap on one copy); Notorious Throng at $3.44 versus Cry of the Carnarium at $0.11 (a $3.33 gap on one copy); Obelisk of Urd at $3.38 versus Foreboding Steamboat at $0.33 (a $3.05 gap on one copy). Those stand-ins do not do the same job. The gap is how much you are paying for the specific card, not a sleeve-in recommendation.
+
+Scryfall's oracle-cards bulk dated 2026-11-01 still lists every card in this product as legal in commander.
+
+Every figure in this section is from that fetch: decklist and printing from MTGJSON on 2026-11-01, legality and mana production from the Scryfall oracle-cards bulk updated 2026-11-01, prices from MTGJSON AllPricesToday dated 2026-11-01, and the clock from the Deck Lab goldfish (120 games, seed 1729) after basic lands were taught to add their own color.
 
 <InArticleAd />
 
-## Strengths of mill
+## Common mistakes
 
-- **It ignores life total.** Lifegain decks and big blockers don't stop it. An opponent at 40 life can still lose to an empty library.
-- **It sidesteps creature combat.** Mill doesn't need to attack, so a board full of blockers is no protection.
-- **It's hard to interact with.** Many decks have no way to put cards back into their library, so once cards are milled, they're gone.
-- **Big spells end games suddenly.** A large mill spell can cut a library from small to empty in one turn.
+- Quoting the goldfish turn as a mill speed. The tool does not mill. The page you are reading is the warning.
+- Building mill for a four-player table with one mill card. Ninety-nine-card libraries times three opponents is the actual job.
+- Milling yourself by accident and calling it the same plan. Self-mill is a reanimator setup. Milling the opponent is a win condition. The graveyards are not interchangeable.
+- Paying Mindcrank prices and then never untapping it. An engine that costs $13.32 on this printing has to be the card the deck is about, or it is an expensive permanent that dies to the first removal.
+- Ignoring the unpriced cards on the N'ghathrod list. The $135.80 total is missing any printing that had no TCGplayer nonfoil retail. The real cardboard cost is higher.
 
-## Weaknesses of mill
+## FAQ
 
-Mill also has real problems, and understanding them is the key to playing it well.
+### Does the simulator mill?
 
-### It helps graveyard decks
+No. Wins are combat damage or direct damage. Both official mill precons show a combat clock near turn 11 because that is the plan the tool can see. The mill plan is invisible to it.
 
-Milling an opponent who uses the graveyard can be like giving them free cards. A Reanimator player is happy to see a big creature milled. Flashback, delve and dredge cards all get better. Know what the opponent's deck does before you mill them heavily.
+### Which precon actually mills without attacking?
 
-### It doesn't affect the board
+Mind Flayarrrs includes Mindcrank, which mills when life is lost. Anowon mills when rogues deal combat damage. One can function on a turn you did not attack. The other cannot.
 
-Milling doesn't stop the opponent's creatures. Against fast aggressive decks, a mill deck can mill plenty of cards and still lose to damage. You need enough defense to survive, which is why mill usually pairs with control. The guide on [how to beat aggro](/blog/how-to-play-against-aggro) covers the defensive tools that matter most here.
+### Why is Anowon cheaper?
 
-### Shuffle effects
+The priced total is $69.98 against $135.80, and Anowon's large line items include the basic lands shipped in the product. N'ghathrod's top nonbasic is Mindcrank at $13.32, with several cards unpriced on top of that.
 
-Some cards put the graveyard back into the library. Emrakul, the Aeons Torn shuffles its owner's graveyard into their library when it's put into a graveyard from anywhere, so milling it undoes your work. Elixir of Immortality lets a player shuffle their graveyard back into their library, and Gaea's Blessing triggers a shuffle when it's milled.
+### Is mill good against a combo deck?
 
-### Slow and card-hungry
+Only if you mill the card they needed before they draw it, or you empty the library. Milling them into the graveyard can help a reanimator or graveyard combo. Know which opponent you are milling.
 
-Mill effects that aren't huge take many turns to empty a library, and each mill card you play is one that doesn't block or remove a threat. A mill deck that draws its mill cards without its defense often falls behind.
+## How this was made
 
-## The takeaway
+These guides use official Wizards product lists redistributed by MTGJSON under its MIT license (https://www.mtgjson.com/license/). Each deck block names the MTGJSON file and the Wizards source URL stored on that file. Prices are the nonfoil retail figure in MTGJSON AllPricesToday version 5.3.0+20261101, dated 2026-11-01, for the printing in the product: TCGplayer when that printing has a nonfoil retail price, otherwise ManaPool from the same file. Legality, type lines, mana values, and produced mana come from Scryfall's oracle-cards bulk, updated 2026-11-01T10:02:02.149+00:00, under Scryfall's API terms (https://scryfall.com/docs/api). The clock is the Deck Lab goldfish in app.sim.goldfish, 120 games, seed 1729, after a fix that counts basic lands as colored sources. No tournament-site scrape, and no paid API, went into these figures. Fetched 2026-11-01.
 
-Mill decks win by emptying the opponent's library, and a player loses only when they have to draw from an empty library, not the moment it's empty. Opponent mill is a slow, control-style win condition that ignores life totals but doesn't affect the board, while self-mill fuels graveyard strategies. Know which kind you're playing, protect yourself from creature decks, and watch out for opponents who want their cards in the graveyard.
+<FanContentNotice />
 
-<DeckLabCTA format="modern" brief="Dimir mill control with counterspells, removal and big mill spells" />
+<DeckLabCTA format="commander" brief="Mill deck" />

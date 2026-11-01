@@ -231,6 +231,76 @@ def test_partial_tron_falls_back_to_one_mana_each():
     assert state.mana.total() == 2
 
 
+def test_basic_mountain_taps_for_red_without_a_keyword_hint():
+    """Basic lands have no color identity and no keyword letters.
+
+    A Mountain used to add colorless mana, so red spells never resolved.
+    The type line is enough; the profile does not need a fake "R" keyword.
+    """
+    from app.sim.goldfish import _gain_mana_phase, _produced_colors
+    from app.sim.state import GameState, card_to_in_play
+
+    mountain = make_profile(
+        "Mountain",
+        cmc=0.0,
+        role={"land": 1.0},
+        effect={"interaction_window": "static"},
+    )
+    card = card_to_in_play(mountain, type_line="Basic Land — Mountain")
+    assert _produced_colors(card) == ["R"]
+    state = GameState(seed=1, library=[], hand=[])
+    state.battlefield = [card]
+    _gain_mana_phase(state)
+    assert state.mana.pool.get("R") == 1
+    assert state.mana.pool.get("C", 0) == 0
+
+    bolt = make_profile(
+        "Lightning Bolt",
+        cmc=1.0,
+        pips={"R": 1},
+        role={"closer": 1.0},
+        effect={"damage_dealt": 3.0, "interaction_window": "instant"},
+    )
+    deck = [(bolt, "Instant")] * 10 + [(mountain, "Basic Land — Mountain")] * 10
+    report = goldfish(deck, policy=POLICIES["aggro"], config=GoldfishConfig(games=40, max_turns=8, seed=7))
+    assert report.wins > 0
+
+
+def test_basic_lands_count_as_colored_sources():
+    from app.rules import count_color_sources, land_produced_colors
+
+    assert land_produced_colors(name="Mountain", type_line="Basic Land — Mountain") == ["R"]
+    assert land_produced_colors(name="Snow-Covered Island", type_line="Basic Snow Land — Island") == ["U"]
+    assert land_produced_colors(name="Steam Vents", type_line="Land — Island Mountain") == ["U", "R"]
+    assert land_produced_colors(
+        name="Karplusan Forest",
+        type_line="Land",
+        oracle_text="{T}: Add {C}. {T}: Add {R} or {G}.",
+    ) == ["R", "G"]
+    assert land_produced_colors(name="Wastes", type_line="Basic Land — Wastes") == []
+    # A creature whose name merely contains a land word is not a source.
+    assert land_produced_colors(name="Brushland", type_line="Creature — Dryad") == []
+
+    counts = count_color_sources(
+        [
+            {"name": "Mountain", "type_line": "Basic Land — Mountain", "quantity": 16, "produced_mana": ["R"]},
+            {"name": "Forest", "type_line": "Basic Land — Forest", "quantity": 4},
+            {
+                "name": "Command Tower",
+                "type_line": "Land",
+                "quantity": 1,
+                "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+                "produced_mana": ["W", "U", "B", "R", "G"],
+                "commander_colors": ["R", "G"],
+            },
+        ]
+    )
+    assert counts["R"] == 17
+    assert counts["G"] == 5
+    assert counts["U"] == 0
+    assert counts["W"] == 0
+
+
 def test_aggressive_curve_kills_faster_than_slow_curve():
     """Aggro curve (1-drops) should kill measurably faster than a 4-drop curve."""
     fast = burn_deck()

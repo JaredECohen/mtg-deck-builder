@@ -1,108 +1,92 @@
 ---
-title: "Combo Decks in MTG Explained: How They Win and How They Work"
-description: "Combo decks in MTG explained: deterministic vs value combos, how tutors and card selection find the pieces, protecting the combo, and classic examples."
+title: "How Do You Know a Combo Deck Is Worth Building?"
+description: "Is a combo deck worth building in Magic: The Gathering? Lotus Field, a $55.97 Pioneer product, won 0 of 120 goldfish games. Here is what that measurement means."
 date: 2026-11-19
+updated: 2026-11-01
+author: Jared Cohen
+reviewed: true
 category: deck-archetypes
-keywords: ["mtg combo decks", "combo deck explained", "infinite combo mtg", "how to play combo mtg"]
-related: ["mtg-deck-archetypes-explained", "how-to-play-against-combo", "mtg-mulligan-guide"]
-draft: false
+keywords: ["combo deck mtg", "lotus field combo pioneer", "how combo decks win", "mtg combo goldfish"]
+related: ["should-you-play-control", "mtg-tempo-decks-explained", "card-advantage-explained", "mtg-deck-archetypes-explained"]
 ---
 
-In Magic: The Gathering (MTG), a combo deck wins by putting together a specific set of cards whose interaction ends the game, usually in a single turn, regardless of what the opponent has on the battlefield. Most of the deck isn't the combo itself. It's the cards that find the pieces, protect them, and keep you alive until you're ready.
+## Short answer
 
-This guide goes deeper than the overview in [MTG deck archetypes explained](/blog/mtg-deck-archetypes-explained). We'll cover the different kinds of combos, how combo decks are built, how to play one well, and the classic examples that show the shapes combos take.
+A combo deck is worth building when you can name the cards that win the game and you would rather lose to disruption than win a combat race. In Magic: The Gathering (MTG), a combo is a small set of cards that ends the game, or comes close, when they resolve together. Everything else in the deck finds those cards or keeps the opponent from stopping them. If you cannot point at the pile, you do not have a combo deck. You have a pile of cards that are good in the abstract.
 
-## What makes a deck "combo"
+Lotus Field Combo, the 2021 Pioneer Challenger product, is a named combo deck with a public list. Its goldfish record is the teaching tool: zero wins in 120 games. The simulator never put Lotus Field, a payoff, and the mana together as a plan. It attacked with whatever creatures existed and then the game ended. That is the right failure. A combo deck that goldfishes like burn is usually just burn. Use the zero as a check that you understand the deck does not win by combat, then practice the actual line, which this simulator will not play for you.
 
-Every deck has synergies. An elf deck wants lots of elves, and a burn deck wants its spells to point at the opponent's face. What separates combo from the rest is how much the deck depends on one specific interaction.
-
-A useful test: **if you removed the combo, would the deck still have a plan?** A midrange deck that happens to contain a two-card combo still wins plenty of games by attacking. A dedicated combo deck without its combo is a pile of card draw and lands. Most real decks sit somewhere on that spectrum, and where your deck sits changes how you should play it.
-
-Combo decks usually share a few traits:
-
-- **Lots of card selection.** Cheap spells that look at or draw cards, so the deck sees more of itself each turn.
-- **Few traditional threats.** Creatures or spells that win through damage or board presence are often a backup plan, if they exist at all.
-- **Little interaction with the opponent.** The deck is mostly busy with itself. Any interaction it plays is often there to protect the combo rather than to stop the opponent's plan.
-- **A specific "go" turn.** The deck aims to win on a particular turn, and everything before it is setup.
+The money tells you what the combo costs as cardboard. The product total is $55.97 on its printings. The top three nonbasic names are 46.8% of that, led by Lotus Field itself. You are buying the land the deck is named for, plus two expensive spells, and a pile of cheaper pieces around them. If Lotus Field is the card you cannot afford, you cannot play this list's mana. A cheaper same-type spell from another official product is not a replacement for the land. The [control decision](/blog/should-you-play-control) is the other non-race plan, and it fails the goldfish for a different reason: answers, not a combo.
 
 <InArticleAd />
 
-## Deterministic combos vs value combos
+## When to choose this
 
-Combos fall into two broad groups, and they play quite differently.
+| Situation | Lean in | Walk away |
+| --- | --- | --- |
+| You can name the winning cards | Lotus Field plus the payoffs in the product list | A good-stuff deck with no named pile |
+| You want a turn-six combat kill | This list won none of 120 goldfish games | The burn product, turn 5.96 |
+| Half the budget can sit in three cards | 46.8% of $55.97 is the top three nonbasics | A deck whose price is spread across twenty cheap spells |
+| You need the simulator to play the combo | It will not. The zero is the evidence | Practice the line by hand or in the builder |
 
-### Deterministic combos
+The table is the decision. The deck sections under it are the measurements the decision is allowed to use. If a number is not in those sections, it is not a number this guide is claiming.
 
-A deterministic combo wins the game, or locks it, once the pieces are together and it isn't disrupted. The result doesn't depend on luck. Many of these are infinite loops.
+## Example decks
 
-Some long-standing examples:
+<DeckBlock id="lotus-field" />
 
-- **Kiki-Jiki, Mirror Breaker with Pestermite.** Kiki-Jiki can tap to create a token copy of a nonlegendary creature you control, with haste. The copy of Pestermite enters and untaps Kiki-Jiki, which makes another copy, which untaps Kiki-Jiki again. The result is as many hasty Pestermites as you want in a single turn. Deceiver Exarch and Zealous Conscripts fill the same role.
-- **Splinter Twin with Deceiver Exarch.** The same loop in a different package: the enchantment gives the creature the copy ability, and each copy untaps the original.
-- **Sanguine Bond with Exquisite Blood.** Whenever you gain life, the opponent loses that much; whenever an opponent loses life, you gain that much. Once both are out, any life gain or life loss starts a loop that drains the opponent to zero.
-- **Painter's Servant with Grindstone.** Painter's Servant makes every card the same color, so Grindstone's "repeat if they share a color" clause never stops. One activation mills the opponent's entire library.
-- **Isochron Scepter with Dramatic Reversal.** With enough mana rocks out to produce at least three mana, copying Dramatic Reversal untaps them all for a net gain each time, giving you as much mana as you want. This is a well-known Commander engine.
+### Lotus Field Combo
 
-### Value combos and engines
+Lotus Field Combo is an official Pioneer Challenger Deck released 2021-10-15. The decklist and the Wizards source link come from MTGJSON file LotusFieldCombo_Q06. Source: https://magic.wizards.com/en/articles/archive/news/pioneer-challenger-decks-2021-08-24.
 
-A value combo doesn't win on the spot. It produces a large, repeating advantage that snowballs. Think of a sacrifice outlet combined with creatures that drain the opponent when they die, or a card that rewards you for casting spells combined with many cheap spells.
+Read this as a deck whose win is a specific pile of cards, which a combat goldfish will not find.
 
-Storm decks sit between the two. Grapeshot deals 1 damage and gets copied for every spell cast before it that turn, so a deck that chains rituals and card draw into one big turn can win with it. It isn't a two-card combo, but the deck is still built around one explosive turn.
+The nonland mana curve is 8 at mana value 1, 15 at mana value 2, 4 at mana value 3, 1 at mana value 4, 4 at mana value 5, 4 at mana value 7 or more. The list runs 24 lands in the library.
 
-Value engines are more forgiving because you can win without assembling every piece, but they are also easier to beat with ordinary removal and pressure.
+Colored sources, using Scryfall produced_mana and counting basic lands as the color on their type line, restricted to this deck's colors: 14 blue, 4 black, 16 green.
 
-## How combo decks find their pieces
+MTGJSON AllPricesToday (2026-11-01) prices the exact printing in the product at $55.97 for main deck, sideboard, and commander, using TCGplayer nonfoil retail when it exists. The three most expensive nonbasic names are 4 Lotus Field at $10.76 total, 1 Approach of the Second Sun at $8.39 total, 2 Peer into the Abyss at $7.02 total, which is 46.8% of the priced total. Basic lands in the product add $1.50 on their own, because the price is the printing Wizards put in the deck, not the cheapest Plains on the market.
 
-If your deck needs two specific cards, you need a plan to find them reliably. Combo decks use three tools.
+The Deck Lab goldfish played 120 solitaire games (seed 1729, combo policy, opponent at 20 life, 12 turns) and never won one. The simulator casts spells and turns creatures sideways. It does not assemble a named combo, storm off, or mill an opponent out. A zero win rate means this list does not win a goldfish race. It does not mean the deck cannot win a real match.
 
-### Redundancy
+Budget benchmarks, not upgrade advice: the cheapest same-type card within one mana value in the other official lists we priced, still legal in the format. Approach of the Second Sun at $8.39 versus Endless Obedience at $0.18 (a $8.21 gap on one copy); Peer into the Abyss at $3.51 versus Thought Distortion at $0.23 (a $3.28 gap on one copy); Peer into the Abyss at $3.51 versus Treasure Cruise at $0.25 (a $3.26 gap on one copy). Those stand-ins do not do the same job. The gap is how much you are paying for the specific card, not a sleeve-in recommendation.
 
-The simplest answer is to play more copies of each role. If Pestermite, Deceiver Exarch and Zealous Conscripts all go infinite with Kiki-Jiki, Mirror Breaker, you have many more ways to complete the combo than you would with a single partner card. Redundancy also makes the deck harder to disrupt, since removing one piece doesn't remove the whole plan.
+Scryfall's oracle-cards bulk dated 2026-11-01 still lists every card in this product as legal in pioneer.
 
-### Card selection
-
-Cheap spells that dig through the deck increase how many cards you see. Brainstorm, Ponder, Preordain and Serum Visions are classic examples. Each one costs a single mana and lets you see two or three cards to pick the one you need. Over several turns, a deck full of these sees far more of itself than a deck that only draws one card a turn.
-
-### Tutors
-
-A tutor searches your library for a card and puts it somewhere useful, usually your hand or the top of your library. Demonic Tutor finds any card. More restricted tutors, like Enlightened Tutor (artifact or enchantment) or Mystical Tutor (instant or sorcery), are cheaper or faster but narrower. Tutors effectively turn every copy into an extra copy of your most important piece.
-
-In 60-card formats, where you can play four copies of each card, redundancy and card selection usually matter most. In singleton formats like Commander, where you get one copy of each card, tutors carry more of the load.
+Every figure in this section is from that fetch: decklist and printing from MTGJSON on 2026-11-01, legality and mana production from the Scryfall oracle-cards bulk updated 2026-11-01, prices from MTGJSON AllPricesToday dated 2026-11-01, and the clock from the Deck Lab goldfish (120 games, seed 1729) after basic lands were taught to add their own color.
 
 <InArticleAd />
 
-## Protecting the combo
+## Common mistakes
 
-Opponents will try to stop you. A combo deck needs a plan for that, and there are a few approaches.
+- Treating a 0% goldfish win rate as a broken deck. The metric does not assemble Lotus Field. It was not built to.
+- Replacing Lotus Field with a cheaper land because a benchmark said a land can be cheap. The deck is named after the land. The mana is the combo.
+- Adding creatures so the goldfish has something to attack with. You have turned a combo deck into a bad midrange deck.
+- Forgetting the deck is several colors. The source count is not a mono-color basic count. The expensive lands are doing a job.
+- Registering the 2021 product at a tournament without checking bans. The bulk file's legality is dated 2026-11-01.
 
-- **Counter their answer.** Holding a counterspell when you try to go off lets you stop the removal or counter aimed at your combo.
-- **Clear the way first.** Discard like Duress or Thoughtseize takes the opponent's answer before your combo turn and shows you what they're holding.
-- **Stop them from responding.** Silence stops your opponents from casting spells for the rest of the turn. Resolve it first on the turn you go off, and they can't cast instant-speed answers to your combo.
-- **Wait for the window.** If the opponent taps out on their own turn, they often can't answer you on yours. Patient combo players go off when the opponent's mana is down.
-- **Present a backup plan.** Many combo pieces are reasonable cards on their own. A Pestermite can still attack. Combo decks that can win a different way force opponents to respect both plans.
+## FAQ
 
-Choosing between "go now" and "wait for protection" is the hardest skill in playing combo. Going off into open mana can lose to one counterspell. Waiting too long gives the opponent time to pressure you or find more answers.
+### What is the combo in the Lotus Field product?
 
-## How to play a combo deck well
+The deck is built to make large amounts of mana with Lotus Field and then cast a payoff that ends the game, including Approach of the Second Sun in the published list. Read the list in the deck block rather than a paraphrase of the line.
 
-**Know your deck's goldfish speed.** Playing alone against no opponent ("goldfishing") shows you which turn your deck typically wins. That number tells you how much time you have and whether you should race or wait.
+### Why can't the goldfish win with it?
 
-**Mulligan for function.** A combo deck's hand needs mana, card selection and a realistic path to the pieces. A hand with one combo piece and no way to find the other may be weaker than it looks. The [mulligan guide](/blog/mtg-mulligan-guide) explains the general process, and combo decks often apply it aggressively.
+The goldfish casts spells and attacks. It does not sequence a mana engine into a two-card kill. 0 wins in 120 games, seed 1729, is that limitation measured on this exact list.
 
-**Sequence to hide information.** Play your setup cards in an order that reveals as little as possible. An opponent who doesn't know you're a combo deck is less likely to hold up the right answer.
+### Is combo the same as control?
 
-**Practice the loop.** In tournament play, you need to demonstrate a loop and then shortcut it by announcing how many times you repeat it. If a loop is optional, you pick a number; you can't just say "infinite." Know exactly how your combo works so you can explain it cleanly.
+No. Control's zero comes from answering threats and never attacking. Combo's zero comes from winning with a pile the attacker-simulator does not play. The decks feel different in a real game: one says no, the other tries to go off.
 
-**Know what beats you.** Learn the cards that shut your deck down so you recognize them and can sideboard around them.
+### How much of the price is Lotus Field?
 
-## How opponents beat combo
+It is the top line item on the product printing. Together with the next two nonbasic names it is 46.8% of the $55.97 total. The rest of the deck is the cheaper shell around that core.
 
-Combo decks are vulnerable to well-timed interaction, cards that stop a key part of the engine, and fast pressure that forces them to go off before they're ready. Graveyard hate, discard, counterspells and cards that limit how many spells a player can cast each turn are all common answers.
+## How this was made
 
-That's a whole guide of its own: [how to beat combo decks](/blog/how-to-play-against-combo) covers identifying the combo, timing your disruption and sideboarding for the matchup.
+These guides use official Wizards product lists redistributed by MTGJSON under its MIT license (https://www.mtgjson.com/license/). Each deck block names the MTGJSON file and the Wizards source URL stored on that file. Prices are the nonfoil retail figure in MTGJSON AllPricesToday version 5.3.0+20261101, dated 2026-11-01, for the printing in the product: TCGplayer when that printing has a nonfoil retail price, otherwise ManaPool from the same file. Legality, type lines, mana values, and produced mana come from Scryfall's oracle-cards bulk, updated 2026-11-01T10:02:02.149+00:00, under Scryfall's API terms (https://scryfall.com/docs/api). The clock is the Deck Lab goldfish in app.sim.goldfish, 120 games, seed 1729, after a fix that counts basic lands as colored sources. No tournament-site scrape, and no paid API, went into these figures. Fetched 2026-11-01.
 
-## The takeaway
+<FanContentNotice />
 
-A combo deck is a plan built around one interaction, supported by redundancy, card selection and tutors to find it, and by discard, counters or patience to protect it. Deterministic combos win on the spot; value engines win by snowballing. To play combo well, learn your deck's speed, mulligan for hands that can actually assemble the pieces, and choose your moment to go off.
-
-<DeckLabCTA format="commander" brief="Combo deck with tutors, card selection, protection and a backup plan" />
+<DeckLabCTA format="pioneer" brief="Lotus Field combo" />

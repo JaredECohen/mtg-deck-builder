@@ -12,6 +12,27 @@ import re
 
 from app.models import CardRecord
 
+_BASIC_LAND_WORDS = (
+    ("plains", "W"),
+    ("island", "U"),
+    ("swamp", "B"),
+    ("mountain", "R"),
+    ("forest", "G"),
+)
+_EXACT_BASIC_NAMES = {
+    "plains",
+    "island",
+    "swamp",
+    "mountain",
+    "forest",
+    "wastes",
+    "snow-covered plains",
+    "snow-covered island",
+    "snow-covered swamp",
+    "snow-covered mountain",
+    "snow-covered forest",
+}
+
 _NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
     "seven": 7, "eight": 8, "nine": 9, "ten": 10,
@@ -84,3 +105,83 @@ def can_be_commander(card: CardRecord) -> bool:
     if "Legendary" in front and "Creature" in front:
         return True
     return bool(_CAN_BE_COMMANDER.search(card.oracle_text or ""))
+
+
+def land_produced_colors(*, name: str, type_line: str = "", oracle_text: str = "") -> list[str]:
+    """Colors a land can add, in WUBRG order.
+
+    Basic lands are the case this exists for. Scryfall leaves their color
+    identity empty, and the goldfish used to read only profile keywords, so a
+    Mountain added colorless mana and never counted as a red source. Land types
+    on the type line (and the card name, for "Mountain" / "Snow-Covered
+    Mountain") are the source of those colors. Other lands use mana symbols in
+    the oracle text. Lands that add "any color in your commander's color
+    identity" are not treated as five-color sources; the caller decides which
+    of the deck's colors they count as.
+    """
+    face = (type_line or "").split("//", 1)[0]
+    lowered_face = face.lower()
+    bare_name = (name or "").strip().lower()
+    if "land" not in lowered_face and bare_name not in _EXACT_BASIC_NAMES:
+        return []
+
+    colors: list[str] = []
+
+    def add(color: str) -> None:
+        if color not in colors:
+            colors.append(color)
+
+    subtypes = face
+    for dash in (" — ", " – ", " - "):
+        if dash in face:
+            subtypes = face.split(dash, 1)[1]
+            break
+    subtype_words = {word.strip(" ,.").lower() for word in re.split(r"[\s/]+", subtypes) if word.strip(" ,.")}
+    for word, color in _BASIC_LAND_WORDS:
+        if word in subtype_words:
+            add(color)
+
+    simple = bare_name.removeprefix("snow-covered ").strip()
+    for word, color in _BASIC_LAND_WORDS:
+        if simple == word:
+            add(color)
+    if colors:
+        return colors
+
+    text = oracle_text or ""
+    lowered = text.lower()
+    if "any color" in lowered and "commander" not in lowered:
+        return ["W", "U", "B", "R", "G"]
+    for symbol in re.findall(r"\{([WUBRG])\}", text):
+        add(symbol)
+    return colors
+
+
+def count_color_sources(cards: list[dict]) -> dict[str, int]:
+    """Count colored sources. ``produced_mana`` (Scryfall) wins when present.
+
+    ``C`` is not a colored source. A land whose text adds mana of the
+    commander's color identity counts for ``commander_colors`` only.
+    """
+    totals = {color: 0 for color in "WUBRG"}
+    for card in cards:
+        quantity = int(card.get("quantity") or 1)
+        if quantity <= 0:
+            continue
+        oracle = str(card.get("oracle_text") or "")
+        commander_colors = [c for c in (card.get("commander_colors") or []) if c in totals]
+        if commander_colors and "commander" in oracle.lower() and "color identity" in oracle.lower():
+            produced = commander_colors
+        else:
+            raw = card.get("produced_mana")
+            if isinstance(raw, list) and raw:
+                produced = [c for c in raw if c in totals]
+            else:
+                produced = land_produced_colors(
+                    name=str(card.get("name") or ""),
+                    type_line=str(card.get("type_line") or ""),
+                    oracle_text=oracle,
+                )
+        for color in produced:
+            totals[color] += quantity
+    return totals

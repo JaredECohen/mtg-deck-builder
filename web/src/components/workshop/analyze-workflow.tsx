@@ -9,6 +9,7 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
+import { prepopulateFromExample } from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
@@ -19,6 +20,8 @@ type Props = {
   onOpenCard: (name: string, context?: CardContext) => void;
   /** Share token from ?deck=: load that saved deck and analyze it. */
   sharedToken: string | null;
+  /** Official list id from ?example=: prefill the editor from the guide catalog. */
+  exampleId?: string | null;
 };
 
 type Snapshot = { format: FormatName | null; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
@@ -32,7 +35,7 @@ function snapshotKey(snapshot: Snapshot): string {
   return [snapshot.format, snapshot.commander, list(snapshot.mainboard), list(snapshot.sideboard)].join("#");
 }
 
-export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) {
+export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId }: Props) {
   const [format, setFormat] = useState<FormatName | null>(null);
   const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
   const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
@@ -56,6 +59,18 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken }: Props) 
     if (sharedToken) {
       setDraftHydrated(true);
       return;
+    }
+    if (exampleId) {
+      const example = prepopulateFromExample(exampleId);
+      if (example) {
+        setFormat(example.format);
+        setManualMainboard(example.mainboard);
+        setManualSideboard(example.sideboard);
+        setManualCommander(example.commander);
+        setManualNotes(`Official list loaded: ${example.name}`);
+        setDraftHydrated(true);
+        return;
+      }
     }
     const draft = loadManualDraft();
     if (draft?.format) setFormat(draft.format);
