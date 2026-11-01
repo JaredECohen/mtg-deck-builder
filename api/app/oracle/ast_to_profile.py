@@ -302,9 +302,18 @@ def build_card_profile(card: dict) -> CardProfile:
             cost_vector.alt_costs.append(alt)
 
     if "land" in type_line:
-        effects: list[Effect] = []
+        effects = []
         coverage = 1.0
-        residual: list[str] = []
+        from app.rules import land_produced_colors
+
+        produced = land_produced_colors(
+            name=name,
+            type_line=card.get("type_line") or "",
+            oracle_text=text,
+        )
+        # Pain lands and other typeless lands only reveal their colors in text.
+        # The goldfish reads this note because those lands have no basic type.
+        residual = [f"produces:{''.join(produced)}"] if produced else []
     else:
         effects, coverage, residual = parse_oracle_text(text, name=name)
 

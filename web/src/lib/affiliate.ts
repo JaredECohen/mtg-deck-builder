@@ -7,6 +7,22 @@
 
 const AFFILIATE_PREFIX = process.env.NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL ?? "";
 
+const AFFILIATE_HOST = /pxf\.io|partner\.tcgplayer\.com/i;
+
+/** True when a URL is actually wrapped for a commission, not a plain store link. */
+export function isAffiliateUrl(url: string, prefix: string = AFFILIATE_PREFIX): boolean {
+  if (!url) return false;
+  if (AFFILIATE_HOST.test(url)) return true;
+  if (!prefix) return false;
+  return url.startsWith(prefix);
+}
+
+/** rel for an off-site link. Affiliate hosts (pxf.io and the TCGplayer partner host) are sponsored. */
+export function externalAnchorRel(href: string): string {
+  if (isAffiliateUrl(href)) return "sponsored nofollow noopener noreferrer";
+  return "noopener noreferrer";
+}
+
 const SEARCH_BASE = "https://www.tcgplayer.com/search/magic/product";
 const MASS_ENTRY_BASE = "https://www.tcgplayer.com/massentry";
 

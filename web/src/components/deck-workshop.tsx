@@ -23,7 +23,8 @@ export function DeckWorkshop() {
   // ?deck=<share_token> opens a shared deck in the Analyze workflow.
   const searchParams = useSearchParams();
   const sharedToken = searchParams.get("deck");
-  const [mode, setMode] = useState<BuilderMode>(sharedToken ? "analyze" : "generate");
+  const exampleId = searchParams.get("example");
+  const [mode, setMode] = useState<BuilderMode>(sharedToken || exampleId ? "analyze" : "generate");
 
   // Shared by both workflows, so the data-status request and the card modal
   // exist once on the page.
@@ -31,8 +32,8 @@ export function DeckWorkshop() {
   const cardDetail = useCardDetail();
 
   useEffect(() => {
-    if (sharedToken) setMode("analyze");
-  }, [sharedToken]);
+    if (sharedToken || exampleId) setMode("analyze");
+  }, [sharedToken, exampleId]);
 
   return (
     <section className="workshop-root" aria-label="MTG deck workshop">
@@ -48,7 +49,7 @@ export function DeckWorkshop() {
         <GenerateWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} />
       </div>
       <div id={panelId("workshop", "analyze")} role="tabpanel" aria-labelledby={tabId("workshop", "analyze")} hidden={mode !== "analyze"}>
-        <AnalyzeWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} sharedToken={sharedToken} />
+        <AnalyzeWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} sharedToken={sharedToken} exampleId={exampleId} />
       </div>
       <div id={panelId("workshop", "precon")} role="tabpanel" aria-labelledby={tabId("workshop", "precon")} hidden={mode !== "precon"}>
         <PreconUpgrade onOpenCard={cardDetail.open} />

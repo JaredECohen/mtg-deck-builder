@@ -1,12 +1,24 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_FOOTER_SLOT } from "@/lib/ads";
+import { syncFooterAds } from "@/lib/footer-ads";
 
 export function SiteFooter() {
+  const pathname = usePathname();
+  // Fail closed until this page's server HTML opts in with [data-ads="on"].
+  // Re-check on every client navigation; the layout does not remount.
+  const [showAds, setShowAds] = useState(false);
+  useEffect(() => {
+    setShowAds(syncFooterAds(document));
+  }, [pathname]);
   return (
     <footer className="site-footer">
-      <AdSlot slot={ADSENSE_FOOTER_SLOT} className="site-footer-ad" />
+      {showAds ? <AdSlot slot={ADSENSE_FOOTER_SLOT} allowed /> : null}
       <nav className="site-footer-links" aria-label="Site">
         <Link href="/">Deck Builder</Link>
         <Link href="/blog">Guides</Link>

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-import { ADSENSE_CLIENT } from "@/lib/ads";
+import { useAdsAllowed } from "@/components/ads-provider";
+import { ADSENSE_CLIENT, shouldRenderAdSlot } from "@/lib/ads";
 
 declare global {
   interface Window {
@@ -12,20 +13,32 @@ declare global {
 
 // A manual AdSense display unit. Renders nothing until both the publisher ID
 // and this unit's slot ID are configured.
-export function AdSlot({ slot, className }: { slot: string; className?: string }) {
+export function AdSlot({
+  slot,
+  className,
+  allowed: allowedProp,
+}: {
+  slot: string;
+  className?: string;
+  /** Set when the caller already decided. Otherwise the provider (default false) wins. */
+  allowed?: boolean;
+}) {
+  const contextAllowed = useAdsAllowed();
+  const allowed = allowedProp ?? contextAllowed;
   const pushed = useRef(false);
+  const render = shouldRenderAdSlot({ allowed, client: ADSENSE_CLIENT, slot });
 
   useEffect(() => {
-    if (!ADSENSE_CLIENT || !slot || pushed.current) return;
+    if (!render || pushed.current) return;
     pushed.current = true;
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {
       /* ad blocked or script not loaded yet: leave the slot empty */
     }
-  }, [slot]);
+  }, [render]);
 
-  if (!ADSENSE_CLIENT || !slot) return null;
+  if (!render) return null;
   return (
     <div className={className} aria-label="Advertisement">
       <ins

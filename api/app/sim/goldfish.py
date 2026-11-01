@@ -5,7 +5,9 @@ pairs) and a policy, plays N games and returns a kill-turn distribution
 plus per-turn diagnostics. Keeps the rules-engine surface intentionally
 small: spells resolve immediately on cast (no opponent priority,
 no targeting failures from state), creatures attack each turn for
-``power`` damage, lands tap for one mana of any color in their identity.
+``power`` damage, lands tap for one mana of a color they actually add. Basic lands
+are read from their land type (Mountain adds red); they are not
+colorless just because their color identity is empty.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Callable, Iterable
 from app.oracle.profile import CardProfile
 from app.sim.mulligan import MulliganProfile, london_mulligan_loop
 from app.sim.policy._common import Decision
+from app.sim.mana_colors import produced_colors
 from app.sim.state import CardInPlay, GameState, build_initial_state
 
 
@@ -211,13 +214,8 @@ def _gain_mana_phase(state: GameState) -> None:
 
 
 def _produced_colors(land: CardInPlay) -> list[str]:
-    """Pull a guess at produced colors from the land's profile keywords/notes."""
-    palette: list[str] = []
-    blob = " ".join(land.profile.combo_primitives.keywords + (land.profile.notes or []))
-    for color in ("W", "U", "B", "R", "G"):
-        if color in blob:
-            palette.append(color)
-    return palette or ["C"]
+    """Colors this land adds. Basic lands count; see :mod:`app.sim.mana_colors`."""
+    return produced_colors(land)
 
 
 def _resolve_decisions(state: GameState, decisions: list[Decision]) -> None:

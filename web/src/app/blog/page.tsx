@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PostCard } from "@/components/blog/post-card";
+import { EnableAds } from "@/components/enable-ads";
 import { CATEGORIES, SITE_NAME, postsInCategory, type CategoryId } from "@/lib/blog";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
@@ -18,6 +19,7 @@ export default function BlogIndexPage() {
   const categories = (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => postsInCategory(id).length > 0);
   return (
     <main className="shell blog-shell">
+      <EnableAds />
       <header className="blog-header">
         <div className="eyebrow">Guides</div>
         <h1 className="headline">Learn Magic: The Gathering</h1>

@@ -1,4 +1,4 @@
-import { CATEGORIES, SITE_NAME, SITE_URL, allPosts } from "@/lib/blog";
+import { CATEGORIES, SITE_NAME, SITE_URL, indexablePosts } from "@/lib/blog";
 
 export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS: scheduled posts appear hourly
 
@@ -7,7 +7,7 @@ function escapeXml(value: string): string {
 }
 
 export function GET() {
-  const items = allPosts()
+  const items = indexablePosts()
     .map(
       (post) => `    <item>
       <title>${escapeXml(post.title)}</title>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { EnableAds } from "@/components/enable-ads";
 import { ADSENSE_CLIENT } from "@/lib/ads";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ const UPDATED = "October 27, 2026";
 export default function PrivacyPage() {
   return (
     <main className="shell legal-page">
+      <EnableAds />
       <h1>Privacy</h1>
       <p className="legal-updated">Last updated {UPDATED}</p>
 

@@ -11,7 +11,7 @@
 // - no bare {...} outside code: MDX evaluates it as JavaScript ({2} renders
 //   "2", {U} breaks the build)
 // - a <DeckLabCTA> with a supported format, two <InArticleAd /> breaks on
-//   their own lines, no "# " h1 in the body
+//   reviewed guides (unreviewed posts carry none), no "# " h1 in the body
 // - the body spells out "Magic: The Gathering" at least once
 // - body length 900-3,500 words
 
@@ -32,7 +32,10 @@ const posts = files.map((file) => {
   const { data, content } = matter(fs.readFileSync(path.join(BLOG_DIR, file), "utf8"));
   return { file, slug: file.replace(/\.mdx$/, ""), data, body: content, date: asDate(data.date) };
 });
-const live = posts.filter((post) => post.data.draft !== true);
+// Archived guides stay in the repo but cannot publish. They still count as
+// real slugs so an old link is not a typo; they do not count as live targets.
+const knownSlugs = new Set(posts.map((post) => post.slug));
+const live = posts.filter((post) => post.data.draft !== true && post.data.archived !== true);
 const dateOf = new Map(live.map((post) => [post.slug, post.date]));
 const firstDate = live.reduce((min, post) => (post.date < min ? post.date : min), "9999-12-31");
 
@@ -50,16 +53,18 @@ for (const post of live) {
   if (!CATEGORIES.has(String(data.category))) fail(`unknown category "${data.category}"`);
 
   // The launch batch shares its first day; after that, one article per day.
-  if (date !== firstDate) {
+  // Reviewed guides are the quality batch and may share a day with each other
+  // or with an older unreviewed guide.
+  if (date !== firstDate && data.reviewed !== true) {
     if (byDate.has(date)) fail(`shares publish date ${date} with ${byDate.get(date)}`);
     byDate.set(date, post.file);
   }
 
   for (const [, slug] of body.matchAll(/\]\(\/blog\/([a-z0-9-]+)(?:#[^)]*)?\)/g)) {
-    if (!CATEGORIES.has(slug) && !dateOf.has(slug)) fail(`broken link /blog/${slug}`);
+    if (!CATEGORIES.has(slug) && !knownSlugs.has(slug)) fail(`broken link /blog/${slug}`);
   }
   for (const slug of Array.isArray(data.related) ? data.related : []) {
-    if (!dateOf.has(slug)) fail(`related slug "${slug}" doesn't exist`);
+    if (!knownSlugs.has(slug)) fail(`related slug "${slug}" doesn't exist`);
   }
   // Every guide needs at least one link that works on its publish day.
   const liveLinks = [...body.matchAll(/\]\(\/blog\/([a-z0-9-]+)/g)].filter(
@@ -80,8 +85,12 @@ for (const post of live) {
     if (format && !FORMATS.has(format)) fail(`DeckLabCTA format "${format}" isn't supported`);
   }
   const adLines = body.split("\n").filter((line) => line.includes("<InArticleAd"));
-  if (adLines.length < 2) fail(`${adLines.length} <InArticleAd /> (want 2)`);
-  for (const line of adLines) if (line.trim() !== "<InArticleAd />") fail("<InArticleAd /> must be alone on its line");
+  if (data.reviewed === true) {
+    if (adLines.length < 2) fail(`${adLines.length} <InArticleAd /> (want 2)`);
+    for (const line of adLines) if (line.trim() !== "<InArticleAd />") fail("<InArticleAd /> must be alone on its line");
+  } else if (adLines.length) {
+    fail("unreviewed guide includes <InArticleAd />; ads stay on reviewed guides");
+  }
   if (/^# /m.test(body)) fail('body has a "# " h1 (the title is the h1)');
   // Spell the game out at least once; "MTG" alone isn't clear to every reader.
   if (!body.includes("Magic: The Gathering")) fail('never says "Magic: The Gathering" (spell it out at first mention)');

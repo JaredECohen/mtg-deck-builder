@@ -4,7 +4,8 @@ import { Suspense } from "react";
 
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
-import { allPosts } from "@/lib/blog";
+import { EnableAds } from "@/components/enable-ads";
+import { indexablePosts } from "@/lib/blog";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
@@ -69,7 +70,7 @@ const FAQ = [
 ];
 
 export default function HomePage() {
-  const latest = allPosts().slice(0, 6);
+  const latest = indexablePosts().slice(0, 6);
   const faqJsonLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -81,6 +82,7 @@ export default function HomePage() {
   };
   return (
     <main className="shell">
+      <EnableAds />
       <header className="hero hero-compact">
         <div className="hero-copy">
           <div className="eyebrow">Meta-aware deckbuilding</div>

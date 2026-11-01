@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AdsProvider } from "@/components/ads-provider";
 import { DeckPageView } from "@/components/deck-page-view";
+import { EnableAds } from "@/components/enable-ads";
 import { ManaCurveChart } from "@/components/workshop/mana-curve-chart";
 import { groupByType } from "@/lib/group-by-type";
 import { SITE_NAME } from "@/lib/blog";
@@ -127,8 +129,11 @@ export default async function SharedDeckPage({ params }: Params) {
   const price = formatPrice(deck.price_usd);
   const count = deck.mainboard.reduce((sum, card) => sum + card.quantity, 0);
 
+  const indexable = deck.visibility !== "unlisted";
   return (
+    <AdsProvider allow={indexable}>
     <main className="shell share-page">
+      {indexable ? <EnableAds /> : null}
       <DeckPageView format={deck.format} />
       <p className="eyebrow">Shared deck</p>
       <h1>{deck.name}</h1>
@@ -165,5 +170,6 @@ export default async function SharedDeckPage({ params }: Params) {
         </aside>
       </div>
     </main>
+    </AdsProvider>
   );
 }

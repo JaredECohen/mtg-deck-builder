@@ -627,15 +627,22 @@ class DeckGenerator:
     _BASIC_COLOR = {"Plains": "W", "Island": "U", "Swamp": "B", "Mountain": "R", "Forest": "G"}
 
     def _land_produces(self, card: CardRecord) -> set[str]:
-        for basic, color in self._BASIC_COLOR.items():
-            if basic in card.type_line:  # basic land types, incl. shocks/duals
-                return {c for b, c in self._BASIC_COLOR.items() if b in card.type_line}
+        from app.rules import land_produced_colors
+
+        # Basics have an empty color identity. Land type and name are the source.
+        found = land_produced_colors(
+            name=card.name,
+            type_line=card.type_line or "",
+            oracle_text=card.oracle_text or "",
+        )
+        if found:
+            return set(found)
         text = card.oracle_text or ""
-        produced = {c for c in "WUBRG" if "{" + c + "}" in text}
+        produced: set[str] = set()
         if "any color" in text or "one color" in text:
             produced |= set("WUBRG")
         if not produced and card.color_identity:
-            produced = set(card.color_identity)
+            produced = set(c for c in card.color_identity if c in "WUBRG")
         return produced
 
     def _alternatives(self, outcome: "_RetrievalOutcome", deck: DeckResponse) -> list[DeckAlternative]:

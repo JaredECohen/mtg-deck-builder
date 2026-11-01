@@ -1,13 +1,13 @@
 import type { MetadataRoute } from "next";
 
-import { CATEGORIES, SITE_URL, allPosts } from "@/lib/blog";
+import { CATEGORIES, SITE_URL, indexablePosts } from "@/lib/blog";
 import { fetchPublicDeckIndex } from "@/lib/public-deck";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const posts = allPosts();
+  const posts = indexablePosts();
   const newest = posts[0]?.updated ?? new Date().toISOString().slice(0, 10);
   const pages: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },

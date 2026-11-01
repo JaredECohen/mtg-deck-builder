@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { EnableAds } from "@/components/enable-ads";
 import { AUTHOR, SITE_NAME } from "@/lib/blog";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <main className="shell legal-page">
+      <EnableAds />
       <h1>About MTG Deck Lab</h1>
       <p>
         MTG Deck Lab is a free deck builder for Magic: The Gathering. Tell it a format, colors and a play style, or

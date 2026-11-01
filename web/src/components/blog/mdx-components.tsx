@@ -3,7 +3,10 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_IN_ARTICLE_SLOT } from "@/lib/ads";
+import { AFFILIATE_DISCLOSURE, externalAnchorRel, isAffiliateUrl, tcgplayerMassEntryUrl } from "@/lib/affiliate";
 import { getPost, isCategory, slugify } from "@/lib/blog";
+import { catalogFetchedAt, getCatalogDeck } from "@/lib/example-catalog";
+import { exampleBuilderHref } from "@/lib/example-decks";
 import type { FormatName } from "@/lib/types";
 
 const FORMATS: FormatName[] = ["standard", "modern", "pioneer", "legacy", "commander"];
@@ -52,6 +55,103 @@ export function InArticleAd() {
   return <AdSlot slot={ADSENSE_IN_ARTICLE_SLOT} className="blog-ad" />;
 }
 
+/** Unreviewed guides keep the MDX tag but must not mount an ad unit. */
+export function HiddenInArticleAd() {
+  return null;
+}
+
+/** Official product list, with a button that opens the builder prefilled via ?example=. */
+export function DeckBlock({ id }: { id: string }) {
+  const deck = getCatalogDeck(id);
+  if (!deck) {
+    return <p>Example deck “{id}” is not in the priced catalog.</p>;
+  }
+  const fetchedAt = catalogFetchedAt();
+  const buyUrl = tcgplayerMassEntryUrl([
+    ...deck.mainboard,
+    ...deck.sideboard,
+    ...(deck.commander ? [{ name: deck.commander, quantity: 1 }] : []),
+  ]);
+  const showDisclosure = isAffiliateUrl(buyUrl);
+  const kill = deck.analysis.goldfish.avg_kill_turn;
+  return (
+    <section className="deck-block" aria-label={deck.name}>
+      <h3 className="deck-block-title">{deck.name}</h3>
+      <p className="deck-block-meta">
+        {deck.type}, released {deck.release_date}. Product-printing total ${deck.analysis.total_cost_usd.toFixed(2)}{" "}
+        (MTGJSON AllPricesToday, {fetchedAt || "the catalog fetch"}).
+        {deck.analysis.unpriced?.length
+          ? ` Priced cards only, ${deck.analysis.unpriced.length} unpriced (${deck.analysis.unpriced.join(", ")}).`
+          : ""}
+        {kill != null
+          ? ` Goldfish average winning turn ${kill} over ${deck.analysis.goldfish.games} games.`
+          : ` Goldfish win rate ${(deck.analysis.goldfish.win_rate * 100).toFixed(0)}% over ${deck.analysis.goldfish.games} games.`}
+      </p>
+      {deck.commander ? (
+        <p>
+          <strong>Commander:</strong> {deck.commander}
+        </p>
+      ) : null}
+      <div className="deck-block-list">
+        <ul>
+          {deck.mainboard.map((card) => (
+            <li key={card.name}>
+              {card.quantity} {card.name}
+            </li>
+          ))}
+        </ul>
+        {deck.sideboard.length ? (
+          <>
+            <p>
+              <strong>Sideboard</strong>
+            </p>
+            <ul>
+              {deck.sideboard.map((card) => (
+                <li key={`side-${card.name}`}>
+                  {card.quantity} {card.name}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
+      <p className="deck-block-actions">
+        <Link className="button blog-cta-button" href={exampleBuilderHref(deck.id)}>
+          Open this list in the deck builder
+        </Link>
+      </p>
+      <p className="deck-block-sources">
+        <a href={buyUrl} target="_blank" rel="sponsored nofollow noopener noreferrer">
+          Price this list on TCGplayer
+        </a>
+        {deck.source_url ? (
+          <>
+            {" · "}
+            <a href={deck.source_url}>Wizards source</a>
+          </>
+        ) : null}
+        {" · "}
+        <a href={deck.mtgjson_deck_url}>MTGJSON deck file</a>
+      </p>
+      {showDisclosure ? <p className="affiliate-disclosure">{AFFILIATE_DISCLOSURE}</p> : null}
+    </section>
+  );
+}
+
+/** Wizards Fan Content Policy notice. Shown on every reviewed guide. */
+export function FanContentNotice() {
+  return (
+    <aside className="blog-callout">
+      <strong className="blog-callout-title">Fan Content</strong>
+      <p>
+        This is unofficial Fan Content permitted under the{" "}
+        <a href="https://company.wizards.com/en/legal/fancontentpolicy">Fan Content Policy</a>. Not approved/endorsed
+        by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+      </p>
+    </aside>
+  );
+}
+
 export function Callout({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <aside className="blog-callout">
@@ -82,7 +182,7 @@ function Anchor({ href = "", ...props }: ComponentPropsWithoutRef<"a">) {
   const guide = href.match(/^\/blog\/([a-z0-9-]+)/)?.[1];
   if (guide && !isCategory(guide) && !getPost(guide)) return <span>{props.children}</span>;
   if (href.startsWith("/")) return <Link href={href} {...props} />;
-  return <a href={href} target="_blank" rel="noopener noreferrer" {...props} />;
+  return <a {...props} href={href} target="_blank" rel={externalAnchorRel(href)} />;
 }
 
 function Table(props: ComponentPropsWithoutRef<"table">) {
@@ -99,6 +199,14 @@ export const mdxComponents = {
   a: Anchor,
   table: Table,
   DeckLabCTA,
+  DeckBlock,
+  FanContentNotice,
   InArticleAd,
   Callout,
 };
+
+/** Reviewed posts keep the ad break. Every other post renders the tag as nothing. */
+export function mdxComponentsForPost(reviewed: boolean) {
+  if (reviewed) return mdxComponents;
+  return { ...mdxComponents, InArticleAd: HiddenInArticleAd };
+}

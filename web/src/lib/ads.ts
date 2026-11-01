@@ -19,6 +19,11 @@ export const ADSENSE_IN_ARTICLE_SLOT = /^\d{6,20}$/.test(process.env.NEXT_PUBLIC
   ? (process.env.NEXT_PUBLIC_ADSENSE_SLOT_IN_ARTICLE as string)
   : "";
 
+/** A manual unit renders only when this page allows ads and both ids are set. */
+export function shouldRenderAdSlot(options: { allowed: boolean; client?: string; slot?: string }): boolean {
+  return options.allowed && Boolean(options.client) && Boolean(options.slot);
+}
+
 // ads.txt line authorizing Google to sell this site's inventory. The
 // certification authority ID f08c47fec0942fa0 is Google's, the same for
 // every publisher.

@@ -74,6 +74,9 @@ export type PostMeta = {
   related: string[];
   readingMinutes: number;
   wordCount: number;
+  /** Passed the guide rubric. Unreviewed posts stay reachable but noindex. */
+  reviewed: boolean;
+  author: string;
 };
 
 export type Post = PostMeta & {
@@ -104,7 +107,8 @@ function readPost(file: string): Post | null {
   const slug = file.replace(/\.mdx$/, "");
   const raw = fs.readFileSync(path.join(BLOG_DIR, file), "utf8");
   const { data, content } = matter(raw);
-  if (data.draft === true) return null;
+  // Drafts and archived guides are kept on disk and out of the site.
+  if (data.draft === true || data.archived === true) return null;
   if (!isCategory(String(data.category))) {
     throw new Error(`content/blog/${file}: unknown category "${data.category}"`);
   }
@@ -128,6 +132,8 @@ function readPost(file: string): Post | null {
     related: Array.isArray(data.related) ? data.related.map(String) : [],
     readingMinutes: Math.max(1, Math.round(wordCount / 230)),
     wordCount,
+    reviewed: data.reviewed === true,
+    author: data.author ? String(data.author) : AUTHOR,
     body: content,
     toc,
   };
@@ -152,12 +158,17 @@ export function allPosts(): Post[] {
   return allPostsIncludingScheduled().filter((post) => post.date <= today);
 }
 
+/** Reviewed posts that are allowed into the index, sitemap, and RSS. */
+export function indexablePosts(): Post[] {
+  return allPosts().filter((post) => post.reviewed);
+}
+
 export function getPost(slug: string): Post | undefined {
   return allPosts().find((post) => post.slug === slug);
 }
 
 export function postsInCategory(category: CategoryId): Post[] {
-  return allPosts().filter((post) => post.category === category);
+  return indexablePosts().filter((post) => post.category === category);
 }
 
 /** Frontmatter `related` first, then other posts in the same category. */
@@ -165,7 +176,7 @@ export function relatedPosts(post: Post, limit = 3): Post[] {
   const picked: Post[] = [];
   for (const slug of post.related) {
     const match = getPost(slug);
-    if (match && match.slug !== post.slug && !picked.includes(match)) picked.push(match);
+    if (match && match.reviewed && match.slug !== post.slug && !picked.includes(match)) picked.push(match);
   }
   for (const other of postsInCategory(post.category)) {
     if (picked.length >= limit) break;

@@ -17,6 +17,9 @@ category: learn-to-play   # learn-to-play | formats | deck-archetypes | strategy
 keywords: ["how to play magic the gathering", "mtg rules for beginners"]
 related: ["how-to-read-a-magic-card", "your-first-game-of-magic"]  # 2-4 slugs
 draft: false              # true hides it everywhere (index, sitemap, RSS)
+archived: false           # true pulls a scheduled guide off the site; the file stays
+reviewed: false           # true is required for the sitemap; failing guides are noindex
+author: Jared Cohen       # required on reviewed guides
 ---
 ```
 
@@ -24,8 +27,13 @@ The title renders as the page's only `<h1>`. Don't repeat it in the body.
 
 ## Scheduling
 
-Guides publish one per day. Set guides (`category: sets`) alternate with the
-other guides while there are set guides left to publish. A guide with a future `date` is hidden everywhere
+Reviewed guides (`reviewed: true`) are the ones that can be indexed. They may
+share a publish day, and the sourced archetype batch publishes together on
+merge rather than dripping across later dates. A guide with `archived: true`
+is off the schedule: it cannot publish, and the file stays in this folder so
+it can be restored. Unreviewed guides that are already public stay reachable
+and are marked noindex, and they are left out of the sitemap, the index, and
+RSS. They do not carry in-article ads. A guide with a future `date` is hidden everywhere
 (index, hubs, related, sitemap, RSS, its own URL) until midnight New York
 time on that day; listing pages re-render hourly, so it appears without a
 deploy. `SCHEDULE.md` is the calendar: take the next open date, one guide
@@ -47,9 +55,10 @@ Run `npm run check:guides` (CI does too) before committing.
   and to the builder (`/`). Only link slugs that exist (see the launch list in
   the PR or `ls`).
 - Components available without imports:
-  - `<InArticleAd />`: put one after the intro section (~300 words in), and a
-    second roughly midway through any article over 1,200 words. Always on its
-    own line between paragraphs, never inside a list or table.
+  - `<InArticleAd />`: reviewed guides only. Put one after the intro section
+    (~300 words in), and a second roughly midway through. Always on its own
+    line between paragraphs, never inside a list or table. Unreviewed posts
+    omit the component.
   - `<Callout title="Tip">…</Callout>`: short asides. Use sparingly.
   - `<DeckLabCTA format="commander" brief="Elf tribal that goes wide" />`: a
     button that opens the builder with the brief filled in. `format` is one of

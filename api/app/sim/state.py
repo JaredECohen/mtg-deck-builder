@@ -36,6 +36,9 @@ class CardInPlay:
     suspended_counters: int = 0  # for Suspend cards waiting in exile
     delay_until_turn: int = 0  # earliest turn this card becomes castable
     entered_tapped_this_turn: bool = False  # cleared at end of each turn
+    # Kept so mana production can see "Basic Land — Mountain". Color identity
+    # on a basic land is empty, so the type line is the colored-source signal.
+    type_line: str = ""
 
     @property
     def name(self) -> str:
@@ -144,11 +147,14 @@ class GameState:
 
 def card_to_in_play(profile: CardProfile, *, type_line: str) -> CardInPlay:
     type_l = type_line.lower()
+    basic_name = profile.name.lower().removeprefix("snow-covered ").strip()
+    is_basic_name = basic_name in {"plains", "island", "swamp", "mountain", "forest", "wastes"}
     return CardInPlay(
         profile=profile,
-        is_land="land" in type_l,
+        is_land="land" in type_l or is_basic_name,
         is_creature="creature" in type_l,
         is_planeswalker="planeswalker" in type_l,
+        type_line=type_line,
     )
 
 

@@ -2275,6 +2275,44 @@ ul.chips {
   text-decoration: none;
 }
 
+.deck-block {
+  margin: 24px 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.deck-block-title {
+  margin: 0 0 8px;
+}
+
+.deck-block-meta,
+.deck-block-sources,
+.affiliate-disclosure {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.deck-block-list {
+  max-height: 320px;
+  overflow: auto;
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.deck-block-list ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.deck-block-actions {
+  margin: 12px 0;
+}
+
 .blog-ad {
   margin: 28px 0;
   min-height: 100px;

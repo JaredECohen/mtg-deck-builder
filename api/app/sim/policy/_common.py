@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.sim.mana_colors import produced_colors
 from app.sim.state import CardInPlay, GameState
 
 
@@ -48,13 +49,8 @@ def choose_land_to_play(state: GameState) -> CardInPlay | None:
 
 
 def _produces(land: CardInPlay) -> set[str]:
-    """Crude color-production inference from land profile."""
-    colors: set[str] = set()
-    text_blob = " ".join(land.profile.combo_primitives.keywords)
-    for color in ("W", "U", "B", "R", "G"):
-        if color in text_blob:
-            colors.add(color)
-    return colors
+    """Colors this land adds, including basic land types."""
+    return {color for color in produced_colors(land) if color != "C"}
 
 
 def castable(card: CardInPlay, state: GameState, extra_mana: int = 0) -> bool:

@@ -15,7 +15,7 @@ import { RevisionHistory } from "./revision-history";
 import { useDeckChat } from "@/hooks/use-deck-chat";
 import type { DeckRevision } from "@/hooks/use-deck-generator";
 import { trackTcgplayerCartClicked } from "@/lib/analytics";
-import { AFFILIATE_DISCLOSURE, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
+import { AFFILIATE_DISCLOSURE, externalAnchorRel, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
 import { MAX_PROMPT_CHARS } from "@/lib/api";
 import { cardCount } from "@/lib/deck-diff";
 import type {
@@ -57,7 +57,7 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
       <a
         href={massEntryUrl}
         target="_blank"
-        rel="noreferrer sponsored"
+        rel={externalAnchorRel(massEntryUrl)}
         className="button"
         style={{ marginBottom: 12 }}
         onClick={() => trackTcgplayerCartClicked(deck.format)}
@@ -67,22 +67,25 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
       <details>
         <summary style={{ cursor: "pointer" }}>{shoppable.length} cards to shop individually</summary>
         <ul className="card-list" style={{ marginTop: 8 }}>
-          {shoppable.map((card) => (
-            <li key={`shop-${card.name}`} className="card-row">
-              <span>
-                {card.quantity}x {card.name}
-              </span>
-              <a
-                href={tcgplayerSearchUrl(card.name)}
-                target="_blank"
-                rel="noreferrer sponsored"
-                className="chip"
-                aria-label={`Buy ${card.name} on TCGplayer`}
-              >
-                TCGplayer
-              </a>
-            </li>
-          ))}
+          {shoppable.map((card) => {
+            const href = tcgplayerSearchUrl(card.name);
+            return (
+              <li key={`shop-${card.name}`} className="card-row">
+                <span>
+                  {card.quantity}x {card.name}
+                </span>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel={externalAnchorRel(href)}
+                  className="chip"
+                  aria-label={`Buy ${card.name} on TCGplayer`}
+                >
+                  TCGplayer
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </details>
       <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
