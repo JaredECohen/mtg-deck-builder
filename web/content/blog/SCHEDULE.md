@@ -2,8 +2,11 @@
 
 The generic scheduled guides (set guides and the other non-archetype backlog)
 are paused. Their files are still in `content/blog` with `archived: true`, so
-they cannot publish and can be restored by removing that flag. Reviewed
-archetype guides keep their dates. New question-driven pilots may share a day.
+they cannot publish and can be restored by removing that flag. The 14 reviewed
+archetype guides publish together on 2026-11-01 (merge day), not on the drip
+dates still listed in this table. Older unreviewed posts that are already
+public stay reachable, noindex, and out of the sitemap, index, and RSS.
+New question-driven pilots may share a day.
 
 One guide a day at midnight New York time still applies to unreviewed guides
 (each file's `date`; see README.md).

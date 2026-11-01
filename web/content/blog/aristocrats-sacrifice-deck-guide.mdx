@@ -1,7 +1,7 @@
 ---
 title: "What Has to Be True for a Sacrifice Deck to Work?"
 description: "What has to be true for a sacrifice deck in Magic: The Gathering? Clavileno's precon is $157.27, and Exquisite Blood alone is $41.93 of that receipt."
-date: 2026-12-19
+date: 2026-11-01
 updated: 2026-11-01
 author: Jared Cohen
 reviewed: true
@@ -29,31 +29,25 @@ The goldfish does win, on turn 10.70 on average, 91.7% of 120 games, by attackin
 | You only have the payoff | You will have nothing to sacrifice | Add bodies before you add a second payoff |
 | You want the loop to show up in a goldfish clock | It will not. The clock is combat | Turn 10.70 is creatures attacking, not a drain loop |
 
-The table is the decision. The deck sections under it are the measurements the decision is allowed to use. If a number is not in those sections, it is not a number this guide is claiming.
-
 ## Example decks
 
 <DeckBlock id="blood-rites" />
 
 ### Blood Rites
 
-Blood Rites, commanded by Clavileño, First of the Blessed is an official Commander Deck released 2023-11-17. The decklist and the Wizards source link come from MTGJSON file BloodRites_LCC. Source: https://magic.wizards.com/en/news/announcements/the-lost-caverns-of-ixalan-commander-decklists.
+Blood Rites, commanded by Clavileño, First of the Blessed is the 2023-11-17 Commander Deck stored as MTGJSON file BloodRites_LCC. Wizards source: https://magic.wizards.com/en/news/announcements/the-lost-caverns-of-ixalan-commander-decklists.
 
-Read this as a deck that wants creatures to die on purpose. The price concentration tells you which one card the product is actually selling.
+You need a body, a payoff that cares that the body died, and a way to sacrifice it on your timing. Two of the three is a vampire deck that sometimes throws cards away. Exquisite Blood is the line item that makes this product expensive, and it is a life-gain card. If you are not assembling that combo, the sacrifice plan can exist without it and the receipt changes by that one line. Do not sacrifice your only attacker for a one-point drain unless the drain wins.
 
-The nonland mana curve is 8 at mana value 1, 19 at mana value 2, 12 at mana value 3, 11 at mana value 4, 6 at mana value 5, 4 at mana value 6, 2 at mana value 7 or more. The list runs 37 lands in the library (the commander is not one of them).
+Blood Rites's nonland curve is 8 at 1, 19 at 2, 12 at 3, 11 at 4, 6 at 5, 4 at 6, 2 at 7+, and it plays 37 lands in the 99.
 
-Colored sources, using Scryfall produced_mana and counting basic lands as the color on their type line, restricted to this deck's colors: 23 white, 29 black.
+Blood Rites has 23 white, 29 black mana sources and 37 land cards.
 
-MTGJSON AllPricesToday (2026-11-01) prices the exact printing in the product at $157.27 for main deck, sideboard, and commander, using TCGplayer nonfoil retail when it exists. The three most expensive nonbasic names are 1 Exquisite Blood at $41.93 total, 1 Charismatic Conqueror at $25.75 total, 1 Carmen, Cruel Skymarcher at $7.30 total, which is 47.7% of the priced total. Basic lands in the product add $4.36 on their own, because the price is the printing Wizards put in the deck, not the cheapest Plains on the market.
+On the 2026-11-01 AllPricesToday nonfoil printings, Blood Rites is $157.27 for main deck, sideboard, and commander. The three most expensive nonbasic names are 1 Exquisite Blood ($41.93), 1 Charismatic Conqueror ($25.75), 1 Carmen, Cruel Skymarcher ($7.30), 47.7% of that priced total.
 
-Across 120 goldfish games (seed 1729, midrange policy, opponent at 40 life) it won 91.7% and the average winning game ended on turn 10.7 (median 10.5). There is no opponent interaction in that number. A goldfish clock is a ceiling on speed, not a match win rate.
+Blood Rites won 91.7% of 120 goldfish games, average winning turn 10.7 (median 10.5, seed 1729, midrange policy, opponent at 40 life).
 
-Budget benchmarks, not upgrade advice: the cheapest same-type card within one mana value in the other official lists we priced, still legal in the format. Exquisite Blood at $41.93 versus Conclave Tribunal at $0.13 (a $41.80 gap on one copy); Charismatic Conqueror at $25.75 versus Phyrexian Rager at $0.14 (a $25.61 gap on one copy); Carmen, Cruel Skymarcher at $7.30 versus Corpse Augur at $0.12 (a $7.18 gap on one copy). Those stand-ins do not do the same job. The gap is how much you are paying for the specific card, not a sleeve-in recommendation.
-
-Scryfall's oracle-cards bulk dated 2026-11-01 still lists every card in this product as legal in commander.
-
-Every figure in this section is from that fetch: decklist and printing from MTGJSON on 2026-11-01, legality and mana production from the Scryfall oracle-cards bulk updated 2026-11-01, prices from MTGJSON AllPricesToday dated 2026-11-01, and the clock from the Deck Lab goldfish (120 games, seed 1729) after basic lands were taught to add their own color.
+Every card in Blood Rites is legal in commander today per the Scryfall bulk of 2026-11-01.
 
 <InArticleAd />
 
@@ -81,11 +75,11 @@ No. Vampires attack. Aristocrats wants them to die. Clavileno's product leans on
 
 ### What is a reasonable budget version?
 
-Not a same-type swap from another precon. Those benchmarks are on the deck block as price gaps, and they do not preserve the sacrifice trigger. Cut Exquisite Blood if you are not playing the life combo, and the receipt drops by that line cost.
+Cut Exquisite Blood if you are not playing the life combo, and the receipt drops by that line cost. A cheaper creature from another precon does not keep the sacrifice trigger.
 
 ## How this was made
 
-These guides use official Wizards product lists redistributed by MTGJSON under its MIT license (https://www.mtgjson.com/license/). Each deck block names the MTGJSON file and the Wizards source URL stored on that file. Prices are the nonfoil retail figure in MTGJSON AllPricesToday version 5.3.0+20261101, dated 2026-11-01, for the printing in the product: TCGplayer when that printing has a nonfoil retail price, otherwise ManaPool from the same file. Legality, type lines, mana values, and produced mana come from Scryfall's oracle-cards bulk, updated 2026-11-01T10:02:02.149+00:00, under Scryfall's API terms (https://scryfall.com/docs/api). The clock is the Deck Lab goldfish in app.sim.goldfish, 120 games, seed 1729, after a fix that counts basic lands as colored sources. No tournament-site scrape, and no paid API, went into these figures. Fetched 2026-11-01.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
 
 <FanContentNotice />
 

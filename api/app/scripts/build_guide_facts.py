@@ -4,9 +4,14 @@ Nothing here is a paid API. Scryfall is read from the oracle-cards bulk file
 (one download, then a local filter). MTGJSON deck files are the official
 product lists; AllPricesToday supplies the TCGplayer / ManaPool retail price
 for the exact printing in each list. Both dumps are cached under /tmp/mtgdata
-and the extracted facts are written into the repo.
+and the extracted facts are written into the repo as compact JSON.
+
+Tokens that ship in a product box are not cards. They are dropped before
+price totals, land and spell counts, and the goldfish. Regenerate, from
+``api/``:
 
     python -m app.scripts.build_guide_facts
+    python -m app.scripts.guide_articles
 """
 
 from __future__ import annotations
@@ -30,6 +35,11 @@ DECK_DIR = CACHE_DIR / "decks"
 SNAPSHOT = ROOT / "api" / "app" / "data" / "official_decks.json"
 CARD_CACHE = ROOT / "api" / "app" / "data" / "guide_card_cache.json"
 EXAMPLE_OUT = ROOT / "web" / "src" / "data" / "example-decks.json"
+EXAMPLE_LISTS_OUT = ROOT / "web" / "src" / "data" / "example-deck-lists.json"
+
+# Scryfall layouts that are not sleeveable cards. A token in the main board
+# (Dinosaur Egg in the Pantlaza precon) must not affect price, counts, or the sim.
+TOKEN_LAYOUTS = {"token", "double_faced_token", "emblem", "art_series"}
 
 ORACLE_URL = "https://data.scryfall.io/oracle-cards/oracle-cards-20261101100202.jsonl.gz"
 PRICES_URL = "https://mtgjson.com/api/v5/AllPricesToday.json.gz"
@@ -113,6 +123,30 @@ def _load_deck(file_name: str) -> dict:
     return json.loads(dest.read_text(encoding="utf-8"))["data"]
 
 
+def is_token_type_line(type_line: str) -> bool:
+    """True when any face's type line uses Token as a supertype."""
+    for face in type_line.split("//"):
+        words = face.replace("—", " ").replace("–", " ").split()
+        if "Token" in words:
+            return True
+    return False
+
+
+def is_token_entry(entry: dict, oracle: dict[str, dict]) -> bool:
+    """A token card from an MTGJSON product list, not a spell that creates tokens."""
+    layout = str(entry.get("layout") or "")
+    if layout in TOKEN_LAYOUTS:
+        return True
+    types = entry.get("types")
+    if isinstance(types, list) and "Token" in types:
+        return True
+    name = clean_card_name(str(entry.get("name") or ""))
+    info = oracle.get(name) or {}
+    if str(info.get("layout") or "") in TOKEN_LAYOUTS:
+        return True
+    return is_token_type_line(str(info.get("type_line") or ""))
+
+
 def _entries(raw: list[dict] | None) -> list[dict]:
     totals: dict[str, dict] = {}
     for entry in raw or []:
@@ -149,6 +183,7 @@ def _stream_oracle(names: set[str]) -> dict[str, dict]:
                 "power": card.get("power"),
                 "toughness": card.get("toughness"),
                 "legalities": card.get("legalities") or {},
+                "layout": card.get("layout") or "",
                 "scryfall_uri": card.get("scryfall_uri"),
             }
             if len(found) == len(names):
@@ -249,56 +284,6 @@ def _goldfish(mainboard: list[dict], oracle: dict[str, dict], *, policy: str, fm
     }
 
 
-def _swaps(deck_names: set[str], deck_colors: set[str], fmt: str, priced_rows: list[dict], pool: list[dict]) -> list[dict]:
-    swaps: list[dict] = []
-    used_adds: set[str] = set()
-    expensive = sorted(
-        [row for row in priced_rows if row["name"] not in BASIC_NAMES and row["type"] != "Land" and row["usd"]],
-        key=lambda row: row["line_usd"],
-        reverse=True,
-    )
-    for row in expensive:
-        if len(swaps) >= 3:
-            break
-        best = None
-        for candidate in pool:
-            if candidate["name"] in deck_names or candidate["name"] in used_adds:
-                continue
-            if candidate["name"] in BASIC_NAMES or candidate["usd"] is None:
-                continue
-            if candidate["legalities"].get(fmt) != "legal":
-                continue
-            identity = set(candidate["color_identity"])
-            if identity - deck_colors:
-                continue
-            if candidate["primary_type"] != row["primary_type"]:
-                continue
-            if abs(candidate["cmc"] - row["cmc"]) > 1:
-                continue
-            if candidate["usd"] > row["usd"] * 0.5:
-                continue
-            savings = round(row["usd"] - candidate["usd"], 2)
-            if savings < 1:
-                continue
-            if best is None or savings > best["savings_usd"]:
-                best = {
-                    "remove": row["name"],
-                    "remove_usd": row["usd"],
-                    "add": candidate["name"],
-                    "add_usd": candidate["usd"],
-                    "savings_usd": savings,
-                    "add_type": candidate["type_line"],
-                    "reason": (
-                        f"Same {row['primary_type'].lower()} role, mana value within 1, "
-                        f"legal in {fmt}, cheaper nonfoil retail"
-                    ),
-                }
-        if best:
-            used_adds.add(best["add"])
-            swaps.append(best)
-    return swaps
-
-
 def build() -> dict:
     prices_doc = None
     decks_raw = []
@@ -321,17 +306,27 @@ def build() -> dict:
     prices = prices_doc["data"]
     price_meta = prices_doc.get("meta") or {}
 
-    pool: list[dict] = []
-    seen_pool: set[str] = set()
     examples: dict[str, dict] = {}
     cache_cards: dict[str, dict] = {}
 
     for deck_id, file_name, policy, raw in decks_raw:
         fmt = "commander" if "commander" in str(raw.get("type") or "").lower() else "pioneer"
-        commanders = _entries(raw.get("commander"))
+
+        def playable(entries: list[dict] | None) -> list[dict]:
+            kept = []
+            for entry in entries or []:
+                if is_token_entry(entry, oracle):
+                    name = clean_card_name(str(entry.get("name") or ""))
+                    if name:
+                        print(f"  skip token {deck_id}: {name}")
+                    continue
+                kept.append(entry)
+            return _entries(kept)
+
+        commanders = playable(raw.get("commander"))
         commander_names = {card["name"] for card in commanders}
-        mainboard = [card for card in _entries(raw.get("mainBoard")) if card["name"] not in commander_names]
-        sideboard = _entries(raw.get("sideBoard"))
+        mainboard = [card for card in playable(raw.get("mainBoard")) if card["name"] not in commander_names]
+        sideboard = playable(raw.get("sideBoard"))
         identity: list[str] = []
         for commander in commanders:
             info = oracle.get(commander["name"]) or {}
@@ -382,9 +377,6 @@ def build() -> dict:
                 "legalities": record["legalities"],
                 "produced_mana": record["produced_mana"],
             }
-            if card["name"] not in seen_pool:
-                seen_pool.add(card["name"])
-                pool.append(record)
             return record
 
         rows = [priced(card) for card in mainboard + sideboard + commanders]
@@ -458,29 +450,11 @@ def build() -> dict:
                 "mana_curve": curve,
                 "color_sources": sources,
                 "illegal_in_format": illegal,
-                "goldfish": fish,
-                "budget_swaps": [],
-            },
-            "_rows": rows,
-            "_commander_names": list(commander_names),
+            "goldfish": fish,
+        },
         }
         kill = fish["avg_kill_turn"]
         print(f"  {deck_id}: ${total} top3 {examples[deck_id]['analysis']['top3_share']} kill {kill} wins {fish['win_rate']}")
-
-    for deck_id, deck in examples.items():
-        rows = deck.pop("_rows")
-        commander_names = set(deck.pop("_commander_names"))
-        deck["analysis"]["budget_swaps"] = [
-            swap
-            for swap in _swaps(
-                {card["name"] for card in deck["mainboard"]} | commander_names,
-                set(deck["color_identity"]),
-                deck["format"],
-                [row for row in rows if row["name"] not in commander_names],
-                pool,
-            )
-            if swap["remove"] not in commander_names
-        ][:3]
 
     document = {
         "fetched_at": FETCHED_ON,
@@ -515,23 +489,30 @@ def build() -> dict:
         },
         "decks": examples,
     }
-    EXAMPLE_OUT.parent.mkdir(parents=True, exist_ok=True)
-    EXAMPLE_OUT.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    CARD_CACHE.write_text(
-        json.dumps(
-            {
-                "fetched_at": FETCHED_ON,
-                "sources": document["sources"],
-                "cards": cache_cards,
-            },
-            indent=2,
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
+    lists = {
+        deck_id: {
+            "id": deck["id"],
+            "name": deck["name"],
+            "format": deck["format"],
+            "commander": deck["commander"],
+            "mainboard": deck["mainboard"],
+            "sideboard": deck["sideboard"],
+        }
+        for deck_id, deck in examples.items()
+    }
+    _write_compact(EXAMPLE_OUT, document)
+    _write_compact(EXAMPLE_LISTS_OUT, {"fetched_at": FETCHED_ON, "decks": lists})
+    _write_compact(
+        CARD_CACHE,
+        {"fetched_at": FETCHED_ON, "sources": document["sources"], "cards": cache_cards},
     )
-    print(f"wrote {EXAMPLE_OUT} and {CARD_CACHE}")
+    print(f"wrote {EXAMPLE_OUT}, {EXAMPLE_LISTS_OUT}, and {CARD_CACHE}")
     return document
+
+
+def _write_compact(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

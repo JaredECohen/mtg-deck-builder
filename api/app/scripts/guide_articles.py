@@ -43,55 +43,59 @@ def deck_line(deck: dict) -> str:
     return who
 
 
+# Reviewed guides publish together on merge. The old drip ran through 2027-01-20.
+PUBLISH_ON = "2026-11-01"
+
+
+def price_scope(deck: dict) -> str:
+    """What a product total is allowed to claim.
+
+    An unpriced printing is missing from the sum. Do not describe that sum as
+    the main deck, sideboard, and commander.
+    """
+    unpriced = list(deck["analysis"]["unpriced"])
+    if not unpriced:
+        return "main deck, sideboard, and commander"
+    names = ", ".join(unpriced)
+    label = "card" if len(unpriced) == 1 else "cards"
+    return f"priced cards only, {len(unpriced)} unpriced {label} ({names})"
+
+
 def sources_sentence(deck: dict) -> str:
     sources = deck["analysis"]["color_sources"]
     parts = [f"{sources[color]} {COLORS[color]}" for color in "WUBRG" if sources.get(color)]
     if not parts:
-        return "No colored sources were detected."
-    return (
-        "Colored sources, using Scryfall produced_mana and counting basic lands as the color "
-        f"on their type line, restricted to this deck's colors: {', '.join(parts)}."
-    )
+        return f"{deck['name']} showed no colored mana sources."
+    lands = deck["analysis"]["land_count"]
+    listed = ", ".join(parts)
+    # produced_mana counts every permanent that can add a color, including creatures.
+    if any(sources.get(color, 0) > lands for color in "WUBRG"):
+        return (
+            f"{deck['name']} has {listed} mana sources, not lands. "
+            f"The list plays {lands} land cards; mana creatures are included in the source count."
+        )
+    return f"{deck['name']} has {listed} mana sources and {lands} land cards."
 
 
 def curve_sentence(deck: dict) -> str:
     points = [point for point in deck["analysis"]["mana_curve"] if point["card_count"]]
     bits = []
     for point in points:
-        label = "7 or more" if point["mana_value"] == 7 else str(point["mana_value"])
-        bits.append(f"{point['card_count']} at mana value {label}")
-    lands = deck["analysis"]["land_count"]
-    return (
-        f"The nonland mana curve is {', '.join(bits)}. "
-        f"The list runs {lands} lands in the library"
-        + (" (the commander is not one of them)." if deck["commander"] else ".")
-    )
+        label = "7+" if point["mana_value"] == 7 else str(point["mana_value"])
+        bits.append(f"{point['card_count']} at {label}")
+    zone = "the 99" if deck["commander"] else "the main deck"
+    return f"{deck['name']}'s nonland curve is {', '.join(bits)}, and it plays {deck['analysis']['land_count']} lands in {zone}."
 
 
-def cost_sentence(deck: dict) -> str:
+def cost_sentence(deck: dict, fetched_at: str) -> str:
     analysis = deck["analysis"]
     top = ", ".join(
-        f"{card['quantity']} {card['name']} at {money(card['line_usd'])} total" for card in analysis["top_cards"]
+        f"{card['quantity']} {card['name']} ({money(card['line_usd'])})" for card in analysis["top_cards"]
     )
-    basic = analysis.get("basic_land_cost_usd")
-    unpriced = analysis["unpriced"]
-    extra = ""
-    if basic:
-        extra += (
-            f" Basic lands in the product add {money(basic)} on their own, because the price is the "
-            "printing Wizards put in the deck, not the cheapest Plains on the market."
-        )
-    if unpriced:
-        extra += (
-            " These cards had no TCGplayer nonfoil price on that printing, so the total undercounts: "
-            + ", ".join(unpriced[:6])
-            + "."
-        )
     return (
-        f"MTGJSON AllPricesToday (2026-11-01) prices the exact printing in the product at "
-        f"{money(analysis['total_cost_usd'])} for main deck, sideboard, and commander, using TCGplayer "
-        f"nonfoil retail when it exists. The three most expensive nonbasic names are {top}, "
-        f"which is {pct(analysis['top3_share'])} of the priced total.{extra}"
+        f"On the {fetched_at} AllPricesToday nonfoil printings, {deck['name']} is "
+        f"{money(analysis['total_cost_usd'])} for {price_scope(deck)}. "
+        f"The three most expensive nonbasic names are {top}, {pct(analysis['top3_share'])} of that priced total."
     )
 
 
@@ -99,98 +103,189 @@ def fish_sentence(deck: dict) -> str:
     fish = deck["analysis"]["goldfish"]
     if fish["wins"] == 0:
         return (
-            f"The Deck Lab goldfish played {fish['games']} solitaire games (seed {fish['seed']}, "
-            f"{fish['policy']} policy, opponent at {fish['starting_life']} life, {fish['max_turns']} turns) "
-            "and never won one. The simulator casts spells and turns creatures sideways. It does not "
-            "assemble a named combo, storm off, or mill an opponent out. A zero win rate means this "
-            "list does not win a goldfish race. It does not mean the deck cannot win a real match."
+            f"{deck['name']} won 0 of {fish['games']} goldfish games "
+            f"(seed {fish['seed']}, {fish['policy']} policy, opponent at {fish['starting_life']} life, "
+            f"{fish['max_turns']} turns)."
         )
     return (
-        f"Across {fish['games']} goldfish games (seed {fish['seed']}, {fish['policy']} policy, "
-        f"opponent at {fish['starting_life']} life) it won {pct(fish['win_rate'])} and the average "
-        f"winning game ended on turn {fish['avg_kill_turn']} (median {fish['median_kill_turn']}). "
-        "There is no opponent interaction in that number. A goldfish clock is a ceiling on speed, "
-        "not a match win rate."
+        f"{deck['name']} won {pct(fish['win_rate'])} of {fish['games']} goldfish games, "
+        f"average winning turn {fish['avg_kill_turn']} (median {fish['median_kill_turn']}, seed {fish['seed']}, "
+        f"{fish['policy']} policy, opponent at {fish['starting_life']} life)."
     )
 
 
-def swap_sentence(deck: dict) -> str:
-    swaps = deck["analysis"]["budget_swaps"]
-    if not swaps:
-        return (
-            "No card in the other priced official lists was legal in this format, within one mana value, "
-            "the same card type, and at most half the price. That absence is data too: the expensive "
-            "cards are not sitting next to an obvious same-type substitute in this pool."
-        )
-    bits = []
-    for swap in swaps:
-        bits.append(
-            f"{swap['remove']} at {money(swap['remove_usd'])} versus {swap['add']} at {money(swap['add_usd'])} "
-            f"(a {money(swap['savings_usd'])} gap on one copy)"
-        )
-    return (
-        "Budget benchmarks, not upgrade advice: the cheapest same-type card within one mana value in the "
-        "other official lists we priced, still legal in the format. "
-        + "; ".join(bits)
-        + ". Those stand-ins do not do the same job. The gap is how much you are paying for the specific "
-        "card, not a sleeve-in recommendation."
-    )
-
-
-def illegal_sentence(deck: dict) -> str:
+def illegal_sentence(deck: dict, fetched_at: str) -> str:
     names = deck["analysis"]["illegal_in_format"]
     if not names:
         return (
-            f"Scryfall's oracle-cards bulk dated 2026-11-01 still lists every card in this product as legal "
-            f"in {deck['format']}."
+            f"Every card in {deck['name']} is legal in {deck['format']} today per the Scryfall bulk of {fetched_at}."
         )
-    return (
-        "Scryfall's oracle-cards bulk dated 2026-11-01 marks "
-        + ", ".join(names)
-        + f" as not legal in {deck['format']}. The product was printed before that change. Copying the "
-        "list into a current tournament deck without checking the ban list is how a legal product becomes "
-        "an illegal deck."
-    )
+    joined = ", ".join(names)
+    verb = "is" if len(names) == 1 else "are"
+    return f"{joined} {verb} not legal today per the Scryfall bulk of {fetched_at}."
 
 
-def narrate(deck: dict, lens: str) -> str:
-    title = deck_line(deck)
+# Deck-specific play, one home per list. These are not shared across the
+# should-you-play page and the how-to page.
+PLAY_NOTES: dict[str, str] = {
+    "mono-red-burn": (
+        "Keep a hand that can cast two spells before turn four, and point the one-mana spells at the opponent "
+        "unless a blocker would deal more damage than the spell. A hand of three lands and two four-drops is not "
+        "this deck: the race is the one-drops. If the opponent plays a creature that does not race you, ignore it. "
+        "The sideboard is where you answer a creature deck that is faster than the goldfish assumed, not where you "
+        "add a five-drop because it looks powerful."
+    ),
+    "gruul-stompy": (
+        "Trade the two-drops. Save the four- and five-drops for a turn they can attack more than once. "
+        "Chandra is one of the three names that dominate the receipt, so she has to stay in play and win the "
+        "middle turns, not trade for the first creature you see. A sweeper that kills your two-drops is why this "
+        "list is a turn slower than burn, and that turn is the plan, not a mistake. Do not shave a land to fit "
+        "another two-drop; the curve reaches five."
+    ),
+    "dimir-control": (
+        "Decide which threat you are allowed to answer, and take the others on the life total. Spending the "
+        "two-mana answer on a one-drop that was not going to kill you is how this deck loses with cards still "
+        "in hand. Make the land drop before you tap out for the finisher. The early turns look empty because "
+        "the deck is waiting, and the goldfish records that wait as a loss."
+    ),
+    "seize-control": (
+        "Cast Mizzix, then cast the four- and five-mana spells the curve is full of. The experience counters "
+        "are the discount; holding up one blue mana the way a Pioneer permission deck does wastes the commander. "
+        "A hand of counters and no spell you actually want to resolve cheaper is a mulligan. The product name "
+        "says control. The turns you play are a spell deck that happens to be slow."
+    ),
+    "veloci-ramp-tor": (
+        "Spend the early turns on land drops and the three-mana ramp, not on attacks. Pantlaza discovers into "
+        "a curve that still has seven-drops, so a hand of two lands and three of those seven-drops is a mulligan "
+        "even though every card is a dinosaur you want. Do not cut lands to sleeve another dinosaur. The extra "
+        "land is the ramp plan's floor. Akroma's Will is the expensive card because it saves the turn you finally attack, "
+        "not because it ramps."
+    ),
+    "lands-wrath": (
+        "Obuun wants a land entering the battlefield, not a mana rock that dies to a two-drop. A spell that puts "
+        "a land into play is the ramp. A creature that taps for mana is a different deck and a different clock. "
+        "If you add another landfall payoff, take it from a creature slot. Taking it from the land count strands "
+        "the payoff the deck is named for. Count the lands by hand before you call the list greedy."
+    ),
+    "orzhov-humans": (
+        "This curve stops at two mana. There is no five-drop to take over the midgame, so you have to be ahead "
+        "on creatures before the opponent's four-drop arrives, and the expensive cards are the lands that let "
+        "you cast both colors on time. A hand with the shock land and no two-drop is not a keep just because "
+        "the land was pricey. Play the creatures. The mana base is the receipt, not the threat."
+    ),
+    "lotus-field": (
+        "Name the pile before you sleeve it: Lotus Field, the mana it makes, and the payoff that spends that mana. "
+        "If you cannot point at those cards in the list below, you do not have the combo, you have a pile of "
+        "spells. Practice the line by hand. Adding creatures so a combat simulator has something to attack with "
+        "turns the deck into a bad midrange list. The land is the combo. A cheaper land from another product is not a stand-in."
+    ),
+    "azorius-spirits": (
+        "Attack with the two-drop fliers and spend the cheap interaction on the spell that would stabilize the "
+        "opponent, not on the first spell they cast. If the game reaches a board of five-drops, the two-drops "
+        "are no longer ahead. That is the trade this deck makes on purpose. Cutting the interaction to add more "
+        "creatures makes a worse aggro deck, not a better tempo deck."
+    ),
+    "izzet-phoenix": (
+        "Do not register this list. The cantrip the deck was built around is not legal in Pioneer on the current "
+        "bulk, and the combat clock without that cantrip is not a tempo clock. Steam Vents is the expensive card. "
+        "Paying for the land and then being unable to cast the banned spell is the trap. Rebuild the shell only "
+        "after you have a legal way to put Phoenix in the graveyard and bring it back on the turn you wanted."
+    ),
+    "token-triumph": (
+        "Emmara makes a body when she becomes tapped, so the turn you tap her is the turn you get the token, "
+        "and a sweeper after that deletes the body without giving you a card back. Make the tokens again, or "
+        "do not attack into the sweeper. This is the cheap version of the plan: the priced total is the whole "
+        "precon we could price, and the commander itself had no nonfoil retail on that printing. The combat "
+        "clock is a lot of small bodies, not one protected attack."
+    ),
+    "rebellion-rising": (
+        "Neyali's expensive cards are the protection spells, not the token makers. Flawless Maneuver and "
+        "Clever Concealment are there so the attack step survives. If you buy the makers and skip those two "
+        "instants, you bought the half of the deck one sweeper deletes. Cast the protection on the turn you "
+        "attack, not on the turn you are afraid. A token deck with no way to save the turn is a different, worse deck."
+    ),
+    "blood-rites": (
+        "You need a body, a payoff that cares that the body died, and a way to sacrifice it on your timing. "
+        "Two of the three is a vampire deck that sometimes throws cards away. Exquisite Blood is the line item "
+        "that makes this product expensive, and it is a life-gain card. If you are not assembling that combo, "
+        "the sacrifice plan can exist without it and the receipt changes by that one line. Do not sacrifice "
+        "your only attacker for a one-point drain unless the drain wins."
+    ),
+    "revenant-recon": (
+        "Necromancy and Animate Dead are enchantments. Reanimate is a sorcery. You need a creature already in "
+        "the graveyard on the turn you cast any of them, which is what the one-drops are for. Reanimate on an "
+        "empty yard is a blank card. The unfair line is the one you count by hand: enablers in the first four "
+        "turns, then one of those three spells. The combat goldfish is the fair plan, the one you fall back to "
+        "when the graveyard is hated."
+    ),
+    "plunder-the-graves": (
+        "Meren is the reanimation spell. She has to stay on the battlefield and collect experience, which is a "
+        "different failure than Mirko's product, where the famous spells are the cards you paid for. If Meren "
+        "dies and stays dead, you are hard-casting the creatures, and the receipt on this printing is those "
+        "creatures plus Skullclamp, not Reanimate. Do not buy the one-mana sorcery and pretend you are still "
+        "playing the 2015 list."
+    ),
+    "mind-flayarrrs": (
+        "Mindcrank mills when life is lost, so this deck can mill on a turn it did not attack. The goldfish "
+        "cannot see that. It attacks, and the winning turn it reports is the creature backup, not the mill clock. "
+        "Count cards milled per turn yourself. One Mindcrank does not empty three 99-card libraries. Several "
+        "cards in the box had no nonfoil price, so the dollar figure is the priced cards only."
+    ),
+    "sneak-attack": (
+        "Anowon mills when rogues deal combat damage. The attack step and the mill plan are the same turn, "
+        "which is why a combat clock is closer to the real plan here than it is for a Mindcrank deck. If you "
+        "cannot attack, you are not milling. Do not describe a turn you spent casting a rogue as a mill turn "
+        "unless that rogue connected. The commander had no nonfoil retail on the printing in the box."
+    ),
+    "orzhov-auras": (
+        "The creature has to be on the battlefield before the auras do anything. A hand of auras and no creature "
+        "is a mulligan even though the curve is full of one-drops. Lurrus, the companion that used to replay "
+        "the auras after the creature died, is not a card you can register in Pioneer today. Thoughtseize has "
+        "to take the removal spell, not a random card, because the life you pay is the race."
+    ),
+    "virtue-and-valor": (
+        "Ellivere's recursion is the Commander answer to auras in the graveyard. Retether and Hall of Heliod's "
+        "Generosity do nothing if you have not put auras in the yard, and they are a large piece of the receipt. "
+        "One removal spell on the enchanted creature is the game you built the deck to survive. A second creature, "
+        "or a way to get the auras back, is the actual count. Six auras that already kill are enough. Twenty auras "
+        "and one creature is a hand that does nothing the turn the creature dies."
+    ),
+    "arcane-maelstrom": (
+        "Deflecting Swat is about half the priced receipt and it is a free counter, not the copy engine. "
+        "Twinning Staff is the card that cares that you cast spells. If you wanted Swat, say so and price that "
+        "card. If you wanted Kalamax, look at the list without Swat and see whether you still cast two spells "
+        "on the turn the commander can copy one. The combat goldfish won nothing here because copying a spell "
+        "is not an attack."
+    ),
+    "prismari-performance": (
+        "Zaffai wants a large spell, and the curve already has a pile of them at seven or more. Seething Song "
+        "is in the list because those spells cost what they cost. Adding another seven-drop without a ritual "
+        "or a land is how the spell stays in your hand. The commander and Veyran had no nonfoil price on these "
+        "printings, so the total is the priced cards only. Cast one large spell on the turn you have the mana, "
+        "not two small ones, unless you changed commanders."
+    ),
+}
+
+
+def narrate(deck: dict, fetched_at: str) -> str:
+    note = PLAY_NOTES.get(deck["id"])
+    if not note:
+        raise SystemExit(f"no play note for {deck['id']}")
     source = deck["source_url"] or "the Wizards product page stored by MTGJSON"
-    opener = {
-        "aggro": "Read this as a race. The question is how many turns of goldfishing the mana and the curve actually buy.",
-        "control": "Read this as a deck that is trying not to race. A goldfish win rate near zero is the expected shape, not a bug in the list.",
-        "midrange": "Read this as a deck that wants the game to reach the turns where its creatures are larger than the opponent's.",
-        "combo": "Read this as a deck whose win is a specific pile of cards, which a combat goldfish will not find.",
-        "tempo": "Read this as a deck that spends early turns on small creatures and cheap interaction, then has to end the game before a bigger deck stabilizes.",
-        "ramp": "Read this as mana acceleration. The curve only makes sense next to the land count, because the extra lands are the plan.",
-        "tokens": "Read this as a deck that spends cards to make bodies it did not draw. The goldfish clock is combat damage from those bodies, not from a single large spell.",
-        "sacrifice": "Read this as a deck that wants creatures to die on purpose. The price concentration tells you which one card the product is actually selling.",
-        "reanimate": "Read this as a deck that cheats on mana by putting something into the graveyard and returning it. The one-drops are the enablers, not the threats.",
-        "mill": "Read this carefully. The goldfish kills with combat damage. It does not mill the opponent. A fast combat clock here is not evidence that the mill plan is fast.",
-        "auras": "Read this as a deck that bets the game on one creature wearing several enchantments. The curve is full of one-mana auras because the creature has to attack early and often.",
-        "spells": "Read this as a deck that would rather cast spells than play creatures. The goldfish, which wins by attacking, is the wrong scoreboard, and the price list shows which spell the product is charging for.",
-    }[lens]
+    who = deck_line(deck)
     return "\n\n".join(
         [
             f"### {deck['name']}",
             (
-                f"{title} is an official {deck['type']} released {deck['release_date']}. "
-                f"The decklist and the Wizards source link come from MTGJSON file {deck['mtgjson_file']}. "
-                f"Source: {source}."
+                f"{who} is the {deck['release_date']} {deck['type']} stored as MTGJSON file {deck['mtgjson_file']}. "
+                f"Wizards source: {source}."
             ),
-            opener,
+            note,
             curve_sentence(deck),
             sources_sentence(deck),
-            cost_sentence(deck),
+            cost_sentence(deck, fetched_at),
             fish_sentence(deck),
-            swap_sentence(deck),
-            illegal_sentence(deck),
-            (
-                "Every figure in this section is from that fetch: decklist and printing from MTGJSON on "
-                "2026-11-01, legality and mana production from the Scryfall oracle-cards bulk updated "
-                "2026-11-01, prices from MTGJSON AllPricesToday dated 2026-11-01, and the clock from the "
-                "Deck Lab goldfish (120 games, seed 1729) after basic lands were taught to add their own color."
-            ),
+            illegal_sentence(deck, fetched_at),
         ]
     )
 
@@ -202,34 +297,34 @@ GUIDES: list[dict] = [
         "description": "Should you play aggro in Magic: The Gathering? A Pioneer burn list goldfishes turn 5.96 for $31.38, and the curve shows when that race is the wrong plan.",
         "date": "2026-11-01",
         "keywords": ["should I play aggro mtg", "aggro deck guide", "pioneer burn deck cost", "mtg goldfish clock"],
-        "related": ["should-you-play-control", "should-you-play-ramp", "mtg-burn-deck-guide", "mtg-deck-archetypes-explained"],
-        "decks": ["mono-red-burn", "gruul-stompy"],
+        "related": ["mtg-midrange-deck-guide", "should-you-play-control", "mtg-burn-deck-guide", "mtg-deck-archetypes-explained"],
+        "decks": ["mono-red-burn"],
         "lens": "aggro",
         "cta_format": "pioneer",
         "cta_brief": "Mono-red burn",
         "thesis": [
-            "Play aggro when you want the game decided by your mana curve instead of by a late-game engine you have not drawn yet. In Magic: The Gathering (MTG), an aggro deck spends its early turns turning cheap cards into damage and assumes the opponent's best cards arrive too late to matter. That is a real choice, not a personality type. The two official lists below are both aggressive, and they are not the same deck: one is a burn spell race, the other is a creature deck that still wants to be attacking on turn seven.",
-            "The useful test is the goldfish clock next to the price, not a tier list. A list that kills on turn six in a vacuum and costs about the price of a single format staple is a different hobby decision from a list that kills a turn later and puts a third of its price into three lands and a planeswalker. If you cannot stand losing to a sweeper, or you want the game to keep going after turn eight, aggro is the wrong tool even when the goldfish number looks impressive.",
-            "Aggro also fails in a specific way. It runs out of cards. Every burn spell pointed at a creature is a burn spell that did not reduce the opponent's life total, and every creature that dies to a blocker took a card with it. The sideboard and the mulligan are part of the deck: a hand with one land is not a hand, and a hand with five lands is not a race. The [burn deck guide](/blog/mtg-burn-deck-guide) covers the play patterns. This page is the decision, with the product lists and the measured clock attached.",
+            "Play aggro when you want the game decided by your mana curve instead of by a late-game engine you have not drawn yet. In Magic: The Gathering (MTG), that means spending the early turns turning cheap cards into damage, and accepting that the opponent's best cards arrive too late to matter. The decision on this page is the burn race: one official Pioneer list, one clock, one price. A creature deck that still wants to be attacking once four-drops are on the table is a different yes-or-no, and it lives on the [midrange page](/blog/mtg-midrange-deck-guide).",
+            "The useful test is the goldfish clock next to the price of this product, not a tier list. The 2021 Challenger burn list is a turn-six race in a vacuum at a product-printing total around the price of one format staple. If you cannot stand losing to a sweeper, or you want the game to keep going after turn eight, this is the wrong tool even when that clock looks impressive. Do not borrow a slower creature deck's land count and call the result burn.",
+            "Aggro fails in a specific way. It runs out of cards. Every burn spell pointed at a creature is a burn spell that did not reduce the opponent's life total. The sideboard and the mulligan are part of the deck: a hand with one land is not a hand, and a hand with five lands is not a race. The [burn deck guide](/blog/mtg-burn-deck-guide) covers the play patterns. This page is the decision to race at all.",
         ],
         "table": [
-            ["You want the game over by turn six or seven", "Mono-red burn's goldfish clock is turn 5.96", "A ramp or control list that has not cast its payoff yet"],
-            ["Your budget is around thirty dollars for a 75", "The 2021 Challenger burn list prices at $31.38 on its own printings", "A deck whose lands are the expensive cards"],
-            ["You hate losing to one sweeper", "Do not pick the creature version", "Gruul Stompy puts its damage on bodies"],
-            ["You want to play the long game on purpose", "This is the wrong plan", "Control, which goldfishes a 0% win rate because it is not trying to race"],
+            ["You want the game over by turn six or seven", "The burn product's goldfish clock is the measurement below", "A ramp or control list that has not cast its payoff yet"],
+            ["Your budget is around thirty dollars for a 75", "The 2021 Challenger burn list is priced on its own printings in the deck block", "A deck whose lands are the expensive cards"],
+            ["You hate losing to one sweeper", "Spell damage does not die to the sweeper", "A creature deck, which the midrange page measures"],
+            ["You want to play the long game on purpose", "This is the wrong plan", "Control, which is trying not to race"],
         ],
         "mistakes": [
-            "Treating every red deck as burn. Gruul Stompy goldfishes a full turn slower than the burn list and spends its money on lands and a planeswalker, not on one-mana spells.",
+            "Treating every red deck as burn. A creature deck with a four- and five-mana top end is a different clock and a different receipt. That comparison is the midrange guide, not a second copy of this list.",
             "Pointing every burn spell at a creature. The goldfish assumes the spells hit the opponent. A real game where half the bolts kill creatures is a different, slower deck.",
-            "Ignoring the land count. Burn plays 20 lands and 20 one-drops. Adding a five-drop because it is powerful pulls the curve off the clock you just measured.",
-            "Buying the most expensive printing of a basic. The totals on this page are the product's printings. A replacement Mountain is a different, usually smaller, number.",
-            "Reading a 100% goldfish win rate as a match win rate. Nothing in these 120 games cast a counterspell or a board sweeper.",
+            "Ignoring the land count. This burn list plays 20 lands under a curve of one-drops. Adding a five-drop because it is powerful pulls the curve off the clock you just measured.",
+            "Buying the most expensive printing of a basic and treating that number as the only way to build the deck. The total below is the product's printings.",
+            "Reading a perfect goldfish record as a match win rate. Nothing in these games cast a counterspell or a board sweeper.",
         ],
         "faq": [
-            ("Is aggro the same as burn?", "No. Burn is an aggro deck that deals most of its damage with spells. Gruul Stompy is an aggro deck that deals most of its damage with creatures. The goldfish clocks are a turn apart, and the expensive cards are different."),
-            ("How many lands does an aggro deck play?", "The burn product plays 20. The Gruul product plays 25, because its curve goes to five. Copy the curve, then the land count, instead of a single magic number."),
-            ("Can I play this burn list in Pioneer today?", "Scryfall's 2026-11-01 bulk still lists the burn cards as Pioneer-legal. Legality changes. Check the current ban list before you register the deck."),
-            ("Why is the goldfish slower than the turn-four burn I have heard about?", "This is the 2021 Challenger product, not a tuned Modern list with Lightning Bolt. The measured average winning turn is 5.96 over 120 games, seed 1729."),
+            ("Is aggro the same as burn?", "Burn is the aggro deck that deals most of its damage with spells. A red creature deck that deals most of its damage by attacking is a different plan, with its own land count, and it is written up on the midrange page so this page can stay about the race."),
+            ("How many lands does this burn list play?", "Twenty, under a curve that is mostly one-drops. Copy that curve, then the land count. A deck that curves to five needs a different number, and it is not this deck."),
+            ("Can I play this burn list in Pioneer today?", "The Scryfall bulk used for this page lists the burn cards as Pioneer-legal on the fetch date in the deck block. Legality changes. Check the ban list before you register the deck."),
+            ("Why is the goldfish slower than the turn-four burn I have heard about?", "This is the 2021 Challenger product, not a tuned Modern list with Lightning Bolt. The measured average winning turn is on the deck block: 120 games, seed 1729."),
         ],
     },
     {
@@ -238,106 +333,107 @@ GUIDES: list[dict] = [
         "description": "Should you play control in Magic: The Gathering? The Pioneer Dimir Challenger deck costs $43.07 and won 0 of 120 goldfish games, which is the point.",
         "date": "2026-11-01",
         "keywords": ["should I play control mtg", "dimir control pioneer", "control deck goldfish", "mtg permission deck"],
-        "related": ["should-you-play-aggro", "mtg-control-deck-guide", "mtg-deck-archetypes-explained", "sideboarding-101"],
-        "decks": ["dimir-control", "seize-control"],
+        "related": ["mtg-control-deck-guide", "should-you-play-aggro", "mtg-deck-archetypes-explained", "sideboarding-101"],
+        "decks": ["dimir-control"],
         "lens": "control",
         "cta_format": "pioneer",
         "cta_brief": "Dimir control",
         "thesis": [
-            "Play control when you are willing to lose the early turns on purpose and win the game that happens after your opponent is out of gas. In Magic: The Gathering (MTG), a control deck trades cards and life total now for a later turn where your answers have cleared the board and your card draw has replaced your hand. If that sentence sounds miserable, do not play control. The goldfish result on the official Dimir list is the cleanest way to see it: zero wins in 120 games, because a deck of counters and removal does not kill a goldfish.",
-            "The trap is the word control on a product box. The 2022 Pioneer Challenger deck is a permission deck with 26 lands and a top end that starts at six mana. The 2015 Commander deck Seize Control is Mizzix of the Izmagnus, a spell-discount list that people call control because it is blue and red and slow. They do not ask the same thing of you. One wants you to answer threats. The other wants you to cast a large spell for less than it costs. Picking control because you like saying no, and then sleeving a spellslinger precon, is how the archetype gets a bad reputation.",
-            "Control is also a price question. The Dimir product is $43.07 on the printings in the box, and 41.4% of that is three cards, led by a shock land. You are paying for the mana base and a handful of answers, not for a pile of finishers. If your budget is the finishers and your mana is 18 basics, you do not have this deck. The [deck archetypes overview](/blog/mtg-deck-archetypes-explained) is the map. This page is the yes-or-no, with the measured failure to goldfish sitting on top of it.",
+            "Play control when you are willing to lose the early turns on purpose and win the game that happens after your opponent is out of gas. In Magic: The Gathering (MTG), a permission deck trades cards and life total now for a later turn where your answers have cleared the board and your card draw has replaced your hand. If that sentence sounds miserable, do not play this deck. The official Dimir Challenger list is the cleanest way to see the choice: it does not kill a goldfish, because a deck of counters and removal is not trying to.",
+            "Say yes only if you want that wait. The 2022 product is a 60-card permission deck whose top end starts at six mana, and a large share of the receipt is a shock land plus two other cards rather than a pile of finishers. If your budget is the finishers and your mana is a stack of basics, you do not have this list. A commander product with the word control on the box can be a spell-discount deck instead. That is a different question, answered on the [how-to-play page](/blog/mtg-control-deck-guide), and it should not talk you into sleeving permission.",
+            "This page is the yes-or-no. The [deck archetypes overview](/blog/mtg-deck-archetypes-explained) is the map of the other plans. If you already know you want the long game, the measurement below is what the official permission list actually costs and how empty the early turns are.",
         ],
         "table": [
-            ["You enjoy the game after turn eight", "Dimir Control never goldfishes a kill, because the kill is not the early plan", "Burn, which is over on turn six if you stumble"],
+            ["You enjoy the game after turn eight", "The Dimir list's goldfish is a loss, because the kill is not the early plan", "Burn, which is over on turn six if you stumble"],
             ["You want to attack with two-drops", "This is the wrong deck", "Spirits or Humans, which are built to attack"],
-            ["A shock land is an acceptable chunk of the budget", "Watery Grave is the top line item on the Dimir list", "A mono-color aggro list whose lands are basics"],
-            ["The box says control but the commander discounts spells", "Read Seize Control as a spell deck, not as Dimir permission", "Mizzix asks for a different kind of patience"],
+            ["A shock land is an acceptable chunk of the budget", "Watery Grave leads the Dimir receipt", "A mono-color aggro list whose lands are basics"],
+            ["You wanted a commander that makes spells cheaper", "That is not this list", "The Mizzix how-to, which is a different deck"],
         ],
         "mistakes": [
-            "Judging a control deck by its goldfish win rate. Zero wins in 120 games is the measurement working. The deck is not trying to race a goldfish.",
-            "Calling every blue deck control. Seize Control is a cost-reduction commander deck. Its curve is full of four- and five-mana spells, not of one-mana counters.",
-            "Skimping on lands. The Dimir product plays 26 lands in 60 cards. Cutting to 22 so you can add more counterspells is how the six-drops stay in your hand.",
-            "Spending the answers on the first creature. Control loses when it is down a card and still facing a board. The early life total is a resource.",
-            "Assuming the 2022 product is a current Pioneer metagame deck. It is an official list with a date. It is evidence about the archetype's shape, not a claim about this weekend's tournament.",
+            "Judging this permission list by its goldfish win rate. A zero is the measurement working. The deck is not trying to race.",
+            "Buying it because a commander precon used the word control. Spell discount and permission are different jobs. The how-to page is the other one.",
+            "Cutting lands so you can add more counterspells. The six-drops are why the early turns exist, and they need the land count printed under them.",
+            "Spending the answer on the first creature. You lose when you are down a card and still facing a board. The early life total is a resource.",
+            "Treating the 2022 product as this weekend's Pioneer metagame. It is an official list with a fetch date. It shows the shape, not the current tournament.",
         ],
         "faq": [
-            ("Why did the control deck never win a goldfish game?", "The simulator deals damage with creatures and direct-damage spells. A permission deck that plans to win with a late finisher after answering everything does not do that inside 12 turns against a goldfish. The 0% figure is from 120 games, seed 1729."),
-            ("Is Mizzix a control commander?", "The product is named Seize Control. The list is blue-red spells with a cost reducer in the command zone. Treat the name as marketing and the curve as the evidence."),
-            ("How much of the Dimir deck's price is the mana?", "Watery Grave alone is the largest line item, and the top three nonbasic names are 41.4% of the $43.07 product-printing total. The rest of the deck is comparatively cheap answers."),
-            ("Does a 0% goldfish rate mean the deck is bad?", "It means the deck does not win a solitaire race. Control is supposed to be bad at that. Judge it by whether you want the long game, not by this clock."),
+            ("Why did this list never win a goldfish game?", "The simulator deals damage with creatures and direct-damage spells. A permission deck that plans to win with a late finisher after answering everything does not do that inside the goldfish's turn limit. The deck block has the game count and the seed."),
+            ("Is every blue deck this kind of control?", "No. Permission answers the opponent's spell. A cost reducer wants your own spell to resolve for less. If the commander is the discount, you are on the how-to page, not this one."),
+            ("How much of the price is the mana?", "Watery Grave is the largest line, and the top three nonbasic names are the share printed in the deck block. The rest is comparatively cheap answers."),
+            ("Does failing the goldfish mean the deck is bad?", "It means the deck does not win a solitaire race. Judge it by whether you want the long game, not by that clock."),
         ],
     },
     {
         "slug": "should-you-play-ramp",
         "title": "Should You Play a Ramp Deck in MTG?",
-        "description": "Should you play ramp in Magic: The Gathering? Pantlaza's precon costs $135.24 with 39 lands and goldfishes turn 11.08. Here is when that mana is worth it.",
+        "description": "Should you play ramp in Magic: The Gathering? Pantlaza's precon costs $134.71 with 39 lands and goldfishes turn 11.26. Here is when that mana is worth it.",
         "date": "2026-11-01",
         "keywords": ["should I play ramp mtg", "pantlaza precon cost", "commander ramp land count", "mtg ramp deck"],
-        "related": ["should-you-play-aggro", "mtg-ramp-deck-guide", "how-to-build-your-first-commander-deck", "mtg-deck-archetypes-explained"],
-        "decks": ["veloci-ramp-tor", "lands-wrath"],
+        "related": ["mtg-ramp-deck-guide", "should-you-play-aggro", "how-to-build-your-first-commander-deck", "mtg-deck-archetypes-explained"],
+        "decks": ["veloci-ramp-tor"],
         "lens": "ramp",
         "cta_format": "commander",
         "cta_brief": "Dinosaur ramp",
         "thesis": [
-            "Play ramp when the cards you actually want to cast cost more than the turn you want to cast them on, and you are willing to spend early turns doing nothing but finding mana. In Magic: The Gathering (MTG), ramp is any effect that puts you ahead on mana: a land onto the battlefield, a creature that taps for mana, an artifact that adds mana. It is not a win condition. It is a way to reach a win condition that a fair curve cannot cast on time. If your payoff costs three mana, you do not need a ramp deck. You need a cheaper curve.",
-            "The two official Commander decks on this page are both sold as big-mana decks and they do not cost the same kind of money. Veloci-Ramp-Tor, the Pantlaza dinosaur precon, prices at $135.24 on the printings in the box, and 27.1% of that is three nonbasic names led by Akroma's Will. Land's Wrath, the Obuun land deck from Zendikar Rising, prices at $53.33, and a large piece of that total is the basic lands in the product rather than a single spell. A ramp deck can be expensive because of one finisher or expensive because the product shipped premium basics. Those are different purchases.",
-            "Ramp also has a goldfish shape. Both lists do win solitaire games, around turn 11 or 12 against one opponent at 40 life. That is the extra mana turning into creatures that attack. It is not evidence that you will have seven mana on turn four every game. Count the lands and the mana creatures first. Pantlaza's deck plays 39 lands in the 99. If your version plays 30, you are not playing this deck, you are playing a dinosaur deck that misses its land drops. If you would rather end the game before the big spell, the [aggro decision](/blog/should-you-play-aggro) is the other side of this, and the [deck archetypes overview](/blog/mtg-deck-archetypes-explained) is the map. The dedicated [ramp guide](/blog/mtg-ramp-deck-guide) goes further on how much mana to add. This page is the decision to be a ramp deck at all.",
+            "Play ramp when the cards you actually want to cast cost more than the turn you want to cast them on, and you are willing to spend the early turns finding mana instead of dealing damage. In Magic: The Gathering (MTG), ramp is not a win condition. It is how you reach a win condition a fair curve cannot cast on time. If your payoff costs three, you do not need this plan. You need a cheaper curve.",
+            "The decision on this page is Pantlaza's dinosaur precon, Veloci-Ramp-Tor. The receipt is a handful of nonbasic spells, led by Akroma's Will, not a pile of basics. You are buying the turn the dinosaurs attack, and the protection spell that keeps that turn. A landfall deck that treats the lands themselves as the ramp is a different purchase. How many of those lands to play is the [count guide](/blog/mtg-ramp-deck-guide). This page is whether you want the dinosaur plan at all.",
+            "The goldfish wins by attacking with the creatures the mana eventually casts. It is not evidence that you will have seven mana on turn four every game. If your version of this list plays far fewer lands than the product, you are playing a dinosaur deck that misses its land drops. If you would rather end the game before the big spell, the [aggro decision](/blog/should-you-play-aggro) is the other side, and the [deck archetypes overview](/blog/mtg-deck-archetypes-explained) is the map.",
         ],
         "table": [
-            ["Your payoff costs six or more", "Pantlaza's nonland curve still has cards at 7 or more, and 39 lands under it", "An aggro deck, whose curve ends at three"],
-            ["You want to attack on turn two", "Ramp spends those turns finding mana", "Burn or Spirits"],
-            ["One spell is a fifth of the budget", "Akroma's Will is $18.40 of the Pantlaza product", "Land's Wrath, whose costly lines are mostly the basic-land printings"],
-            ["You are about to cut lands to make room for more ramp spells", "The products play 37 and 39 lands", "A 30-land list that will miss the mana the ramp was for"],
+            ["Your payoff costs six or more", "Pantlaza's curve still has cards at 7 or more", "An aggro deck, whose curve ends at three"],
+            ["You want to attack on turn two", "The early turns are mana, not damage", "Burn or Spirits"],
+            ["One instant is a large share of the budget", "Akroma's Will leads the nonbasic receipt", "A deck whose money is the lands, which is the other guide"],
+            ["You are about to cut lands to add more dinosaurs", "The printed land count is the floor", "A short-land list that cannot cast the top end"],
         ],
         "mistakes": [
-            "Adding ramp and cutting lands in the same edit. The land count is the ramp plan's floor. The official lists sit in the high 30s for a 99-card deck.",
-            "Judging ramp by a turn-four kill. These goldfish clocks are turn 11 and turn 12. The mana is for a large creature, not for a one-drop.",
-            "Treating every green deck as a ramp deck. A green deck with a curve of two-drops is an aggro or midrange deck that happens to be green.",
-            "Pricing the deck off a single average. Pantlaza's top three nonbasics are 27.1% of the product. The fourth card is a different budget conversation.",
-            "Ignoring a card the bulk file says is not legal. Dinosaur Egg is flagged not legal in Commander on the 2026-11-01 Scryfall bulk. A precon can contain a card you should not copy into a new list.",
+            "Adding ramp spells and cutting lands in the same edit. The land count is the floor under the dinosaurs. The product is already in the high 30s for a 99-card deck.",
+            "Judging the plan by a turn-four kill. The mana is for a large creature. The clock on the deck block is a creature race against one 40-life opponent, and it is not turn four.",
+            "Treating every green deck as ramp. A curve of two-drops is an aggro or midrange deck that happens to be green.",
+            "Pricing the deck off a single average. The top three nonbasics are the share in the deck block. The fourth card is a different conversation.",
+            "Sleeving a token that came in the box as if it were one of the 99. The list below is the cards. A token card in the product is not a Commander-legal spell you copy into a new deck.",
         ],
         "faq": [
-            ("How many lands does a Commander ramp deck play?", "These two products play 39 and 37 lands in the 99, with the commander separate. That is the published floor, not a suggestion to play 30."),
-            ("Is Pantlaza's deck a ramp deck or a dinosaur deck?", "It is both. The curve has a real top end and the land count is 39. The dinosaurs are the payoff the mana is for."),
-            ("Why is Land's Wrath cheaper if it is also a big-mana deck?", "The product-printing total is $53.33, and the expensive lines include the basic lands in the box. Pantlaza's $135.24 is driven by nonbasic spells, especially Akroma's Will."),
-            ("Does the goldfish mean I will win on turn 11?", "It means that in 120 solitaire games against one 40-life opponent, the average winning game ended on that turn. A four-player table is a different game. The number is a speed ceiling for the creature plan."),
+            ("How many lands does Pantlaza's deck play?", "The land count is in the deck block, in the 99, with the commander separate. That is the published floor for this payoff curve, not a suggestion to play 30."),
+            ("Is this a ramp deck or a dinosaur deck?", "It is both. The top of the curve is the dinosaurs. The lands and the three-mana ramp are how you cast them. If you cut the mana, you kept the creatures and lost the plan."),
+            ("Why does one spell cost so much of the product?", "Akroma's Will is the protection for the turn you attack. It is not a ramp spell. Swapping it for a cheaper instant does not keep that turn."),
+            ("Does the goldfish mean I win on that turn at a real table?", "It means the average winning solitaire game against one 40-life opponent ended then. A four-player table is a different game. The number is a speed ceiling for the creature plan."),
         ],
     },
     {
         "slug": "mtg-control-deck-guide",
-        "title": "How Do You Actually Play Control in MTG?",
-        "description": "How do you play control in Magic: The Gathering? Dimir's 26 lands and 0-for-120 goldfish, versus Mizzix, show two decks that only share a box name.",
-        "date": "2026-11-05",
-        "keywords": ["how to play control mtg", "dimir control challenger deck", "mizzix precon", "control deck land count"],
-        "related": ["should-you-play-control", "should-you-play-aggro", "sideboarding-101", "card-advantage-explained"],
-        "decks": ["dimir-control", "seize-control"],
+        "title": "How Do You Pilot Mizzix, the Deck Named Control?",
+        "description": "How do you pilot Mizzix of the Izmagnus in Magic: The Gathering? The Seize Control precon discounts your spells. Cast the four-drop; do not hold up a counter.",
+        "date": "2026-11-01",
+        "keywords": ["how to play mizzix mtg", "seize control precon", "spell discount commander", "mizzix experience counters"],
+        "related": ["should-you-play-control", "spellslinger-deck-guide", "sideboarding-101", "card-advantage-explained"],
+        "decks": ["seize-control"],
         "lens": "control",
-        "cta_format": "pioneer",
-        "cta_brief": "Dimir control",
+        "cta_format": "commander",
+        "cta_brief": "Mizzix spells",
         "thesis": [
-            "You play control by deciding, every turn, which threat you are allowed to answer and which one you will take on the life total. In Magic: The Gathering (MTG), the deck works when your answers line up with the opponent's threats one for one and your card draw replaces the answer you just spent. It falls apart when you answer a creature that was going to die anyway, or when you tap out for a finisher and the next threat resolves uncontested. The official lists make the split concrete: one is a 60-card Pioneer permission deck, the other is a Commander spell-discount deck that was printed under a control name.",
-            "Start with the mana. Dimir Control plays 26 lands. Its nonland curve is not a pile of one-mana counters; it has a real six- and seven-mana top end. You cannot play that curve on 22 lands and then blame the archetype when the finisher stays stuck. Seize Control, Mizzix of the Izmagnus, plays 39 lands in the 99 and a curve that peaks at four and five mana, because the commander is a cost reducer and the spells are the deck. Playing Mizzix like Dimir, holding up one blue mana and never casting the five-drop, wastes the card the deck is built around.",
-            "The goldfish is the practice reminder. Neither list won a solitaire game. Practice for control is not how fast can I kill a goldfish. It is which of these two hands I keep when I am on the draw against a two-drop, and which answer I spend on the first creature that is actually going to end the game. Sideboarding, for the Pioneer list, is where the deck changes shape between games. The [sideboarding guide](/blog/sideboarding-101) is the companion. The lists below are the measured shape.",
+            "You pilot Mizzix by getting the experience counters onto the commander and then casting the spell those counters make cheaper. In Magic: The Gathering (MTG), Seize Control was printed with the word control on the box. The turns you play are not the turns of a permission deck. The [yes-or-no for permission](/blog/should-you-play-control) is a Pioneer list that answers threats. This page is the Commander list that wants your own spell to resolve.",
+            "The curve peaks at four and five mana because the commander is the discount. The turn Mizzix comes down, you are not holding up one blue mana and passing. You cast the spell the counters just made castable. A hand of interaction and no spell you actually want to resolve cheaper is a mulligan, even when every card says instant. The 99 has the land count of a commander deck, not of a 60-card list. Importing a small-deck mana base strands the five-drop the discount was for.",
+            "Practice is which spell you cast once the counters are on, not how fast you can kill a goldfish. The solitaire games lose because nothing is attacking. That loss is a check that you are looking at the right scoreboard. The [sideboarding guide](/blog/sideboarding-101) is for the 60-card permission deck between games. Mizzix does not sideboard. You sequence.",
+            "A concrete turn: you have Mizzix and two experience counters, six lands, and a five-mana spell in hand. The spell now costs three. Cast it. If an opponent has mana open, you decide whether the counter in your hand protects that spell or answers theirs, and you make that choice before you tap out. Waiting for a perfect seven-card lock is how the discount expires with the commander dead. The list below is the spell pile Wizards printed for that sequence. Read the curve, then name the spell you are excited to cast cheaper. If you cannot name it, you wanted permission instead, and that deck is the other page.",
         ],
         "table": [
-            ["60-card permission", "26 lands, answers, a six-mana top end", "Dimir Control, $43.07 on product printings"],
-            ["Commander cost reduction", "39 lands, four- and five-mana spells, a commander that makes them cheaper", "Seize Control / Mizzix"],
-            ["What good looks like in the goldfish", "Often a loss. The win is not a race", "0 wins in 120 games for both lists"],
-            ["What you practice", "Which threat to answer, and when to tap out", "Not the turn-six kill from the aggro page"],
+            ["The commander is in play with counters", "Cast the four- or five-mana spell the curve is full of", "Holding up a one-mana answer and passing"],
+            ["Your hand is counters and no payoff", "Mulligan", "A permission hand, which is a different deck"],
+            ["You imported a 60-card land count", "Put the lands back", "The 99 needs the commander-deck count printed below"],
+            ["You wanted to say no for twelve turns", "Wrong product", "The Pioneer permission decision"],
         ],
         "mistakes": [
-            "Playing the Pioneer land count in the Commander deck, or the reverse. 26 lands is a 60-card number. 39 is a 99-card number.",
-            "Tapping out for card draw into an empty board and an opponent who still has a threat. The life total only buys time if an answer is available.",
-            "Cutting the top end because the goldfish never cast it. The seven-mana cards are why the early turns exist.",
-            "Assuming Mizzix's counters are the same job as Dimir's counters. One deck wants the spell to resolve for less mana. The other wants the opponent's spell not to resolve.",
-            "Sleeveing the 2022 Challenger list into an event without reading the ban list that day. The bulk file said the cards were legal on 2026-11-01. That is a dated fact, not a promise.",
+            "Playing Mizzix like a draw-go permission deck. The discount does nothing if you never cast the spell it cheapens.",
+            "Cutting lands because the spells cost less once the commander is online. They do not cost less before that, and a missed land drop is a turn without counters.",
+            "Adding creatures so the goldfish has something to attack with. You have stopped playing the spell deck.",
+            "Treating every counter in the list as an answer to the opponent. Some of them protect the spell you are trying to resolve cheaper.",
+            "Reading the product name as a format ruling. The list below is what Wizards printed. The permission shape is the other guide.",
         ],
         "faq": [
-            ("How many counterspells does a control deck need?", "Enough that you can hold one up on the turns that matter, and not so many that your hand is answers to problems you do not have. The Dimir curve has 8 one-drops and 10 two-drops in the nonlands. That is the product's mix of early interaction and setup, not a requirement to play 20 counters."),
-            ("Why does control feel like it never does anything?", "Because the early plan is not a creature. The goldfish agrees: zero wins. The something happens after the opponent's hand is empty."),
-            ("Can I goldfish a control deck to practice?", "You can, and you should expect it not to win. Use the games to see whether you cast your lands and your draw spells. Use a friend, or the builder, when you want to practice the answers."),
-            ("Is a shock land required?", "Watery Grave is the most expensive line on the Dimir product. The deck wants blue and black sources on time. A slower land that enters tapped changes the turn you can hold up a two-mana answer. That is a real cost, separate from the dollar cost."),
+            ("What do I do the turn Mizzix resolves?", "Put the experience counter to work. Cast a spell that the new cost makes reasonable. Passing with the discount unused is the turn the deck failed."),
+            ("Why does the goldfish lose?", "It attacks. This list wins by casting spells for less than printed. A combat record of zero is the tool refusing to pretend otherwise. The deck block has the game count."),
+            ("How many lands does this commander deck play?", "The count is in the deck block, and it is a 99-card number. Do not copy a 60-card permission deck's land count into this list."),
+            ("Is this the same deck as Dimir control?", "No. Dimir answers an opponent's spell and wins later. Mizzix wants your spell to resolve. They share a marketing word and nothing you do on the turn."),
         ],
     },
     {
@@ -373,7 +469,7 @@ GUIDES: list[dict] = [
             ("What is the difference between midrange and aggro?", "About a turn and a land count, on these products. Burn goldfishes turn 5.96 on 20 lands. Gruul goldfishes turn 7.02 on 25 lands with cards up to five mana."),
             ("Why are the expensive cards lands?", "Because the creatures in a Challenger product are often reprints, and the shock lands are not. Humans' top three line items are all lands, 49.6% of the product price."),
             ("How do I play the midgame?", "Trade when your card is the worse creature, and stop trading when your card is the one that will win the next three turns. Gruul's four- and five-drops are those cards. Humans does not have them."),
-            ("Is Chandra worth the price on this list?", "She is $7.36 of the Gruul product as a line cost in the file, one of the three names that make up 43.1%. The budget benchmark in the pool is a cheaper planeswalker that does not do her job. Pay for her only if the midgame plan is the plan you want."),
+            ("Is Chandra worth the price on this list?", "She is $7.36 of the Gruul product as a line cost in the file, one of the three names that make up 43.1%. A cheaper planeswalker from another product does not do her job. Pay for her only if the midgame plan is the plan you want."),
         ],
     },
     {
@@ -400,7 +496,7 @@ GUIDES: list[dict] = [
         ],
         "mistakes": [
             "Treating a 0% goldfish win rate as a broken deck. The metric does not assemble Lotus Field. It was not built to.",
-            "Replacing Lotus Field with a cheaper land because a benchmark said a land can be cheap. The deck is named after the land. The mana is the combo.",
+            "Replacing Lotus Field with a cheaper land because some other land in another product is cheap. The deck is named after the land. The mana is the combo.",
             "Adding creatures so the goldfish has something to attack with. You have turned a combo deck into a bad midrange deck.",
             "Forgetting the deck is several colors. The source count is not a mono-color basic count. The expensive lands are doing a job.",
             "Registering the 2021 product at a tournament without checking bans. The bulk file's legality is dated 2026-11-01.",
@@ -426,7 +522,7 @@ GUIDES: list[dict] = [
         "thesis": [
             "A tempo deck trades raw damage for the right to decide what resolves. In Magic: The Gathering (MTG), tempo means spending your mana and your cards so that the opponent's expensive spell resolves a turn too late, or not at all, while your small creatures are already attacking. You give up the ability to win a long game of card advantage. If the game reaches the point where both players have seven lands and full hands, the tempo deck is usually the one that is behind.",
             "Azorius Spirits, the 2021 Challenger product, is the clean version of that trade. Twenty-two of its nonlands cost two mana. The goldfish average win is turn 6.62, close to burn, on a $22.40 product total that is the cheapest list in this set of guides. The expensive cards are the creatures, not a shock land. You can see the whole plan: small fliers, a little disruption, a clock that does not need a six-drop.",
-            "Izzet Phoenix is the cautionary official list. Its goldfish win rate is only 56.7%, and the average winning game is turn 9.78, which is not a tempo clock. Scryfall's 2026-11-01 bulk marks Expressive Iteration as not legal in Pioneer. The product was a real Challenger deck in 2022. It is not a list you can copy into a tournament now. Tempo decks also rot when a key cantrip is banned, because the deck was the cantrip plus the threat, not the threat alone. The [aggro page](/blog/should-you-play-aggro) is the comparison when you want damage instead of disruption.",
+            "Izzet Phoenix is the cautionary official list. Its goldfish win rate is only 56.7%, and the average winning game is turn 9.78, which is not a tempo clock. Expressive Iteration is not legal today per the Scryfall bulk of 2026-11-01. The product was a real Challenger deck in 2022. It is not a list you can copy into a tournament now. Tempo decks also rot when a key cantrip is banned, because the deck was the cantrip plus the threat, not the threat alone. The [aggro page](/blog/should-you-play-aggro) is the comparison when you want damage instead of disruption.",
         ],
         "table": [
             ["Small creatures plus cheap interaction", "Spirits: 22 two-drops, turn 6.62, $22.40", "A control list that does not attack"],
@@ -443,45 +539,45 @@ GUIDES: list[dict] = [
         ],
         "faq": [
             ("What does tempo mean if it is not just aggro?", "Aggro spends every card on damage. Tempo spends some cards to slow the opponent's expensive plays so the small creatures stay ahead. Spirits' curve is the creature half of that. The disruption is the other half."),
-            ("Can I play the Phoenix Challenger deck in Pioneer?", "Not as printed. Expressive Iteration is not legal in Pioneer on the Scryfall oracle-cards bulk dated 2026-11-01. Check the ban list for anything else before you rebuild the shell."),
+            ("Can I play the Phoenix Challenger deck in Pioneer?", "Not as printed. Expressive Iteration is not legal today per the Scryfall bulk of 2026-11-01. Check the current ban list before you rebuild the shell."),
             ("Why is Spirits so much cheaper?", "The product-printing total is $22.40, and the top costs are creatures at a few dollars, not a $10 land. Phoenix is $35.25 with Steam Vents alone at $10.77."),
             ("Is a turn-9 goldfish still tempo?", "No. Turn 9.78 for Phoenix says the printed list does not present a fast combat clock once the simulator is just attacking. Spirits at 6.62 does."),
         ],
     },
     {
         "slug": "mtg-ramp-deck-guide",
-        "title": "How Much Ramp Does an MTG Deck Need?",
-        "description": "How much ramp does a Magic: The Gathering deck need? Two official Commander lists play 39 and 37 lands. Pantlaza costs $135.24. Land's Wrath costs $53.33.",
-        "date": "2026-12-03",
-        "keywords": ["how much ramp mtg", "commander land count", "pantlaza deck price", "obuun lands wrath"],
+        "title": "How Many Lands Does a Landfall Deck Actually Need?",
+        "description": "How many lands does a landfall deck need in Magic: The Gathering? Obuun's official list plays 37 lands in the 99, because the land drop is the ramp spell.",
+        "date": "2026-11-01",
+        "keywords": ["how many lands commander", "obuun lands wrath", "landfall ramp count", "mana creature vs land"],
         "related": ["should-you-play-ramp", "should-you-play-aggro", "how-to-build-your-first-commander-deck", "mtg-deck-archetypes-explained"],
-        "decks": ["veloci-ramp-tor", "lands-wrath"],
+        "decks": ["lands-wrath"],
         "lens": "ramp",
         "cta_format": "commander",
-        "cta_brief": "Dinosaur ramp",
+        "cta_brief": "Landfall ramp",
         "thesis": [
-            "A deck needs as much ramp as the gap between its curve and the turn you want the payoff to resolve, and it needs lands under that ramp or the ramp spells are stranded. In Magic: The Gathering (MTG), the failure mode is a hand of three-mana land searchers and two lands. The searchers never resolve, and the six-drop was never the problem. Count lands first, then mana creatures and land search, then the payoff. The official products are the check on wishful counting.",
-            "Veloci-Ramp-Tor plays 39 lands in the 99. Its nonland curve still has a pile of cards at three mana and a real top end at seven or more. That three-mana slot is where a lot of ramp lives. You do not add four more ramp spells by cutting four lands. You look at whether the 39 are already doing the job, and you cut a payoff you were never going to cast. Land's Wrath plays 37 lands and a curve that is thick at three and four. Obuun wants lands in play, not just mana. Those lands are the ramp.",
-            "Then look at what the cardboard costs, because ramp decks get blamed for prices that are really one spell or a basic-land printing. Pantlaza's product is $135.24, top three nonbasics 27.1%, Akroma's Will leading. Land's Wrath is $53.33, and once basics are pulled out of the top-line ranking the remaining concentration is 11.7%. The [yes-or-no on playing ramp at all](/blog/should-you-play-ramp) is the shorter page. This one is the count.",
+            "Count lands before you count ramp spells. In Magic: The Gathering (MTG), the usual failure is a hand of three-mana land searchers and two lands: the searchers never resolve, and the six-drop was never the card that was stuck. A landfall deck makes this stricter. The land entering the battlefield is the effect, so a mana creature that dies to a two-drop is not a substitute for the land.",
+            "Land's Wrath, Obuun, Mul Daya Ancestor, is the official list for that count. The curve is thick at three and four, which is where the land search lives, and the land total in the 99 is the plan rather than a support package under a dinosaur. Whether you want a big-mana creature deck at all, dinosaurs included, is the [yes-or-no page](/blog/should-you-play-ramp). This page is how you count.",
+            "Say the number out loud before you cut anything. If the payoff triggers when a land enters, cutting a land to add another payoff removes the trigger. If the payoff only needed colored mana, a creature that taps for mana might belong, and you still do not cut the land that casts it. The goldfish on this list is a creature clock against one opponent. It will not tell you how often you missed the land drop. Count that by hand.",
         ],
         "table": [
-            ["99-card deck, payoffs at six or more", "High 30s lands, as printed: 39 and 37", "A 30-land list with extra ramp spells you cannot cast"],
-            ["The payoff is a three-drop", "You do not need a ramp package", "Cut the ramp before you cut lands"],
-            ["One instant is $18", "That is Akroma's Will in the Pantlaza product, not the ramp", "Do not solve it by adding more lands"],
-            ["Basics dominate the receipt", "Land's Wrath prices the product's basic printings", "A cheap Plains is a different number from the one in the box"],
+            ["The payoff triggers on a land drop", "Keep the lands printed in the 99", "A mana dork that dies before it taps"],
+            ["The payoff costs three and does not care about lands", "You may not need a ramp package", "Cutting lands anyway, out of habit"],
+            ["You want another landfall creature", "Take it from a nonland slot", "Taking it from the land count"],
+            ["You are pricing the product's basics", "That receipt is the printing in the box", "The price of a random basic at the shop"],
         ],
         "mistakes": [
-            "Cutting lands to add ramp. Both products are already in the high 30s. The ramp is in addition to lands, not instead of them.",
-            "Counting a mana rock and a land searcher as the same effect. One needs four mana to matter if it costs two and taps for one. The other finds a land. The curve slot tells you which you added.",
-            "Goldfishing ramp as if the win should arrive on turn six. These clocks are turn 11.08 and turn 12.32 against one 40-life opponent.",
-            "Blaming green for the price. Akroma's Will is the Pantlaza line item. The ramp creatures under it are not the $18 card.",
-            "Copying Dinosaur Egg forward. The Scryfall bulk flags it not legal in Commander. A precon slot is not a format ruling.",
+            "Cutting lands to add ramp. The ramp is in addition to lands. This product is already in the high 30s, and those lands are the triggers.",
+            "Calling a mana creature a land when you check your colors. The source count can be higher than the land count because creatures that tap for mana are included. Say sources when that is what you counted.",
+            "Treating a mana rock and a land search as the same card. One taps for mana after you have already spent mana. The other puts a land onto the battlefield, which is what Obuun wants.",
+            "Expecting the solitaire clock to prove you ramped. It reports when creatures dealt enough damage. It does not report your mana on turn five.",
+            "Blaming the whole color for the receipt. Look at which names are the top three nonbasics in the deck block. The land-search creatures under them are not that line.",
         ],
         "faq": [
-            ("Is 39 lands too many?", "Not for this payoff curve. Pantlaza's nonlands still go to seven or more. The 39 is what Wizards printed under that curve. Cut lands only if you also cut the top of the curve."),
-            ("What counts as ramp?", "A card that leaves you with more mana next turn than a normal land drop would: an extra land onto the battlefield, or a permanent that taps for mana. A card that draws you a land is smoother, not ahead."),
-            ("Why is one ramp precon $135 and another $53?", "Different printings and different expensive cards. Pantlaza's top nonbasic is an $18.40 instant. Land's Wrath's receipt is much more about the lands in the box. Both totals are MTGJSON TCGplayer nonfoil retail for those printings on 2026-11-01."),
-            ("Can the goldfish tell me if I have enough ramp?", "It can tell you the creature plan's solitaire speed: about turn 11 or 12 here. It will not tell you how often you had seven mana on turn five. For that, count lands and mana creatures by hand."),
+            ("Is 37 lands too many for Obuun?", "Not when the land drop is the trigger. Cut lands only if you also cut the payoffs that wanted the land to enter. The deck block has the printed count."),
+            ("What counts as ramp here?", "A card that leaves a land on the battlefield, or that adds mana beyond your land drop. A card that draws you a land is smoother. It does not put you ahead, and it does not trigger landfall until you play the land."),
+            ("Why is the commander missing from the dollar total?", "Obuun had no nonfoil retail price on the printing in the product file. The total is priced cards only. The deck block names every unpriced card."),
+            ("Can I copy Pantlaza's land count into this deck?", "You can compare the two after you have counted this one. The dinosaur list is a different payoff on the decision page. Do not average the two numbers and call it a rule."),
         ],
     },
     {
@@ -553,7 +649,7 @@ GUIDES: list[dict] = [
             ("What are the three pieces again?", "A way to make or replay a creature, a permanent that gets better when a creature dies, and a way to sacrifice a creature when you choose. Two out of three is a different deck."),
             ("Why is this precon so expensive?", "Exquisite Blood at $41.93 and Charismatic Conqueror at $25.75, inside a $157.27 product-printing total on 2026-11-01. The top three nonbasics are 47.7%."),
             ("Is a vampire deck automatically aristocrats?", "No. Vampires attack. Aristocrats wants them to die. Clavileno's product leans on both, which is why the combat goldfish still wins."),
-            ("What is a reasonable budget version?", "Not a same-type swap from another precon. Those benchmarks are on the deck block as price gaps, and they do not preserve the sacrifice trigger. Cut Exquisite Blood if you are not playing the life combo, and the receipt drops by that line cost."),
+            ("What is a reasonable budget version?", "Cut Exquisite Blood if you are not playing the life combo, and the receipt drops by that line cost. A cheaper creature from another precon does not keep the sacrifice trigger."),
         ],
     },
     {
@@ -569,7 +665,7 @@ GUIDES: list[dict] = [
         "cta_brief": "Reanimator",
         "thesis": [
             "Reanimator is faster than hard-casting only on the turns you have both a creature in the graveyard and a reanimation spell in hand. In Magic: The Gathering (MTG), the rest of the time you are a deck with expensive creatures and a hand full of setup. The comparison is not reanimate versus a six-drop on turn six. It is reanimate on turn three or four versus doing nothing until turn six, and only in the games where the graveyard actually has the creature.",
-            "Two official Commander decks show different eras of the same idea. Revenant Recon, Mirko, is a $136.88 product whose top nonbasics are Necromancy at $17.89, Reanimate at $9.71, and Animate Dead at $7.82. That is the reanimation suite as the price, 25.9% of the product in three enchantments and one sorcery's company. The curve has one-drops. Those are the enablers that fill the graveyard, not the monsters. Plunder the Graves, the original Meren precon, is $97.26 and its top costs are a big creature, an anthem, and Skullclamp, not the reanimation spells. Meren reanimates by being on the battlefield and collecting experience. Mirko's product reanimates by casting the famous spells. They are not interchangeable just because both touch the graveyard.",
+            "Two official Commander decks show different eras of the same idea. Revenant Recon, Mirko, is a $136.88 product whose top nonbasics are Necromancy at $17.89, Reanimate at $9.71, and Animate Dead at $7.82. Necromancy and Animate Dead are enchantments. Reanimate is a sorcery. Together those three are 25.9% of the product. The curve has one-drops. Those are the enablers that fill the graveyard, not the monsters. Plunder the Graves, the original Meren precon, is $97.26 and its top costs are a big creature, an anthem, and Skullclamp, not the reanimation spells. Meren reanimates by being on the battlefield and collecting experience. Mirko's product reanimates by casting the famous spells. They are not interchangeable just because both touch the graveyard.",
             "The goldfish clocks, turn 11.50 and turn 11.34, are combat again. The simulator will cast a creature if it can pay for it. It will not Entomb a creature and Reanimate it as a plan. A turn-11 combat win does not prove reanimator is slow, and it does not prove it is fast. It proves the creature plan, played fairly, takes that long. The speed you built the deck for is the unfair line, which you have to count by hand: how many cards put a creature in the yard, how many bring one back, and how many of those you need in the first four turns. The [combo page](/blog/mtg-combo-decks-explained) is the other place a goldfish zero or a goldfish combat clock hides the real line.",
         ],
         "table": [
@@ -641,7 +737,7 @@ GUIDES: list[dict] = [
         "cta_brief": "Aura voltron",
         "thesis": [
             "A voltron deck needs enough auras or equipment that the creature is lethal in one or two attacks, and enough extra creatures or protection that one removal spell does not end your game. In Magic: The Gathering (MTG), voltron means one creature wearing the rest of the deck. The math is harsh: every aura in your hand does nothing until a creature is on the battlefield, and every aura on a creature that dies goes to the graveyard with it. You do not need twenty auras if six of them already kill. You need the creature to stay in play, or another creature to wear the next wave.",
-            "Orzhov Auras, the 2021 Pioneer Challenger product, is the 60-card version. Thirty-one nonlands cost one mana. The curve is the strategy: the creature and the auras have to come down immediately. The goldfish average win is turn 8.09, slower than burn, because auras spend cards to make one body larger instead of adding more attackers. Lurrus of the Dream-Den is in the printed list and is not legal in Pioneer on the Scryfall bulk dated 2026-11-01. The companion was the card that made dying auras easy to replay. Without it, the printed deck is a historical object, not a registration sheet. Thoughtseize and Sram are the other price centers, inside a $46.84 total.",
+            "Orzhov Auras, the 2021 Pioneer Challenger product, is the 60-card version. Thirty-one nonlands cost one mana. The curve is the strategy: the creature and the auras have to come down immediately. The goldfish average win is turn 8.09, slower than burn, because auras spend cards to make one body larger instead of adding more attackers. Lurrus of the Dream-Den is in the printed list and is not legal today per the Scryfall bulk of 2026-11-01. The companion was the card that made dying auras easy to replay. Without it, the printed deck is a historical object, not a registration sheet. Thoughtseize and Sram are the other price centers, inside a $46.84 total.",
             "Virtue and Valor, Ellivere of the Wild Court, is the Commander version at $127.24. Bear Umbra, Retether, and Hall of Heliod's Generosity are the top nonbasics, 30.1% of the product. Retether and the Hall are cards that get auras back. That is the Commander answer to the same problem Lurrus used to solve in Pioneer: auras in the graveyard are not on a creature. The [tempo page](/blog/mtg-tempo-decks-explained) is the small-creature comparison when you would rather have many bodies than one enchanted one.",
         ],
         "table": [
@@ -659,7 +755,7 @@ GUIDES: list[dict] = [
         ],
         "faq": [
             ("How many auras is enough?", "Enough that one creature becomes lethal, which on these curves means a lot of one-mana auras in the 60-card list (31 one-drops, not all of them auras) and a Commander list that can get the auras back. Count the auras that actually grant evasion or power, not every enchantment."),
-            ("Can I play Lurrus in Pioneer?", "No. The 2026-11-01 Scryfall oracle-cards bulk lists Lurrus of the Dream-Den as not legal in Pioneer. The 2021 product included it as a companion."),
+            ("Can I play Lurrus in Pioneer?", "No. Lurrus of the Dream-Den is not legal today per the Scryfall bulk of 2026-11-01. The 2021 product included it as a companion."),
             ("Why is the Commander aura deck almost three times the price?", "Virtue and Valor is $127.24 against the Pioneer product's $46.84. Bear Umbra alone is $14.51, and the recursion pieces are the rest of the top three. Different formats, different expensive cards."),
             ("Is voltron the same as tempo?", "Tempo uses several small creatures and disruption. Voltron uses one creature and a stack of auras. Spirits goldfishes faster than the auras product because the creatures are the threats, not the costumes."),
         ],
@@ -691,7 +787,7 @@ GUIDES: list[dict] = [
             "Adding more big spells to Zaffai without a ritual or a land. The curve is already top-heavy. Seething Song is in the list because the spells cost what they cost.",
             "Expecting a combat goldfish to show storm. Zero wins is the tool telling you it cannot see the plan. Do not add creatures until the number moves and then call it fixed.",
             "Cutting lands because spells are the deck. Prismari plays 37 lands. Kalamax plays 38. The second spell on a turn needs the mana the land would have been.",
-            "Using a same-type cheap sorcery from the benchmark pool as if it copied spells. The price gap is real. The function is not the same.",
+            "Swapping a cheap sorcery in for a spell that copies spells. The prices are different because the jobs are different.",
         ],
         "faq": [
             ("Why is Deflecting Swat so much of the deck?", "The product printing's TCGplayer nonfoil price on 2026-11-01 is $75.69 inside a $152.89 total. One card, about half the receipt. The top three nonbasics together are 61.7%."),
@@ -703,19 +799,26 @@ GUIDES: list[dict] = [
 ]
 
 
-def render(guide: dict, decks: dict[str, dict]) -> str:
+def render(guide: dict, decks: dict[str, dict], fetched_at: str) -> str:
     rows = "\n".join(f"| {left} | {mid} | {right} |" for left, mid, right in guide["table"])
     mistakes = "\n".join(f"- {item}" for item in guide["mistakes"])
     faqs = "\n\n".join(f"### {question}\n\n{answer}" for question, answer in guide["faq"])
-    blocks = "\n\n".join(f'<DeckBlock id="{deck_id}" />\n\n' + narrate(decks[deck_id], guide["lens"]) for deck_id in guide["decks"])
+    blocks = "\n\n".join(
+        f'<DeckBlock id="{deck_id}" />\n\n' + narrate(decks[deck_id], fetched_at) for deck_id in guide["decks"]
+    )
     thesis = "\n\n".join(guide["thesis"])
     related = ", ".join(f'"{slug}"' for slug in guide["related"])
     keywords = ", ".join(f'"{word}"' for word in guide["keywords"])
+    # One short shared note. The long fetch paragraph used to be copied onto every guide.
+    made = (
+        f"Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched {fetched_at}. "
+        "The clock is the Deck Lab goldfish, 120 games, seed 1729."
+    )
     body = f"""---
 title: "{guide["title"]}"
 description: "{guide["description"]}"
-date: {guide["date"]}
-updated: 2026-11-01
+date: {PUBLISH_ON}
+updated: {fetched_at}
 author: Jared Cohen
 reviewed: true
 category: deck-archetypes
@@ -735,8 +838,6 @@ related: [{related}]
 | --- | --- | --- |
 {rows}
 
-The table is the decision. The deck sections under it are the measurements the decision is allowed to use. If a number is not in those sections, it is not a number this guide is claiming.
-
 ## Example decks
 
 {blocks}
@@ -753,7 +854,7 @@ The table is the decision. The deck sections under it are the measurements the d
 
 ## How this was made
 
-These guides use official Wizards product lists redistributed by MTGJSON under its MIT license (https://www.mtgjson.com/license/). Each deck block names the MTGJSON file and the Wizards source URL stored on that file. Prices are the nonfoil retail figure in MTGJSON AllPricesToday version 5.3.0+20261101, dated 2026-11-01, for the printing in the product: TCGplayer when that printing has a nonfoil retail price, otherwise ManaPool from the same file. Legality, type lines, mana values, and produced mana come from Scryfall's oracle-cards bulk, updated 2026-11-01T10:02:02.149+00:00, under Scryfall's API terms (https://scryfall.com/docs/api). The clock is the Deck Lab goldfish in app.sim.goldfish, 120 games, seed 1729, after a fix that counts basic lands as colored sources. No tournament-site scrape, and no paid API, went into these figures. Fetched 2026-11-01.
+{made}
 
 <FanContentNotice />
 
@@ -764,7 +865,9 @@ These guides use official Wizards product lists redistributed by MTGJSON under i
 
 def main() -> None:
     facts = json.loads(FACTS.read_text(encoding="utf-8"))
+    fetched_at = str(facts["fetched_at"])
     decks = facts["decks"]
+    problems: list[str] = []
     for guide in GUIDES:
         missing = [deck_id for deck_id in guide["decks"] if deck_id not in decks]
         if missing:
@@ -772,7 +875,7 @@ def main() -> None:
         description = guide["description"]
         if not 120 <= len(description) <= 170:
             raise SystemExit(f"{guide['slug']} description is {len(description)} chars")
-        text = render(guide, decks)
+        text = render(guide, decks, fetched_at)
         if "{" in text.split("---", 2)[-1]:
             # Frontmatter has no braces. A brace in the body breaks MDX.
             body = text.split("---", 2)[-1]
@@ -782,7 +885,9 @@ def main() -> None:
         path.write_text(text, encoding="utf-8")
         print(f"{guide['slug']}: {count} words, description {len(description)}")
         if count < 900 or count > 3500:
-            raise SystemExit(f"{guide['slug']} word count {count} out of range")
+            problems.append(f"{guide['slug']} word count {count} out of range")
+    if problems:
+        raise SystemExit("\n".join(problems))
 
 
 if __name__ == "__main__":

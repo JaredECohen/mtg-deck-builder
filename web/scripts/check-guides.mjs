@@ -11,7 +11,7 @@
 // - no bare {...} outside code: MDX evaluates it as JavaScript ({2} renders
 //   "2", {U} breaks the build)
 // - a <DeckLabCTA> with a supported format, two <InArticleAd /> breaks on
-//   their own lines, no "# " h1 in the body
+//   reviewed guides (unreviewed posts carry none), no "# " h1 in the body
 // - the body spells out "Magic: The Gathering" at least once
 // - body length 900-3,500 words
 
@@ -85,8 +85,12 @@ for (const post of live) {
     if (format && !FORMATS.has(format)) fail(`DeckLabCTA format "${format}" isn't supported`);
   }
   const adLines = body.split("\n").filter((line) => line.includes("<InArticleAd"));
-  if (adLines.length < 2) fail(`${adLines.length} <InArticleAd /> (want 2)`);
-  for (const line of adLines) if (line.trim() !== "<InArticleAd />") fail("<InArticleAd /> must be alone on its line");
+  if (data.reviewed === true) {
+    if (adLines.length < 2) fail(`${adLines.length} <InArticleAd /> (want 2)`);
+    for (const line of adLines) if (line.trim() !== "<InArticleAd />") fail("<InArticleAd /> must be alone on its line");
+  } else if (adLines.length) {
+    fail("unreviewed guide includes <InArticleAd />; ads stay on reviewed guides");
+  }
   if (/^# /m.test(body)) fail('body has a "# " h1 (the title is the h1)');
   // Spell the game out at least once; "MTG" alone isn't clear to every reader.
   if (!body.includes("Magic: The Gathering")) fail('never says "Magic: The Gathering" (spell it out at first mention)');

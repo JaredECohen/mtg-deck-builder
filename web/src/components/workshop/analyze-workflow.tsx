@@ -9,7 +9,7 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
-import { prepopulateFromExample } from "@/lib/example-decks";
+import { prepopulateFromExample, resolveAnalyzeSeed } from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
@@ -49,6 +49,9 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const loadedToken = useRef<string | null>(null);
+  // ?example= fills the editor from the catalog. That load must not replace the
+  // saved draft, and the draft must not replace the example.
+  const persistDraft = useRef(true);
 
   const analyzer = useDeckAnalyzer();
   const analysis = analyzer.analysis;
@@ -60,31 +63,25 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       setDraftHydrated(true);
       return;
     }
-    if (exampleId) {
-      const example = prepopulateFromExample(exampleId);
-      if (example) {
-        setFormat(example.format);
-        setManualMainboard(example.mainboard);
-        setManualSideboard(example.sideboard);
-        setManualCommander(example.commander);
-        setManualNotes(`Official list loaded: ${example.name}`);
-        setDraftHydrated(true);
-        return;
-      }
-    }
-    const draft = loadManualDraft();
-    if (draft?.format) setFormat(draft.format);
-    if (draft?.mainboard) setManualMainboard(draft.mainboard);
-    if (draft?.sideboard) setManualSideboard(draft.sideboard);
-    if (draft?.commander) setManualCommander(draft.commander);
-    if (draft?.notes) setManualNotes(draft.notes);
+    const example = exampleId ? prepopulateFromExample(exampleId) : null;
+    const seed = resolveAnalyzeSeed({
+      example,
+      draft: loadManualDraft(),
+      defaultNotes: DEFAULT_NOTES,
+    });
+    persistDraft.current = seed.persistDraft;
+    if (seed.format) setFormat(seed.format);
+    setManualMainboard(seed.mainboard);
+    setManualSideboard(seed.sideboard);
+    setManualCommander(seed.commander);
+    setManualNotes(seed.notes);
     setDraftHydrated(true);
     // Only on mount: later token changes are handled by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!draftHydrated) return;
+    if (!draftHydrated || !persistDraft.current) return;
     saveManualDraft({
       format: format ?? undefined,
       mainboard: manualMainboard,
@@ -188,7 +185,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     setAnalyzedKey(null);
     setShared(null);
     analyzer.reset();
-    clearManualDraft();
+    if (persistDraft.current) clearManualDraft();
   }
 
   function handleAnalyze() {
