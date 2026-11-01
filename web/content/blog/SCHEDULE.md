@@ -3,8 +3,8 @@
 The generic scheduled guides (set guides and the other non-archetype backlog)
 are paused. Their files are still in `content/blog` with `archived: true`, so
 they cannot publish and can be restored by removing that flag. The 14 reviewed
-archetype guides publish together on 2026-11-01 (merge day), not on the drip
-dates still listed in this table. Older unreviewed posts that are already
+archetype guides publish together on 2026-11-01 (merge day). Their rows below
+use that date and are not dripped through 2027. Older unreviewed posts that are already
 public stay reachable, noindex, and out of the sitemap, index, and RSS.
 New question-driven pilots may share a day.
 
@@ -34,13 +34,13 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-11-02 | `secrets-of-strixhaven-mtg-set-guide` | sets | Secrets of Strixhaven Set Guide | paused |
 | 2026-11-03 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | paused |
 | 2026-11-04 | `teenage-mutant-ninja-turtles-mtg-set-guide` | sets | Teenage Mutant Ninja Turtles Set Guide | paused |
-| 2026-11-05 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | written |
+| 2026-11-01 | `mtg-control-deck-guide` | deck-archetypes | How to Play Control in MTG | written |
 | 2026-11-06 | `star-trek-mtg-set-guide` | sets | Star Trek Set Guide | paused |
 | 2026-11-07 | `how-to-play-against-aggro` | strategy | How to Beat Aggro Decks | paused |
 | 2026-11-08 | `lorwyn-eclipsed-mtg-set-guide` | sets | Lorwyn Eclipsed Set Guide | paused |
 | 2026-11-09 | `mtg-combat-explained` | learn-to-play | MTG Combat Explained Step by Step | paused |
 | 2026-11-10 | `avatar-the-last-airbender-mtg-set-guide` | sets | Avatar: The Last Airbender Set Guide | paused |
-| 2026-11-11 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | written |
+| 2026-11-01 | `mtg-midrange-deck-guide` | deck-archetypes | Midrange Decks Explained | written |
 | 2026-11-12 | `spider-man-mtg-set-guide` | sets | Marvel's Spider-Man Set Guide | paused |
 | 2026-11-13 | `mtg-pioneer-format-guide` | formats | Pioneer Format Guide | paused |
 | 2026-11-14 | `edge-of-eternities-mtg-set-guide` | sets | Edge of Eternities Set Guide | paused |
@@ -48,7 +48,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-11-16 | `final-fantasy-mtg-set-guide` | sets | Final Fantasy Set Guide | paused |
 | 2026-11-17 | `mtg-turn-structure-phases` | learn-to-play | MTG Turn Structure: Every Phase and Step | paused |
 | 2026-11-18 | `tarkir-dragonstorm-mtg-set-guide` | sets | Tarkir: Dragonstorm Set Guide | paused |
-| 2026-11-19 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | written |
+| 2026-11-01 | `mtg-combo-decks-explained` | deck-archetypes | Combo Decks in MTG Explained | written |
 | 2026-11-20 | `aetherdrift-mtg-set-guide` | sets | Aetherdrift Set Guide | paused |
 | 2026-11-21 | `how-to-play-against-combo` | strategy | How to Beat Combo Decks | paused |
 | 2026-11-22 | `foundations-mtg-set-guide` | sets | Foundations Set Guide | paused |
@@ -56,13 +56,13 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-11-24 | `duskmourn-mtg-set-guide` | sets | Duskmourn: House of Horror Set Guide | paused |
 | 2026-11-25 | `summoning-sickness-explained` | learn-to-play | Summoning Sickness Explained | paused |
 | 2026-11-26 | `bloomburrow-mtg-set-guide` | sets | Bloomburrow Set Guide | paused |
-| 2026-11-27 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | written |
+| 2026-11-01 | `mtg-tempo-decks-explained` | deck-archetypes | Tempo Decks Explained | written |
 | 2026-11-28 | `outlaws-of-thunder-junction-mtg-set-guide` | sets | Outlaws of Thunder Junction Set Guide | paused |
 | 2026-11-29 | `tempo-explained-mtg` | strategy | What Is Tempo in MTG? | paused |
 | 2026-11-30 | `murders-at-karlov-manor-mtg-set-guide` | sets | Murders at Karlov Manor Set Guide | paused |
 | 2026-12-01 | `mtg-color-pie-guide` | learn-to-play | The MTG Color Pie Explained | paused |
 | 2026-12-02 | `lost-caverns-of-ixalan-mtg-set-guide` | sets | The Lost Caverns of Ixalan Set Guide | paused |
-| 2026-12-03 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | written |
+| 2026-11-01 | `mtg-ramp-deck-guide` | deck-archetypes | Ramp Decks in MTG | written |
 | 2026-12-04 | `wilds-of-eldraine-mtg-set-guide` | sets | Wilds of Eldraine Set Guide | paused |
 | 2026-12-05 | `whos-the-beatdown-mtg` | strategy | Who's the Beatdown? Role Assignment in MTG | paused |
 | 2026-12-06 | `march-of-the-machine-mtg-set-guide` | sets | March of the Machine Set Guide | paused |
@@ -70,7 +70,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-12-08 | `phyrexia-all-will-be-one-mtg-set-guide` | sets | Phyrexia: All Will Be One Set Guide | paused |
 | 2026-12-09 | `mtg-planeswalkers-explained` | learn-to-play | How Planeswalkers Work | paused |
 | 2026-12-10 | `brothers-war-mtg-set-guide` | sets | The Brothers' War Set Guide | paused |
-| 2026-12-11 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | written |
+| 2026-11-01 | `mtg-tokens-deck-guide` | deck-archetypes | Token Decks Explained | written |
 | 2026-12-12 | `dominaria-united-mtg-set-guide` | sets | Dominaria United Set Guide | paused |
 | 2026-12-13 | `combat-tricks-guide` | strategy | How to Use Combat Tricks | paused |
 | 2026-12-14 | `streets-of-new-capenna-mtg-set-guide` | sets | Streets of New Capenna Set Guide | paused |
@@ -78,7 +78,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-12-16 | `kamigawa-neon-dynasty-mtg-set-guide` | sets | Kamigawa: Neon Dynasty Set Guide | paused |
 | 2026-12-17 | `mtg-mana-symbols-explained` | learn-to-play | MTG Mana Symbols and Costs Explained | paused |
 | 2026-12-18 | `innistrad-crimson-vow-mtg-set-guide` | sets | Innistrad: Crimson Vow Set Guide | paused |
-| 2026-12-19 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
+| 2026-11-01 | `aristocrats-sacrifice-deck-guide` | deck-archetypes | Aristocrats and Sacrifice Decks | written |
 | 2026-12-20 | `innistrad-midnight-hunt-mtg-set-guide` | sets | Innistrad: Midnight Hunt Set Guide | paused |
 | 2026-12-21 | `when-to-attack-mtg` | strategy | When to Attack in MTG | paused |
 | 2026-12-22 | `adventures-in-the-forgotten-realms-mtg-set-guide` | sets | Adventures in the Forgotten Realms Set Guide | paused |
@@ -86,7 +86,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-12-24 | `strixhaven-school-of-mages-mtg-set-guide` | sets | Strixhaven: School of Mages Set Guide | paused |
 | 2026-12-25 | `mtg-tokens-explained` | learn-to-play | How Tokens Work in MTG | paused |
 | 2026-12-26 | `kaldheim-mtg-set-guide` | sets | Kaldheim Set Guide | paused |
-| 2026-12-27 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | written |
+| 2026-11-01 | `reanimator-deck-guide` | deck-archetypes | Reanimator Decks Explained | written |
 | 2026-12-28 | `zendikar-rising-mtg-set-guide` | sets | Zendikar Rising Set Guide | paused |
 | 2026-12-29 | `blocking-strategy-mtg` | strategy | Blocking Strategy in MTG | paused |
 | 2026-12-30 | `core-set-2021-mtg-set-guide` | sets | Core Set 2021 Set Guide | paused |
@@ -94,7 +94,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2027-01-01 | `ikoria-lair-of-behemoths-mtg-set-guide` | sets | Ikoria: Lair of Behemoths Set Guide | paused |
 | 2027-01-02 | `mtg-counters-explained` | learn-to-play | Counters in MTG Explained | paused |
 | 2027-01-03 | `theros-beyond-death-mtg-set-guide` | sets | Theros Beyond Death Set Guide | paused |
-| 2027-01-04 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | written |
+| 2026-11-01 | `mill-deck-guide` | deck-archetypes | Mill Decks Explained | written |
 | 2027-01-05 | `throne-of-eldraine-mtg-set-guide` | sets | Throne of Eldraine Set Guide | paused |
 | 2027-01-06 | `bluffing-in-mtg` | strategy | Bluffing in MTG | paused |
 | 2027-01-07 | `core-set-2020-mtg-set-guide` | sets | Core Set 2020 Set Guide | paused |
@@ -102,7 +102,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2027-01-09 | `war-of-the-spark-mtg-set-guide` | sets | War of the Spark Set Guide | paused |
 | 2027-01-10 | `mtg-triggered-abilities-explained` | learn-to-play | Triggered Abilities Explained | paused |
 | 2027-01-11 | `ravnica-allegiance-mtg-set-guide` | sets | Ravnica Allegiance Set Guide | paused |
-| 2027-01-12 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | written |
+| 2026-11-01 | `voltron-commander-guide` | deck-archetypes | Voltron Commander Decks | written |
 | 2027-01-13 | `guilds-of-ravnica-mtg-set-guide` | sets | Guilds of Ravnica Set Guide | paused |
 | 2027-01-14 | `how-to-playtest-a-deck` | strategy | How to Playtest an MTG Deck | paused |
 | 2027-01-15 | `core-set-2019-mtg-set-guide` | sets | Core Set 2019 Set Guide | paused |
@@ -110,7 +110,7 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2027-01-17 | `dominaria-mtg-set-guide` | sets | Dominaria Set Guide | paused |
 | 2027-01-18 | `activated-vs-static-abilities` | learn-to-play | Activated, Static and Triggered Abilities | paused |
 | 2027-01-19 | `rivals-of-ixalan-mtg-set-guide` | sets | Rivals of Ixalan Set Guide | paused |
-| 2027-01-20 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | written |
+| 2026-11-01 | `spellslinger-deck-guide` | deck-archetypes | Spellslinger Decks Explained | written |
 | 2027-01-21 | `ixalan-mtg-set-guide` | sets | Ixalan Set Guide | paused |
 | 2027-01-22 | `mtg-sequencing-guide` | strategy | Sequencing Your Plays in MTG | paused |
 | 2027-01-23 | `hour-of-devastation-mtg-set-guide` | sets | Hour of Devastation Set Guide | paused |
