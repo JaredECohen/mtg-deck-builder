@@ -4,7 +4,14 @@
 // they cite. No model is called.
 
 export const SIMILARITY_THRESHOLD = 0.15;
-/** Shared section outline of the old templated set guides. Reviewed guides sit at 0. */
+/**
+ * Outline gate for the old templated set guides (The story, Mechanics, Key
+ * cards, Limited, The meta, Cards from {set} worth owning). It is a blocklist
+ * of those headings: renaming them defeats the gate. The reviewed guides share
+ * their own outline (Short answer, Common mistakes, FAQ, How this was made, and
+ * the other entries in RUBRIC_HEADINGS). Those headings are removed before the
+ * comparison, so that shared anatomy is not what this gate measures.
+ */
 export const OUTLINE_THRESHOLD = 0.5;
 
 const NUMBER_WORDS = {
@@ -342,7 +349,7 @@ export function cardDeckProblems({ file, text, decks }) {
       { pattern: /\bsits in\b/i, cardsFirst: true },
       { pattern: /\bplayed in\b/i, cardsFirst: true },
       { pattern: /\bbelongs in\b/i, cardsFirst: true },
-      { pattern: /\b(?:includes?|contains|features)\b/i, cardsFirst: false },
+      { pattern: /\b(?:includes?|contains|features|runs|plays|has)\b/i, cardsFirst: false },
       { pattern: /\bGame Changer is\b/i, cardsFirst: false },
     ];
     for (const verb of verbs) {
@@ -403,7 +410,7 @@ export function claimProblems({ file, body, claims, facts }) {
       problems.push(`${file}: ${occurrence.text} is in the prose and not in the claims`);
       continue;
     }
-    if (!occurrenceBound(occurrence, claims)) {
+    if (!occurrenceBound(occurrence, claims, names)) {
       problems.push(`${file}: ${occurrence.text} is not bound to the claim for its subject and metric`);
     }
   }
@@ -424,10 +431,11 @@ function sentenceAt(text, index) {
   const sentenceEnd = text.indexOf(". ", index);
   if (lineEnd >= 0) end = Math.min(end, lineEnd);
   if (sentenceEnd >= 0) end = Math.min(end, sentenceEnd + 1);
-  return text.slice(start, end);
+  return { sentence: text.slice(start, end), start };
 }
 
-const METRIC_WORD = /\b(lands?|ramp|draws?|removal|prices?|costs?|sums?|median|mean|floors?|names|wins?|curve|copies|lists|decks|cards)\b/gi;
+const METRIC_WORD = /\b(lands?|ramp|draws?|removal|prices?|costs?|sums?|floors?|names|wins?|curve|copies|lists|decks|cards)\b/gi;
+const QUALIFIER_WORD = /\b(most|median|typical|average|mean)\b/gi;
 
 function metricStem(word) {
   const value = word.toLowerCase();
@@ -444,9 +452,10 @@ function metricStem(word) {
 }
 
 function nearestWord(sentence, index, pattern) {
+  const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
   let best = null;
   let distance = 48;
-  for (const match of sentence.matchAll(pattern)) {
+  for (const match of sentence.matchAll(re)) {
     const gap = Math.abs(match.index - index);
     if (gap < distance) {
       distance = gap;
@@ -456,73 +465,85 @@ function nearestWord(sentence, index, pattern) {
   return best;
 }
 
+function anchorsAt(sentence, valueAt, names) {
+  const pool = names.filter((name) => typeof name === "string" && name.length > 3);
+  const subjects = hitsIn(sentence, pool);
+  const metricWord = nearestWord(maskDeckNames(sentence, subjects), valueAt, METRIC_WORD);
+  const qualifierWord = nearestWord(sentence, valueAt, QUALIFIER_WORD);
+  const lower = sentence.toLowerCase();
+  const placed = subjects
+    .map((name) => ({ name, at: lower.indexOf(name.toLowerCase()) }))
+    .filter((item) => item.at >= 0);
+  const before = placed.filter((item) => item.at < valueAt && valueAt - item.at <= 60).sort((left, right) => right.at - left.at);
+  const after = placed.filter((item) => item.at >= valueAt && item.at - valueAt <= 24).sort((left, right) => left.at - right.at);
+  return {
+    metric: metricWord ? metricStem(metricWord) : null,
+    qualifier: qualifierWord ? qualifierWord.toLowerCase() : null,
+    subject: (before[0] ?? after[0])?.name ?? null,
+  };
+}
+
+function numberPositions(haystack, needle) {
+  const positions = [];
+  const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  for (const match of haystack.matchAll(pattern)) {
+    const end = match.index + match[0].length;
+    const before = match.index === 0 || !/[A-Za-z0-9]/.test(haystack[match.index - 1]);
+    const next = haystack[end] ?? "";
+    const continues = /\d/.test(next) || (next === "." && /\d/.test(haystack[end + 1] ?? ""));
+    if (before && !continues) positions.push(match.index);
+  }
+  return positions;
+}
+
 function literalOccurrences(body, names) {
   const text = prepareLiteralText(body, names);
   const occurrences = [];
-  const push = (index, textValue, raw) => {
-    const sentence = sentenceAt(text, index);
-    const subjects = hitsIn(sentence, names.filter((name) => name.length > 3));
-    const valueAt = Math.max(0, sentence.toLowerCase().indexOf(String(raw).toLowerCase()));
-    const metric = nearestWord(maskDeckNames(sentence, subjects), valueAt, METRIC_WORD);
-    const lower = sentence.toLowerCase();
-    const placed = subjects
-      .map((name) => ({ name, at: lower.indexOf(name.toLowerCase()) }))
-      .filter((item) => item.at >= 0);
-    const before = placed.filter((item) => item.at < valueAt && valueAt - item.at <= 60).sort((left, right) => right.at - left.at);
-    const after = placed.filter((item) => item.at >= valueAt && item.at - valueAt <= 24).sort((left, right) => left.at - right.at);
-    const subject = (before[0] ?? after[0])?.name ?? null;
-    occurrences.push({ text: textValue, sentence, metric: metric ? metricStem(metric) : null, subject });
+  const push = (index, textValue) => {
+    const located = sentenceAt(text, index);
+    const anchors = anchorsAt(located.sentence, index - located.start, names);
+    occurrences.push({ text: textValue, sentence: located.sentence, ...anchors });
   };
   const skip = [];
   for (const match of text.matchAll(/\$\d+(?:\.\d+)?|\d+(?:\.\d+)?%|\b\d{4}-\d{2}-\d{2}\b/g)) {
     skip.push([match.index, match.index + match[0].length]);
   }
   const skipped = (index) => skip.some(([start, end]) => index >= start && index < end);
-  for (const match of text.matchAll(/\$(\d+(?:\.\d+)?)/g)) push(match.index, `$${match[1]}`, match[0]);
-  for (const match of text.matchAll(/(\d+(?:\.\d+)?)%/g)) push(match.index, `${match[1]}%`, match[0]);
-  for (const match of text.matchAll(/\b(\d+)(?:st|nd|rd|th)\b/gi)) push(match.index, match[1], match[0]);
-  for (const match of text.matchAll(/\b(\d+)x\b/gi)) push(match.index, match[1], match[0]);
-  for (const match of text.matchAll(/\ba dozen\b/gi)) push(match.index, "12", match[0]);
+  for (const match of text.matchAll(/\$(\d+(?:\.\d+)?)/g)) push(match.index, `$${match[1]}`);
+  for (const match of text.matchAll(/(\d+(?:\.\d+)?)%/g)) push(match.index, `${match[1]}%`);
+  for (const match of text.matchAll(/\b(\d+)(?:st|nd|rd|th)\b/gi)) push(match.index, match[1]);
+  for (const match of text.matchAll(/\b(\d+)x\b/gi)) push(match.index, match[1]);
+  for (const match of text.matchAll(/\ba dozen\b/gi)) push(match.index, "12");
   for (const match of text.matchAll(/\b\d+(?:\.\d+)?\b/g)) {
     if (skipped(match.index)) continue;
     const after = text.slice(match.index + match[0].length, match.index + match[0].length + 2);
     if (/^(?:st|nd|rd|th|x)\b/i.test(after)) continue;
-    push(match.index, match[0], match[0]);
+    push(match.index, match[0]);
   }
   const spelled = /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b|(?<!-)\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b(?!-)/gi;
-  for (const match of text.matchAll(spelled)) push(match.index, match[0].toLowerCase(), match[0]);
+  for (const match of text.matchAll(spelled)) push(match.index, match[0].toLowerCase());
   return occurrences;
 }
 
-function contextHasStem(context, stem) {
-  const stems = {
-    land: /\blands?\b/i,
-    draw: /\bdraws?\b/i,
-    price: /\b(?:prices?|costs?|sums?)\b/i,
-    list: /\blists?\b/i,
-    deck: /\bdecks?\b/i,
-    card: /\b(?:cards?|copies)\b/i,
-    name: /\bnames?\b/i,
-    win: /\bwins?\b/i,
-    floor: /\bfloors?\b/i,
-    ramp: /\bramp\b/i,
-    removal: /\bremoval\b/i,
-    median: /\bmedian\b/i,
-    mean: /\bmean\b/i,
-    curve: /\bcurve\b/i,
-  };
-  return stems[stem] ? stems[stem].test(context) : context.toLowerCase().includes(stem);
+function anchorsAgree(occurrence, local, context) {
+  if (occurrence.metric && local.metric && occurrence.metric !== local.metric) return false;
+  if (occurrence.subject) return context.includes(occurrence.subject);
+  // No deck or card name. A shared metric word is not enough: "most" / "median" /
+  // "typical" has to be the qualifier on this claim, at this number.
+  if (!occurrence.qualifier) return false;
+  if (local.qualifier !== occurrence.qualifier) return false;
+  return !occurrence.metric || local.metric === occurrence.metric;
 }
 
-function occurrenceBound(occurrence, claims) {
+function occurrenceBound(occurrence, claims, names) {
   const sentence = compact(occurrence.sentence);
   for (const claim of claims) {
     if (claim.text !== occurrence.text || !claim.context) continue;
     const context = compact(claim.context);
     if (context.includes(sentence) || sentence.includes(context)) return true;
-    if (occurrence.subject && !context.includes(occurrence.subject)) continue;
-    if (occurrence.metric && !contextHasStem(context, occurrence.metric)) continue;
-    if (occurrence.subject || occurrence.metric) return true;
+    for (const at of numberPositions(context, occurrence.text)) {
+      if (anchorsAgree(occurrence, anchorsAt(context, at, names), context)) return true;
+    }
   }
   return false;
 }
@@ -561,6 +582,9 @@ export function maskComparable(text, names = []) {
   );
 }
 
+// Reviewed-guide headings removed before the outline comparison. The 17
+// reviewed guides share this anatomy; hiding it is why their outline Jaccard
+// is 0. The gate then only sees the old set-guide outline.
 const RUBRIC_HEADINGS = new Set([
   "short answer",
   "common mistakes",

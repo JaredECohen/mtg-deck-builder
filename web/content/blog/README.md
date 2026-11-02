@@ -43,7 +43,15 @@ Links to a guide that hasn't published yet are fine: they render as plain
 text until it goes live. Every guide still needs at least one link that
 works on its own publish day.
 
-Run `npm run check:guides` (CI does too) before committing.
+Run `npm run check:guides` and `npm run check:guide-rubric` (CI does too) before committing.
+
+The rubric's outline check is a blocklist for the old templated set-guide
+outline (The story, Mechanics, Key cards, Limited, The meta, Cards from the
+set worth owning). Renaming those headings defeats it. The reviewed guides
+share a different outline — Short answer, Common mistakes, FAQ, How this was
+made, and the other headings listed as `RUBRIC_HEADINGS` in
+`web/scripts/guide-claims.mjs`. Those headings are removed before the
+comparison, so that shared anatomy is not what the gate measures.
 
 ## Body
 

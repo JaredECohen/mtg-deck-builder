@@ -63,7 +63,8 @@ def main() -> None:
         return
     print(f"missing from the repo: {missing}")
     print(f"extra in the repo: {extra}")
-    raise SystemExit(1)
+    # 2 is a real list drift. A download or parse error stays on the default exit 1.
+    raise SystemExit(2)
 
 
 if __name__ == "__main__":

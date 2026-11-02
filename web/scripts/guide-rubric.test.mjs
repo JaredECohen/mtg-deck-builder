@@ -341,13 +341,47 @@ test("card membership is case-insensitive and covers more verbs", () => {
   const decks = [
     { name: "Arcane Maelstrom", cards: ["Crop Rotation"] },
     { name: "Timey-Wimey", cards: ["Farewell"] },
+    { name: "Veloci-Ramp-Tor", cards: ["Cultivate"] },
+    { name: "Timeless Wisdom", cards: ["Fierce Guardianship"] },
   ];
   const wrong = cardDeckProblems({
     file: "membership.mdx",
-    text: "FAREWELL APPEARS IN ARCANE MAELSTROM.",
+    text: "FAREWELL APPEARS IN ARCANE MAELSTROM. Veloci-Ramp-Tor runs Fierce Guardianship.",
     decks,
   });
   assert.ok(wrong.some((line) => line.includes("Farewell is not in Arcane Maelstrom")));
+  assert.ok(wrong.some((line) => line.includes("Fierce Guardianship is not in Veloci-Ramp-Tor")));
+  const played = cardDeckProblems({
+    file: "membership.mdx",
+    text: "Veloci-Ramp-Tor plays Cultivate. Timey-Wimey has Farewell.",
+    decks,
+  });
+  assert.deepEqual(played, []);
+});
+
+test("an aggregate sentence does not inherit a different fact's metric", () => {
+  const body = [
+    "This census starts from 182 Commander products.",
+    "The median is 38 lands, 10 ramp cards, and 10 draw cards.",
+    "Most decks run 182 lands.",
+    "The median precon plays 10 lands.",
+  ].join("\n");
+  const problems = claimProblems({
+    file: "aggregate.mdx",
+    body,
+    claims: [
+      { text: "182", path: "summary.commander_products", as: "int", context: "This census starts from 182 Commander products." },
+      { text: "38", path: "summary.lands.median", as: "int", context: "The median is 38 lands, 10 ramp cards, and 10 draw cards." },
+      { text: "10", path: "summary.ramp.median", as: "int", context: "The median is 38 lands, 10 ramp cards, and 10 draw cards." },
+      { text: "10", path: "summary.draw.median", as: "int", context: "The median is 38 lands, 10 ramp cards, and 10 draw cards." },
+    ],
+    facts: {
+      summary: { commander_products: 182, lands: { median: 38 }, ramp: { median: 10 }, draw: { median: 10 } },
+    },
+  });
+  assert.ok(problems.some((line) => line.includes("182") && line.includes("not bound")));
+  assert.ok(problems.some((line) => line.includes("10") && line.includes("not bound")));
+  assert.ok(!problems.some((line) => line.includes("38") && line.includes("not bound")));
 });
 
 test("templated set guides share an outline and reviewed guides do not", () => {

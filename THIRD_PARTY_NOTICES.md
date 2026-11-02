@@ -6,32 +6,29 @@ of the Coast. © Wizards of the Coast LLC.
 
 ## MTGJSON
 
-Official product deck lists (names and quantities) come from MTGJSON
-(https://mtgjson.com). MTGJSON publishes that data under the MIT license:
-https://www.mtgjson.com/license/
+MTGJSON licenses its data under the following license.
 
-Copyright (c) MTGJSON contributors
+MIT License
+
+Copyright © 2018-Present Zachary Halpern
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this data and associated documentation files (the "Data"), to deal in the
-Data without restriction, including without limitation the rights to use,
-copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Data, and to permit persons to whom the Data is furnished to do so,
-subject to the following conditions:
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Data.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-THE DATA IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE DATA OR THE USE OR OTHER DEALINGS IN THE DATA.
-
-The lists are Wizards of the Coast products, not a scrape of a tournament
-site. Each record keeps the source URL MTGJSON recorded for that product when
-it had one.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ## Scryfall
 
