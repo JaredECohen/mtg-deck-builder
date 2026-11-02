@@ -15,9 +15,10 @@ export default function MethodPage() {
     <main className="shell legal-page">
       <h1>How the guide numbers are counted</h1>
       <p>
-        Guides signed Deck Lab Editorial cite a checked-in facts file. A price, a count, or a percentage in those
-        guides has to match that file. This page is the definition. It is not a promise that a store will sell a card
-        at the printed number. This page does not carry ads.
+        Reviewed guides signed Deck Lab Editorial cite a checked-in facts file. A price, a count, or a percentage
+        in a reviewed guide has to match that file. A guide that has not passed the rubric is not signed that way,
+        and nothing on this page says its numbers were checked. This page is the definition for the reviewed guides.
+        It is not a promise that a store will sell a card at the printed number. This page does not carry ads.
       </p>
 
       <h2>Deck lists</h2>
@@ -123,7 +124,9 @@ export default function MethodPage() {
         the Coast. ©Wizards of the Coast LLC.
       </p>
       <p>
-        The <Link href="/blog">guides</Link> link back here. From the API directory, regenerate with{" "}
+        Data terms for MTGJSON and Scryfall are in{" "}
+        <Link href="/THIRD_PARTY_NOTICES.txt">THIRD_PARTY_NOTICES</Link>. The <Link href="/blog">guides</Link>{" "}
+        link back here. From the API directory, regenerate with{" "}
         <code>python -m app.scripts.build_precon_facts</code> and{" "}
         <code>python -m app.scripts.build_study_guides</code>. A regenerated facts file changes the numbers in the
         guides, so the diff needs a review before it is treated as reviewed copy.

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { cardDeckProblems, claimProblems, formatFact, headlineLiteralProblems, legacyClaimProblems, legacyHeadlineProblems, similarityProblems } from "./guide-claims.mjs";
+import { cardDeckProblems, claimProblems, extractLiterals, formatFact, headlineLiteralProblems, legacyClaimProblems, legacyHeadlineProblems, similarityProblems } from "./guide-claims.mjs";
 import { reviewPost } from "./guide-rubric.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -283,6 +283,87 @@ test("a card claimed in the wrong deck fails", () => {
     decks,
   });
   assert.deepEqual(right, []);
+});
+
+test("a number from a different fact is not bound to the wrong subject", () => {
+  const body = [
+    "The high end is Tricky Terrain at 44 lands.",
+    "Heads I Win, Tails You Lose is the expensive end at $266.03.",
+    "Land's Wrath plays 44 removal spells and costs $266.03.",
+  ].join("\n");
+  const problems = claimProblems({
+    file: "swap.mdx",
+    body,
+    claims: [
+      { text: "44", path: "summary.lands.max", as: "int", context: "The high end is Tricky Terrain at 44 lands." },
+      { text: "$266.03", path: "summary.price.high", as: "usd", context: "Heads I Win, Tails You Lose is the expensive end at $266.03." },
+    ],
+    facts: {
+      summary: { lands: { max: 44 }, price: { high: 266.03 } },
+      decks: {
+        wrath: { name: "Land's Wrath" },
+        terrain: { name: "Tricky Terrain" },
+        heads: { name: "Heads I Win, Tails You Lose" },
+      },
+    },
+  });
+  assert.ok(problems.some((line) => line.includes("44") && line.includes("not bound")));
+  assert.ok(problems.some((line) => line.includes("$266.03") && line.includes("not bound")));
+});
+
+test("link text, alt text, and code are checked, and the URL is not", () => {
+  const problems = claimProblems({
+    file: "link.mdx",
+    body: "The sample is 182 lists.\n[deck that costs $999 and plays 99 lands](/blog/sideboarding-101)\n`also $7`",
+    claims: [{ text: "182", path: "summary.lands.median", as: "int", context: "The sample is 182 lists." }],
+    facts: { summary: { lands: { median: 182 } } },
+  });
+  assert.ok(problems.some((line) => line.includes("$999")));
+  assert.ok(problems.some((line) => line.includes("99")));
+  assert.ok(problems.some((line) => line.includes("$7")));
+  assert.ok(!problems.some((line) => line.includes("101")));
+});
+
+test("fullwidth digits, ordinals, multiples, and a dozen count as literals", () => {
+  const found = extractLiterals("Finished ３３rd, ran 12x, and drew a dozen.");
+  assert.ok(found.counts.includes("33"));
+  assert.ok(found.counts.includes("12"));
+  const problems = claimProblems({
+    file: "dozen.mdx",
+    body: "The sample drew a dozen.",
+    claims: [{ text: "1", path: "summary.lands.median", as: "int", context: "The sample drew a dozen." }],
+    facts: { summary: { lands: { median: 1 } } },
+  });
+  assert.ok(problems.some((line) => line.includes("12")));
+});
+
+test("card membership is case-insensitive and covers more verbs", () => {
+  const decks = [
+    { name: "Arcane Maelstrom", cards: ["Crop Rotation"] },
+    { name: "Timey-Wimey", cards: ["Farewell"] },
+  ];
+  const wrong = cardDeckProblems({
+    file: "membership.mdx",
+    text: "FAREWELL APPEARS IN ARCANE MAELSTROM.",
+    decks,
+  });
+  assert.ok(wrong.some((line) => line.includes("Farewell is not in Arcane Maelstrom")));
+});
+
+test("templated set guides share an outline and reviewed guides do not", () => {
+  const read = (name) => fs.readFileSync(path.join(root, "content/blog", name), "utf8").split("---").slice(2).join("---");
+  const problems = similarityProblems([
+    { file: "adventures-in-the-forgotten-realms-mtg-set-guide.mdx", body: read("adventures-in-the-forgotten-realms-mtg-set-guide.mdx") },
+    { file: "alara-reborn-mtg-set-guide.mdx", body: read("alara-reborn-mtg-set-guide.mdx") },
+  ]);
+  assert.ok(problems.some((line) => line.includes("outline")));
+  const reviewed = ["precon-lands-ramp-draw.mdx", "pioneer-challenger-decks.mdx", "should-you-play-aggro.mdx", "mtg-ramp-deck-guide.mdx"].map(
+    (file) => ({ file, body: read(file) }),
+  );
+  assert.deepEqual(
+    similarityProblems(reviewed).filter((line) => line.includes("outline")),
+    [],
+  );
 });
 
 test("an unsourced legacy price fails against the example catalog", () => {

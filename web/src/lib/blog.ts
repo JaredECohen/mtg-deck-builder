@@ -16,8 +16,14 @@ import matter from "gray-matter";
 export const SITE_URL = "https://mtgdecklab.app";
 export const SITE_NAME = "MTG Deck Lab";
 export const AUTHOR = "Jared Cohen";
-/** Guides are signed by the desk, including ones that are not reviewed yet. */
+/** Reviewed guides are signed by the desk. Unreviewed guides are not. */
 export const GUIDE_AUTHOR = "Deck Lab Editorial";
+
+/** Byline and method link. Only a reviewed guide is signed by the desk. */
+export function articleCredit(post: { reviewed: boolean; author: string }): { byline: string; showMethod: boolean } {
+  if (post.reviewed) return { byline: post.author || GUIDE_AUTHOR, showMethod: true };
+  return { byline: post.author || AUTHOR, showMethod: false };
+}
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
@@ -135,7 +141,7 @@ function readPost(file: string): Post | null {
     readingMinutes: Math.max(1, Math.round(wordCount / 230)),
     wordCount,
     reviewed: data.reviewed === true,
-    author: data.author ? String(data.author) : GUIDE_AUTHOR,
+    author: data.reviewed === true ? (data.author ? String(data.author) : GUIDE_AUTHOR) : data.author ? String(data.author) : "",
     body: content,
     toc,
   };

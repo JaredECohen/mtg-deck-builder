@@ -194,6 +194,50 @@ def test_load_oracle_keeps_the_real_card_when_a_token_row_is_first(tmp_path):
     assert found["Dinosaur Egg"]["layout"] == "normal"
 
 
+def test_bulk_cache_requires_a_version_stamp_and_a_minimum_size(tmp_path):
+    from app.scripts.build_precon_facts import CACHE_VERSION, cache_is_fresh
+
+    dest = tmp_path / "oracle-cards.jsonl.gz"
+    dest.write_bytes(b"x" * 50)
+    url = "https://example.test/oracle"
+    assert cache_is_fresh(dest, url, 5_000_000) is False
+    dest.write_bytes(b"x" * 5_000_000)
+    assert cache_is_fresh(dest, url, 5_000_000) is False
+    (tmp_path / "oracle-cards.jsonl.gz.meta").write_text(f"{CACHE_VERSION}\n{url}\n", encoding="utf-8")
+    assert cache_is_fresh(dest, url, 5_000_000) is True
+    assert cache_is_fresh(dest, "https://example.test/other", 5_000_000) is False
+
+
+def test_game_changer_write_refuses_a_tiny_or_wholesale_replacement():
+    import pytest
+
+    from app.scripts.build_precon_facts import guard_game_changer_write
+
+    current = [f"Card {index}" for index in range(53)]
+    with pytest.raises(RuntimeError, match="at least 40"):
+        guard_game_changer_write(current, ["Sol Ring"])
+    replaced = [f"Other {index}" for index in range(53)]
+    with pytest.raises(RuntimeError, match="refusing to replace"):
+        guard_game_changer_write(current, replaced)
+    guard_game_changer_write(current, current[:50] + ["Farewell", "Biorhythm", "Consecrated Sphinx"])
+
+
+def test_game_changer_drift_report_names_missing_and_extra_cards():
+    import json
+
+    from app.scripts.check_game_changer_drift import drift, names_in_oracle
+
+    missing, extra = drift(["Sol Ring", "Farewell"], ["Sol Ring", "Biorhythm"])
+    assert missing == ["Biorhythm"]
+    assert extra == ["Farewell"]
+    lines = [
+        json.dumps({"name": "Token Egg", "layout": "token", "set_type": "token", "game_changer": True}),
+        json.dumps({"name": "Farewell", "layout": "normal", "set_type": "commander", "game_changer": True}),
+        json.dumps({"name": "Sol Ring", "layout": "normal", "game_changer": False}),
+    ]
+    assert names_in_oracle(lines) == ["Farewell"]
+
+
 def test_study_guide_template_calls_a_full_total_the_whole_list():
     from pathlib import Path
 

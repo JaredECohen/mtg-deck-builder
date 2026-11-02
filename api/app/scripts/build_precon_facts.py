@@ -47,6 +47,13 @@ SNAPSHOT = ROOT / "api" / "app" / "data" / "official_decks.json"
 OUT = ROOT / "web" / "src" / "data" / "precon_facts.json"
 CACHE = Path("/tmp/mtgdata")
 BULK_INDEX = "https://api.scryfall.com/bulk-data"
+# Bump this when the download filters change so a stale /tmp file is not reused.
+CACHE_VERSION = "2"
+MIN_ORACLE_BYTES = 5_000_000
+MIN_PRICE_BYTES = 20_000_000
+MIN_INDEX_BYTES = 1_000
+MIN_GAME_CHANGERS = 40
+MAX_GAME_CHANGER_CHANGE = 0.25
 
 
 class _Repo:
@@ -57,9 +64,23 @@ class _Repo:
         return self._cards.get(name)
 
 
-def _download(url: str, dest: Path) -> None:
+def _cache_stamp(url: str) -> str:
+    return f"{CACHE_VERSION}\n{url}\n"
+
+
+def cache_is_fresh(dest: Path, url: str, min_bytes: int) -> bool:
+    """True when dest is this version of url and large enough to be a real bulk file."""
+    meta = dest.with_name(dest.name + ".meta")
+    if not dest.exists() or not meta.exists():
+        return False
+    if dest.stat().st_size < min_bytes:
+        return False
+    return meta.read_text(encoding="utf-8") == _cache_stamp(url)
+
+
+def _download(url: str, dest: Path, *, min_bytes: int, refresh: bool) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists() and dest.stat().st_size > 0:
+    if not refresh and cache_is_fresh(dest, url, min_bytes):
         return
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     temporary = dest.with_suffix(dest.suffix + ".part")
@@ -70,6 +91,11 @@ def _download(url: str, dest: Path) -> None:
                 break
             handle.write(chunk)
     temporary.replace(dest)
+    size = dest.stat().st_size
+    if size < min_bytes:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(f"{dest.name} is {size} bytes; a real bulk file is at least {min_bytes}")
+    dest.with_name(dest.name + ".meta").write_text(_cache_stamp(url), encoding="utf-8")
 
 
 def _face_text(card: dict) -> str:
@@ -473,10 +499,10 @@ def game_changer_report(commanders: list[dict], oracle: dict[str, dict], names: 
     return rows
 
 
-def _bulk_item(bulk_type: str) -> tuple[str, str]:
+def _bulk_item(bulk_type: str, *, refresh: bool) -> tuple[str, str]:
     index_path = CACHE / "scryfall-bulk.json"
     payload = None
-    if index_path.exists():
+    if not refresh and cache_is_fresh(index_path, BULK_INDEX, MIN_INDEX_BYTES):
         payload = json.loads(index_path.read_text(encoding="utf-8"))
     else:
         request = urllib.request.Request(BULK_INDEX, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
@@ -484,6 +510,9 @@ def _bulk_item(bulk_type: str) -> tuple[str, str]:
             payload = json.load(response)
             index_path.parent.mkdir(parents=True, exist_ok=True)
             index_path.write_text(json.dumps(payload), encoding="utf-8")
+            index_path.with_name(index_path.name + ".meta").write_text(_cache_stamp(BULK_INDEX), encoding="utf-8")
+        if index_path.stat().st_size < MIN_INDEX_BYTES:
+            raise RuntimeError(f"Scryfall bulk index is only {index_path.stat().st_size} bytes")
     for item in payload.get("data") or []:
         if item.get("type") == bulk_type:
             return str(item["jsonl_download_uri"]), str(item.get("updated_at") or "")
@@ -501,6 +530,8 @@ def enforce_game_changers(bulk_names: list[str], *, write: bool, as_of: str) -> 
         return
     missing = sorted(set(bulk_names) - set(current))
     extra = sorted(set(current) - set(bulk_names))
+    if write:
+        guard_game_changer_write(current, bulk_names)
     if not write:
         raise RuntimeError(
             "game_changers.json disagrees with the Scryfall oracle game_changer field "
@@ -517,6 +548,22 @@ def enforce_game_changers(bulk_names: list[str], *, write: bool, as_of: str) -> 
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     bracket_data.cache_clear()
     print(f"updated {path} ({len(bulk_names)} names, as of {as_of})")
+
+
+def guard_game_changer_write(current: list[str], bulk_names: list[str]) -> None:
+    """Refuse a write that is too small or replaces more than a quarter of the list."""
+    if len(bulk_names) < MIN_GAME_CHANGERS:
+        raise RuntimeError(
+            f"refusing to write {len(bulk_names)} Game Changers; the oracle list should have at least {MIN_GAME_CHANGERS}"
+        )
+    if not current:
+        return
+    changed = len(set(current).symmetric_difference(bulk_names))
+    if changed / len(current) > MAX_GAME_CHANGER_CHANGE:
+        raise RuntimeError(
+            f"refusing to replace {changed} of {len(current)} Game Changer names "
+            f"({changed / len(current):.0%} of the committed list; the cap is {MAX_GAME_CHANGER_CHANGE:.0%})"
+        )
 
 
 def pioneer_overlap(sources: list[dict]) -> list[dict]:
@@ -544,17 +591,23 @@ def pioneer_overlap(sources: list[dict]) -> list[dict]:
     return rows
 
 
-def build(oracle_path: Path | None = None, prices_path: Path | None = None, *, write_game_changers: bool = False) -> dict:
+def build(
+    oracle_path: Path | None = None,
+    prices_path: Path | None = None,
+    *,
+    write_game_changers: bool = False,
+    refresh_bulk: bool = False,
+) -> dict:
     snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     decks = [deck for deck in snapshot.get("decks") or [] if isinstance(deck, dict)]
-    oracle_url_value, updated = _bulk_item("oracle_cards")
-    price_url, price_updated = _bulk_item("default_cards")
+    oracle_url_value, updated = _bulk_item("oracle_cards", refresh=refresh_bulk)
+    price_url, price_updated = _bulk_item("default_cards", refresh=refresh_bulk)
     if oracle_path is None:
         oracle_path = CACHE / "oracle-cards.jsonl.gz"
-        _download(oracle_url_value, oracle_path)
+        _download(oracle_url_value, oracle_path, min_bytes=MIN_ORACLE_BYTES, refresh=refresh_bulk)
     if prices_path is None:
         prices_path = CACHE / "default-cards.jsonl.gz"
-        _download(price_url, prices_path)
+        _download(price_url, prices_path, min_bytes=MIN_PRICE_BYTES, refresh=refresh_bulk)
     as_of = (updated or "")[:10]
     bulk_changers = scan_game_changers(oracle_path)
     enforce_game_changers(bulk_changers, write=write_game_changers, as_of=as_of)
@@ -651,8 +704,18 @@ def main() -> None:
         action="store_true",
         help="Rewrite game_changers.json from the oracle bulk when it disagrees. Without this flag, disagreement fails the build.",
     )
+    parser.add_argument(
+        "--refresh-bulk",
+        action="store_true",
+        help="Redownload the Scryfall bulk even when /tmp/mtgdata already has this cache version.",
+    )
     args = parser.parse_args()
-    build(oracle_path=args.oracle, prices_path=args.prices, write_game_changers=args.write_game_changers)
+    build(
+        oracle_path=args.oracle,
+        prices_path=args.prices,
+        write_game_changers=args.write_game_changers,
+        refresh_bulk=args.refresh_bulk,
+    )
 
 
 if __name__ == "__main__":

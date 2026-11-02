@@ -31,7 +31,7 @@ from app.models import (
 )
 from app.rules import is_basic_land, is_land_card
 from app.scripts.ingest_official_decks import load_snapshot
-from app.services.brackets import assess, bracket_data, is_extra_turn, is_mass_land_denial
+from app.services.brackets import _is_game_changer, assess, bracket_data, is_extra_turn, is_mass_land_denial
 from app.services.card_function import describe
 from app.services.card_repository import CardRepository
 from app.services.card_roles import primary_role
@@ -304,7 +304,7 @@ def _blocked(
         return False
     if is_mass_land_denial(card) or is_extra_turn(card):
         return True
-    if card.name in bracket_data()["game_changers"] and (max_bracket <= 2 or game_changers_left <= 0):
+    if _is_game_changer(card.name, bracket_data()["game_changers"]) and (max_bracket <= 2 or game_changers_left <= 0):
         return True
     for pair in bracket_data()["two_card_combos"]:
         if card.name in pair and set(pair) - {card.name} <= present:
@@ -386,7 +386,7 @@ def upgrade_precon(
     max_bracket = request.max_bracket
     game_changers_left = 3
     if max_bracket == 3:
-        already = sum(1 for name in present if name in bracket_data()["game_changers"])
+        already = sum(1 for name in present if _is_game_changer(name, bracket_data()["game_changers"]))
         game_changers_left = max(0, 3 - already)
 
     def value(card: CardRecord) -> float:
@@ -458,7 +458,7 @@ def upgrade_precon(
         used_adds.add(add.name)
         remaining -= price
         present.add(add.name)
-        if add.name in bracket_data()["game_changers"]:
+        if _is_game_changer(add.name, bracket_data()["game_changers"]):
             game_changers_left -= 1
         if not is_land_card(cut):
             role_counts[primary_role(cut)] = max(0, role_counts.get(primary_role(cut), 0) - 1)

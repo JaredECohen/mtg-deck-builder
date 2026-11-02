@@ -4,6 +4,8 @@
 // they cite. No model is called.
 
 export const SIMILARITY_THRESHOLD = 0.15;
+/** Shared section outline of the old templated set guides. Reviewed guides sit at 0. */
+export const OUTLINE_THRESHOLD = 0.5;
 
 const NUMBER_WORDS = {
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -92,16 +94,23 @@ export function factNames(facts, catalog) {
   return names.filter(Boolean);
 }
 
-export function extractLiterals(body, names = []) {
-  const text = maskNames(
+function prepareLiteralText(body, names = []) {
+  return maskNames(
     String(body)
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/https?:\/\/\S+/g, " ")
-    .replace(/\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/`[^`]*`/g, " "),
+      .normalize("NFKC")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/```/g, " ")
+      .replace(/<img\b[^>]*\balt="([^"]*)"[^>]*>/gi, " $1 ")
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, " $1 ")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, " $1 ")
+      .replace(/https?:\/\/\S+/g, " ")
+      .replace(/`/g, ""),
     names,
   );
+}
+
+export function extractLiterals(body, names = []) {
+  const text = prepareLiteralText(body, names);
   const prices = [...text.matchAll(/\$(\d+(?:\.\d+)?)/g)].map((match) => match[1]);
   const percents = [...text.matchAll(/(\d+(?:\.\d+)?)%/g)].map((match) => match[1]);
   const stripped = text
@@ -109,6 +118,10 @@ export function extractLiterals(body, names = []) {
     .replace(/\d+(?:\.\d+)?%/g, " ")
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
   const counts = [...stripped.matchAll(/\b\d+(?:\.\d+)?\b/g)].map((match) => match[0]);
+  for (const match of stripped.matchAll(/\b(\d+)(?:st|nd|rd|th)\b/gi)) counts.push(match[1]);
+  for (const match of stripped.matchAll(/\b(\d+)x\b/gi)) counts.push(match[1]);
+  const dozens = stripped.match(/\ba dozen\b/gi);
+  if (dozens) counts.push(...dozens.map(() => "12"));
   const spelled = stripped.match(
     /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b|(?<!-)\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b(?!-)/gi,
   );
@@ -277,16 +290,18 @@ export function headlineLiteralProblems({ file, title, description, claims, fact
 function hitsIn(text, names) {
   const found = [];
   const taken = [];
-  const ordered = names.filter((name) => typeof name === "string" && name.length > 2 && text.includes(name));
+  const haystack = text.toLowerCase();
+  const ordered = names.filter((name) => typeof name === "string" && name.length > 2 && haystack.includes(name.toLowerCase()));
   ordered.sort((left, right) => right.length - left.length);
   for (const name of ordered) {
+    const needle = name.toLowerCase();
     let from = 0;
-    while (from < text.length) {
-      const index = text.indexOf(name, from);
+    while (from < haystack.length) {
+      const index = haystack.indexOf(needle, from);
       if (index < 0) break;
-      const end = index + name.length;
-      const beforeOk = index === 0 || !/[A-Za-z0-9]/.test(text[index - 1]);
-      const afterOk = end >= text.length || !/[A-Za-z0-9]/.test(text[end]);
+      const end = index + needle.length;
+      const beforeOk = index === 0 || !/[A-Za-z0-9]/.test(haystack[index - 1]);
+      const afterOk = end >= haystack.length || !/[A-Za-z0-9]/.test(haystack[end]);
       const overlaps = taken.some(([start, stop]) => index < stop && end > start);
       if (beforeOk && afterOk && !overlaps) {
         taken.push([index, end]);
@@ -302,7 +317,8 @@ function hitsIn(text, names) {
 function maskDeckNames(text, deckNames) {
   let masked = text;
   for (const name of [...deckNames].sort((left, right) => right.length - left.length)) {
-    masked = masked.split(name).join(" ".repeat(name.length));
+    const pattern = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    masked = masked.replace(pattern, (match) => " ".repeat(match.length));
   }
   return masked;
 }
@@ -319,9 +335,14 @@ export function cardDeckProblems({ file, text, decks }) {
   const problems = [];
   for (const sentence of String(text).split(/\n+|(?<=[.!?])\s+/)) {
     const verbs = [
-      { pattern: /\bis in\b/i, cardsFirst: true },
-      { pattern: /\bshows up in\b/i, cardsFirst: true },
-      { pattern: /\bincludes\b/i, cardsFirst: false },
+      { pattern: /\b(?:is|are) in\b/i, cardsFirst: true },
+      { pattern: /\bshows? up in\b/i, cardsFirst: true },
+      { pattern: /\bappears? in\b/i, cardsFirst: true },
+      { pattern: /\bfound in\b/i, cardsFirst: true },
+      { pattern: /\bsits in\b/i, cardsFirst: true },
+      { pattern: /\bplayed in\b/i, cardsFirst: true },
+      { pattern: /\bbelongs in\b/i, cardsFirst: true },
+      { pattern: /\b(?:includes?|contains|features)\b/i, cardsFirst: false },
       { pattern: /\bGame Changer is\b/i, cardsFirst: false },
     ];
     for (const verb of verbs) {
@@ -375,20 +396,135 @@ export function claimProblems({ file, body, claims, facts }) {
     }
     texts.push(claim.text);
   }
-  const found = extractLiterals(body, factNames(facts, null));
-  const expected = {
-    prices: texts.filter((text) => text.startsWith("$")).map((text) => text.slice(1)),
-    percents: texts.filter((text) => text.endsWith("%")).map((text) => text.slice(0, -1)),
-    counts: texts.filter((text) => !text.startsWith("$") && !text.endsWith("%")),
-  };
-  for (const kind of ["prices", "percents", "counts"]) {
-    const extras = found[kind].filter((literal) => !expected[kind].includes(literal));
-    for (const literal of extras) {
-      const label = kind === "prices" ? `$${literal}` : kind === "percents" ? `${literal}%` : literal;
-      problems.push(`${file}: ${label} is in the prose and not in the claims`);
+  const names = factNames(facts, null);
+  for (const occurrence of literalOccurrences(body, names)) {
+    const known = texts.includes(occurrence.text);
+    if (!known) {
+      problems.push(`${file}: ${occurrence.text} is in the prose and not in the claims`);
+      continue;
+    }
+    if (!occurrenceBound(occurrence, claims)) {
+      problems.push(`${file}: ${occurrence.text} is not bound to the claim for its subject and metric`);
     }
   }
   return problems;
+}
+
+function compact(text) {
+  return String(text).replace(/\s+/g, " ").trim();
+}
+
+function sentenceAt(text, index) {
+  let start = 0;
+  for (const breakAt of [text.lastIndexOf("\n", index - 1), text.lastIndexOf(". ", index - 1)]) {
+    if (breakAt >= start) start = breakAt + 1;
+  }
+  let end = text.length;
+  const lineEnd = text.indexOf("\n", index);
+  const sentenceEnd = text.indexOf(". ", index);
+  if (lineEnd >= 0) end = Math.min(end, lineEnd);
+  if (sentenceEnd >= 0) end = Math.min(end, sentenceEnd + 1);
+  return text.slice(start, end);
+}
+
+const METRIC_WORD = /\b(lands?|ramp|draws?|removal|prices?|costs?|sums?|median|mean|floors?|names|wins?|curve|copies|lists|decks|cards)\b/gi;
+
+function metricStem(word) {
+  const value = word.toLowerCase();
+  if (value.startsWith("land")) return "land";
+  if (value.startsWith("draw")) return "draw";
+  if (value.startsWith("price") || value.startsWith("cost") || value.startsWith("sum")) return "price";
+  if (value.startsWith("list")) return "list";
+  if (value.startsWith("deck")) return "deck";
+  if (value.startsWith("card") || value.startsWith("cop")) return "card";
+  if (value.startsWith("name")) return "name";
+  if (value.startsWith("win")) return "win";
+  if (value.startsWith("floor")) return "floor";
+  return value;
+}
+
+function nearestWord(sentence, index, pattern) {
+  let best = null;
+  let distance = 48;
+  for (const match of sentence.matchAll(pattern)) {
+    const gap = Math.abs(match.index - index);
+    if (gap < distance) {
+      distance = gap;
+      best = match[1];
+    }
+  }
+  return best;
+}
+
+function literalOccurrences(body, names) {
+  const text = prepareLiteralText(body, names);
+  const occurrences = [];
+  const push = (index, textValue, raw) => {
+    const sentence = sentenceAt(text, index);
+    const subjects = hitsIn(sentence, names.filter((name) => name.length > 3));
+    const valueAt = Math.max(0, sentence.toLowerCase().indexOf(String(raw).toLowerCase()));
+    const metric = nearestWord(maskDeckNames(sentence, subjects), valueAt, METRIC_WORD);
+    const lower = sentence.toLowerCase();
+    const placed = subjects
+      .map((name) => ({ name, at: lower.indexOf(name.toLowerCase()) }))
+      .filter((item) => item.at >= 0);
+    const before = placed.filter((item) => item.at < valueAt && valueAt - item.at <= 60).sort((left, right) => right.at - left.at);
+    const after = placed.filter((item) => item.at >= valueAt && item.at - valueAt <= 24).sort((left, right) => left.at - right.at);
+    const subject = (before[0] ?? after[0])?.name ?? null;
+    occurrences.push({ text: textValue, sentence, metric: metric ? metricStem(metric) : null, subject });
+  };
+  const skip = [];
+  for (const match of text.matchAll(/\$\d+(?:\.\d+)?|\d+(?:\.\d+)?%|\b\d{4}-\d{2}-\d{2}\b/g)) {
+    skip.push([match.index, match.index + match[0].length]);
+  }
+  const skipped = (index) => skip.some(([start, end]) => index >= start && index < end);
+  for (const match of text.matchAll(/\$(\d+(?:\.\d+)?)/g)) push(match.index, `$${match[1]}`, match[0]);
+  for (const match of text.matchAll(/(\d+(?:\.\d+)?)%/g)) push(match.index, `${match[1]}%`, match[0]);
+  for (const match of text.matchAll(/\b(\d+)(?:st|nd|rd|th)\b/gi)) push(match.index, match[1], match[0]);
+  for (const match of text.matchAll(/\b(\d+)x\b/gi)) push(match.index, match[1], match[0]);
+  for (const match of text.matchAll(/\ba dozen\b/gi)) push(match.index, "12", match[0]);
+  for (const match of text.matchAll(/\b\d+(?:\.\d+)?\b/g)) {
+    if (skipped(match.index)) continue;
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 2);
+    if (/^(?:st|nd|rd|th|x)\b/i.test(after)) continue;
+    push(match.index, match[0], match[0]);
+  }
+  const spelled = /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b|(?<!-)\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b(?!-)/gi;
+  for (const match of text.matchAll(spelled)) push(match.index, match[0].toLowerCase(), match[0]);
+  return occurrences;
+}
+
+function contextHasStem(context, stem) {
+  const stems = {
+    land: /\blands?\b/i,
+    draw: /\bdraws?\b/i,
+    price: /\b(?:prices?|costs?|sums?)\b/i,
+    list: /\blists?\b/i,
+    deck: /\bdecks?\b/i,
+    card: /\b(?:cards?|copies)\b/i,
+    name: /\bnames?\b/i,
+    win: /\bwins?\b/i,
+    floor: /\bfloors?\b/i,
+    ramp: /\bramp\b/i,
+    removal: /\bremoval\b/i,
+    median: /\bmedian\b/i,
+    mean: /\bmean\b/i,
+    curve: /\bcurve\b/i,
+  };
+  return stems[stem] ? stems[stem].test(context) : context.toLowerCase().includes(stem);
+}
+
+function occurrenceBound(occurrence, claims) {
+  const sentence = compact(occurrence.sentence);
+  for (const claim of claims) {
+    if (claim.text !== occurrence.text || !claim.context) continue;
+    const context = compact(claim.context);
+    if (context.includes(sentence) || sentence.includes(context)) return true;
+    if (occurrence.subject && !context.includes(occurrence.subject)) continue;
+    if (occurrence.metric && !contextHasStem(context, occurrence.metric)) continue;
+    if (occurrence.subject || occurrence.metric) return true;
+  }
+  return false;
 }
 
 export function shingleSet(text) {
@@ -425,20 +561,54 @@ export function maskComparable(text, names = []) {
   );
 }
 
+const RUBRIC_HEADINGS = new Set([
+  "short answer",
+  "common mistakes",
+  "faq",
+  "how this was made",
+  "when to choose this",
+  "example decks",
+  "lists to open",
+  "lists worth opening",
+  "what to copy",
+  "how to use the floor",
+  "the names that show up",
+  "curve, overlap, and what each deck is doing",
+]);
+
+/** Section outline after the shared reviewed-guide headings are removed. */
+export function outlineSet(text) {
+  const heads = [...String(text).matchAll(/^## (.+)$/gm)].map((match) =>
+    match[1]
+      .toLowerCase()
+      .replace(/cards from .+ worth owning/, "cards worth owning")
+      .replace(/the meta.*/, "the meta")
+      .trim(),
+  );
+  return new Set(heads.filter((heading) => heading && !RUBRIC_HEADINGS.has(heading)));
+}
+
 export function similarityProblems(posts, threshold = SIMILARITY_THRESHOLD, names = []) {
   const problems = [];
   const sets = posts.map((post) => ({
     file: post.file,
     shingles: shingleSet(post.body),
     masked: shingleSet(maskComparable(post.body, names)),
+    outline: outlineSet(post.body),
   }));
   for (let i = 0; i < sets.length; i += 1) {
     for (let j = i + 1; j < sets.length; j += 1) {
       const score = jaccard(sets[i].shingles, sets[j].shingles);
       const masked = jaccard(sets[i].masked, sets[j].masked);
+      const outline = jaccard(sets[i].outline, sets[j].outline);
       if (score > threshold || masked > threshold) {
         problems.push(
           `${sets[i].file} and ${sets[j].file}: shingle Jaccard ${Math.max(score, masked).toFixed(3)} is above ${threshold}`,
+        );
+      }
+      if (outline > OUTLINE_THRESHOLD) {
+        problems.push(
+          `${sets[i].file} and ${sets[j].file}: section outline Jaccard ${outline.toFixed(3)} is above ${OUTLINE_THRESHOLD}`,
         );
       }
     }
