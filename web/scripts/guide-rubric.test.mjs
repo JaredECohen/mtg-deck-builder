@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { claimProblems, formatFact, legacyClaimProblems, similarityProblems } from "./guide-claims.mjs";
+import { cardDeckProblems, claimProblems, formatFact, headlineLiteralProblems, legacyClaimProblems, legacyHeadlineProblems, similarityProblems } from "./guide-claims.mjs";
 import { reviewPost } from "./guide-rubric.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -222,6 +222,67 @@ test("a near-copy fixture fails the similarity gate and a different guide does n
     0.45,
   );
   assert.deepEqual(distinct, []);
+});
+
+function frontmatter(raw) {
+  const parts = raw.split("---");
+  const data = {};
+  for (const line of parts[1].split("\n")) {
+    const match = line.match(/^([A-Za-z]+):\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    data[match[1]] = value;
+  }
+  return { title: data.title ?? "", description: data.description ?? "", body: parts.slice(2).join("---") };
+}
+
+test("a wrong land count in the ramp guide description fails", () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, "src/data/example-decks.json"), "utf8"));
+  const raw = fs.readFileSync(path.join(root, "content/blog/mtg-ramp-deck-guide.mdx"), "utf8");
+  const parsed = frontmatter(raw);
+  const problems = legacyHeadlineProblems({
+    file: "mtg-ramp-deck-guide.mdx",
+    title: parsed.title,
+    description: parsed.description.replace("37 lands", "33 lands"),
+    body: parsed.body,
+    catalog,
+  });
+  assert.ok(problems.some((line) => line.includes("33") && line.includes("title or description")));
+});
+
+test("a wrong land count in the census description fails", () => {
+  const facts = JSON.parse(fs.readFileSync(path.join(root, "src/data/precon_facts.json"), "utf8"));
+  const raw = fs.readFileSync(path.join(root, "content/blog/precon-lands-ramp-draw.mdx"), "utf8");
+  const claims = JSON.parse(fs.readFileSync(path.join(root, "content/blog/precon-lands-ramp-draw.claims.json"), "utf8"));
+  const parsed = frontmatter(raw);
+  const problems = headlineLiteralProblems({
+    file: "precon-lands-ramp-draw.mdx",
+    title: parsed.title,
+    description: parsed.description.replace("plays 38 lands", "plays 33 lands"),
+    claims,
+    facts,
+  });
+  assert.ok(problems.some((line) => line.includes("33") && line.includes("title or description")));
+});
+
+test("a card claimed in the wrong deck fails", () => {
+  const decks = [
+    { name: "Arcane Maelstrom", cards: ["Crop Rotation", "Kalamax, the Stormsire"] },
+    { name: "Timey-Wimey", cards: ["Farewell"] },
+  ];
+  const wrong = cardDeckProblems({
+    file: "membership.mdx",
+    text: "Farewell is in Arcane Maelstrom.",
+    decks,
+  });
+  assert.ok(wrong.some((line) => line.includes("Farewell is not in Arcane Maelstrom")));
+  const right = cardDeckProblems({
+    file: "membership.mdx",
+    text: "Farewell is in Timey-Wimey. Arcane Maelstrom's Game Changer is Crop Rotation.",
+    decks,
+  });
+  assert.deepEqual(right, []);
 });
 
 test("an unsourced legacy price fails against the example catalog", () => {

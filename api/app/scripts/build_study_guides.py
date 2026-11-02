@@ -169,6 +169,11 @@ related: [{rel}]
 """
 
 
+def whole_list(c: Claims, deck_id: str) -> str:
+    """price_usd is every counted card. It is never a remainder after one card."""
+    return f"The whole list sums to {c(f'decks.{deck_id}.price_usd', 'usd')}"
+
+
 def color_words(identity: str) -> str:
     colors = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green", "C": "colorless"}
     names = [colors[letter] for letter in identity]
@@ -296,8 +301,8 @@ def game_changers_guide(facts: dict) -> None:
     body = frontmatter(
         title="Which Game Changers Are Actually in Commander Precons?",
         description=(
-            "Scryfall marks 53 Commander Game Changers on the November 2026 oracle bulk. "
-            "Eleven of them show up in the 174 unique precon lists, with prices from that bulk."
+            "Scryfall marks 53 Commander Game Changers on the current oracle bulk. "
+            "11 of them show up in the 174 unique precon lists, with prices from that bulk."
         ),
         category="strategy",
         keywords=["commander game changers", "precon game changers", "farewell commander", "commander bracket precon"],
@@ -326,11 +331,11 @@ Farewell is on this bulk even where an older announcement left it off. It is {c(
 
 <DeckBlock id="arcane-maelstrom" />
 
-Arcane Maelstrom's Game Changer is Crop Rotation, at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")} on this bulk. The rest of the product sums to {c("decks." + arcane["id"] + ".price_usd", "usd")} and plays {c("decks." + arcane["id"] + ".land_count", "int")} lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in.
+Arcane Maelstrom's Game Changer is Crop Rotation, at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")} on this bulk. {whole_list(c, arcane["id"])}, Crop Rotation included, and it plays {c("decks." + arcane["id"] + ".land_count", "int")} lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in.
 
 <DeckBlock id="sneak-attack" />
 
-Sneak Attack includes Notion Thief and no other name from the {c("summary.game_changer_list_size", "int")}. Notion Thief is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Notion Thief")) + ".usd", "usd")}. The product sum is {c("decks." + sneak["id"] + ".price_usd", "usd")}, with {c("decks." + sneak["id"] + ".land_count", "int")} lands, {c("decks." + sneak["id"] + ".ramp_count", "int")} ramp, {c("decks." + sneak["id"] + ".draw_count", "int")} draw, and {c("decks." + sneak["id"] + ".removal_count", "int")} removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards.
+Sneak Attack includes Notion Thief and no other name from the {c("summary.game_changer_list_size", "int")}. Notion Thief is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Notion Thief")) + ".usd", "usd")}. {whole_list(c, sneak["id"])}, with {c("decks." + sneak["id"] + ".land_count", "int")} lands, {c("decks." + sneak["id"] + ".ramp_count", "int")} ramp, {c("decks." + sneak["id"] + ".draw_count", "int")} draw, and {c("decks." + sneak["id"] + ".removal_count", "int")} removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards.
 
 <InArticleAd />
 
@@ -345,7 +350,7 @@ Do not add Farewell or Fierce Guardianship to a different precon and keep callin
 - Using an older copy of the list. This page has {c("summary.game_changer_list_size", "int")} names because that is what the {fetched} bulk marks, and Farewell is on it.
 - Treating "not on the list" as "weak." Most of the {c("summary.commander_precons", "int")} unique lists have none of these cards.
 - Reading the optimized floor as a ban. The cards are legal. The floor describes the list.
-- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom costs {c("decks." + arcane["id"] + ".price_usd", "usd")} with Crop Rotation at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")}.
+- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom's whole list sums to {c("decks." + arcane["id"] + ".price_usd", "usd")}, and Crop Rotation is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")} of that total.
 
 ## FAQ
 
@@ -431,9 +436,9 @@ def pioneer_guide(facts: dict) -> None:
     body += f"""
 ## Short answer
 
-In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes {c("summary.pioneer_challenger", "words")} of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on {fetched}, so none of these sums is missing a name. The sums are the lowest such price, not the printing in the box. The deck block is that other price, and this page will not repeat the distinction in every section. Definitions are on the [method page](/method).
+In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes {c("summary.pioneer_challenger", "words")} of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on {fetched}, so none of these sums is missing a name. Those sums are the lowest such price. The deck block is the printing in the box. Definitions are on the [method page](/method).
 
-Land counts run from {c("decks." + auras["id"] + ".land_count", "int")} in Orzhov Auras to {c("decks." + dimir["id"] + ".land_count", "int")} in Dimir Control. Mono-Red Burn, at {c("decks." + burn["id"] + ".land_count", "int")} lands, is not the lowest list here. Gruul Stompy, the other red deck, plays {c("decks." + gruul["id"] + ".land_count", "int")}. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at {c("decks." + spirits["id"] + ".price_usd", "usd")}. The expensive end is Lotus Field Combo at {c("decks." + lotus["id"] + ".price_usd", "usd")}.
+Land counts run from {c("decks." + auras["id"] + ".land_count", "int")} in Orzhov Auras to {c("decks." + dimir["id"] + ".land_count", "int")} in Dimir Control. Gruul Stompy plays {c("decks." + gruul["id"] + ".land_count", "int")}. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at {c("decks." + spirits["id"] + ".price_usd", "usd")}. The expensive end is Lotus Field Combo at {c("decks." + lotus["id"] + ".price_usd", "usd")}.
 
 {". ".join(illegal)}. Those are the only Pioneer legality flags on the {fetched} bulk. {". ".join(flagged)}, which is a Commander Game Changer sitting in a Pioneer product. It is legal in Pioneer on this bulk. Do not register Phoenix or Auras as printed. Check the ban list again before you submit anything else, because a bulk date is a snapshot.
 
@@ -449,7 +454,7 @@ Azorius Spirits and Orzhov Humans both peak at mana value {c("decks." + spirits[
 
 Gruul Stompy's ramp count is {c("decks." + gruul["id"] + ".ramp_count", "int")}, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so the removal count of {c("decks." + gruul["id"] + ".removal_count", "int")} includes her, and draw is {c("decks." + gruul["id"] + ".draw_count", "int")}. The curve tops out higher than those one-drops, so calling the deck burn because it is red misses the land count and the elves.
 
-Izzet Phoenix draws {c("decks." + phoenix["id"] + ".draw_count", "int")} times because the deck is cantrips, and it still has {c("decks." + phoenix["id"] + ".mana_curve.7.card_count", "int")} cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps {c("decks." + lotus["id"] + ".ramp_count", "int")}, draws {c("decks." + lotus["id"] + ".draw_count", "int")}, and removes {c("decks." + lotus["id"] + ".removal_count", "int")}. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: {c("decks." + dimir["id"] + ".land_count", "int")} lands, {c("decks." + dimir["id"] + ".removal_count", "int")} removal, {c("decks." + dimir["id"] + ".draw_count", "int")} draw. It is the list that is allowed to have a hand full of answers.
+Izzet Phoenix has {c("decks." + phoenix["id"] + ".draw_count", "int")} draw cards, mostly cantrips, and it still has {c("decks." + phoenix["id"] + ".mana_curve.7.card_count", "int")} cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps {c("decks." + lotus["id"] + ".ramp_count", "int")}, draws {c("decks." + lotus["id"] + ".draw_count", "int")}, and removes {c("decks." + lotus["id"] + ".removal_count", "int")}. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: {c("decks." + dimir["id"] + ".land_count", "int")} lands, {c("decks." + dimir["id"] + ".removal_count", "int")} removal, {c("decks." + dimir["id"] + ".draw_count", "int")} draw. It is the list that is allowed to have a hand full of answers.
 
 The lists also share a few specific cards, which is a shared tool and not a shared strategy. {". ".join(overlap)}. A pain land in both Orzhov lists, or a cantrip in both a control deck and a combo deck, is as much of a metagame as these sealed products can show.
 
@@ -467,11 +472,11 @@ Gruul is the creature deck next to it: {c("decks." + gruul["id"] + ".land_count"
 
 <DeckBlock id="izzet-phoenix" />
 
-Phoenix plays {c("decks." + phoenix["id"] + ".land_count", "int")} lands and sums to {c("decks." + phoenix["id"] + ".price_usd", "usd")}. Expressive Iteration is in the printed list and is not legal on the {fetched} bulk. The draw count of {c("decks." + phoenix["id"] + ".draw_count", "int")} includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, {c("decks." + auras["id"] + ".land_count", "int")} lands, {c("decks." + auras["id"] + ".price_usd", "usd")}, and {c("decks." + auras["id"] + ".mana_curve.1.card_count", "int")} one-drops that are the actual plan if you rebuild without the companion.
+Phoenix plays {c("decks." + phoenix["id"] + ".land_count", "int")} lands and sums to {c("decks." + phoenix["id"] + ".price_usd", "usd")}. Expressive Iteration is in the printed list and is not legal on the {fetched} bulk. The {c("decks." + phoenix["id"] + ".draw_count", "int")} draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, {c("decks." + auras["id"] + ".land_count", "int")} lands, {c("decks." + auras["id"] + ".price_usd", "usd")}, and {c("decks." + auras["id"] + ".mana_curve.1.card_count", "int")} one-drops that are the actual plan if you rebuild without the companion.
 
 ## Common mistakes
 
-- Calling Mono-Red Burn the lowest land count in the file. Orzhov Auras plays {c("decks." + auras["id"] + ".land_count", "int")}. Burn plays {c("decks." + burn["id"] + ".land_count", "int")}.
+- Reading Mono-Red Burn as the low land count. The table's low end is Orzhov Auras, and Gruul Stompy is a different red deck.
 - Registering Izzet Phoenix or Orzhov Auras as printed. The bulk of {fetched} flags Expressive Iteration and Lurrus of the Dream-Den.
 - Reading Burn's removal count of {c("decks." + burn["id"] + ".removal_count", "int")} as creature removal. The rule counts damage to any target.
 - Treating these products, from separate seasons, as a Pioneer metagame. There is no licensed standings feed behind this page.
@@ -480,7 +485,7 @@ Phoenix plays {c("decks." + phoenix["id"] + ".land_count", "int")} lands and sum
 
 ### Which lists can I register?
 
-Phoenix and Auras are the lists with a legality flag on {fetched}, named above. The others had no Pioneer ban or not-legal flag on that bulk. Legality moves. The bulk does not.
+Phoenix and Auras are the lists with a legality flag on {fetched}, named above. The others had no Pioneer ban or not-legal flag on that bulk. A ban printed after that date is not in this file.
 
 ### Why does Gruul count as ramp?
 

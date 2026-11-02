@@ -213,61 +213,61 @@
     "text": "$3.35",
     "path": "game_changers.5.usd",
     "as": "usd",
-    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The rest of the product sums to $132.04 and plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
   },
   {
     "text": "$132.04",
     "path": "decks.mtgjson-ArcaneMaelstrom_C20.price_usd",
     "as": "usd",
-    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The rest of the product sums to $132.04 and plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
   },
   {
     "text": "38",
     "path": "decks.mtgjson-ArcaneMaelstrom_C20.land_count",
     "as": "int",
-    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The rest of the product sums to $132.04 and plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
   },
   {
     "text": "53",
     "path": "summary.game_changer_list_size",
     "as": "int",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "$1.75",
     "path": "game_changers.3.usd",
     "as": "usd",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "$41.70",
     "path": "decks.mtgjson-SneakAttack_ZNC.price_usd",
     "as": "usd",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "38",
     "path": "decks.mtgjson-SneakAttack_ZNC.land_count",
     "as": "int",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "7",
     "path": "decks.mtgjson-SneakAttack_ZNC.ramp_count",
     "as": "int",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "11",
     "path": "decks.mtgjson-SneakAttack_ZNC.draw_count",
     "as": "int",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "5",
     "path": "decks.mtgjson-SneakAttack_ZNC.removal_count",
     "as": "int",
-    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The product sum is $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
   },
   {
     "text": "154",
@@ -309,13 +309,13 @@
     "text": "$132.04",
     "path": "decks.mtgjson-ArcaneMaelstrom_C20.price_usd",
     "as": "usd",
-    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom costs $132.04 with Crop Rotation at $3.35."
+    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom's whole list sums to $132.04, and Crop Rotation is $3.35 of that total."
   },
   {
     "text": "$3.35",
     "path": "game_changers.5.usd",
     "as": "usd",
-    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom costs $132.04 with Crop Rotation at $3.35."
+    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom's whole list sums to $132.04, and Crop Rotation is $3.35 of that total."
   },
   {
     "text": "18",

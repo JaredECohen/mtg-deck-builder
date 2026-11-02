@@ -23,10 +23,10 @@ draw. "Whenever you draw a card, ..." is a trigger, not a draw effect, so
 Psychosis Crawler, Smothering Tithe, and Ominous Seas do not count.
 
 Removal (nonland) is a card that destroys or exiles an opponent's permanent,
-deals damage to a creature or any target, gives a creature -N/-N, fights,
-forces a sacrifice, or shuffles a permanent into a library. Counterspells are
-not removal. Exiling your own permanents and bringing them back (blink) is
-not removal.
+deals damage to a creature or any target, gives a target creature -N/-N, gives
+all creatures or each creature -N/-N, fights, forces a sacrifice, or shuffles
+a permanent into a library. Counterspells are not removal. Exiling your own
+permanents and bringing them back (blink) is not removal.
 """
 
 from __future__ import annotations

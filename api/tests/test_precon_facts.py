@@ -69,6 +69,8 @@ def test_blink_is_not_removal_and_a_minus_spell_is():
         "Exile all creatures you control, then reveal cards from the top of your library until you reveal that many creature cards.",
     )
     assert is_removal("Instant", "Target creature gets -4/-4 until end of turn.")
+    assert is_removal("Sorcery", "All creatures get -2/-2 until end of turn.")
+    assert is_removal("Sorcery", "Each creature gets -1/-1 until end of turn.")
     assert is_removal("Instant", "Exile target creature. Its controller may search their library for a basic land card.")
 
 
@@ -141,3 +143,60 @@ def test_committed_facts_cover_the_official_snapshot():
     priced = [row for row in facts["game_changers"] if not row["unpriced"]]
     assert priced, "Scryfall bulk should price at least one Game Changer"
     assert all(isinstance(row["usd"], (int, float)) and row["usd"] >= 0 for row in priced)
+
+
+def test_committed_game_changers_match_the_facts_census():
+    """CI does not download the oracle bulk.
+
+    ``build_precon_facts`` raises when ``game_changers.json`` drifts from the
+    Scryfall ``game_changer`` field. This locks the committed file to the census
+    that was built from that bulk, so the two artifacts cannot diverge in CI.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    listed = json.loads((root / "api" / "app" / "data" / "game_changers.json").read_text(encoding="utf-8"))
+    facts = json.loads((root / "web" / "src" / "data" / "precon_facts.json").read_text(encoding="utf-8"))
+    names = sorted(listed["game_changers"])
+    assert listed["as_of"] == "2026-11-01"
+    assert names == sorted(row["name"] for row in facts["game_changers"])
+    assert facts["summary"]["game_changer_list_size"] == len(names) == 53
+
+
+def test_load_oracle_keeps_the_real_card_when_a_token_row_is_first(tmp_path):
+    import json
+
+    from app.scripts.build_precon_facts import load_oracle
+
+    path = tmp_path / "oracle.jsonl"
+    rows = [
+        {
+            "name": "Dinosaur Egg",
+            "layout": "token",
+            "set_type": "token",
+            "type_line": "Token Creature — Dinosaur Egg",
+            "oracle_text": "This token is not the card.",
+        },
+        {
+            "name": "Dinosaur Egg",
+            "layout": "normal",
+            "set_type": "commander",
+            "type_line": "Creature — Dinosaur Egg",
+            "oracle_text": "Trample",
+            "cmc": 1,
+        },
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    found = load_oracle(path, {"Dinosaur Egg"})
+    assert found["Dinosaur Egg"]["type_line"] == "Creature — Dinosaur Egg"
+    assert found["Dinosaur Egg"]["oracle_text"] == "Trample"
+    assert found["Dinosaur Egg"]["layout"] == "normal"
+
+
+def test_study_guide_template_calls_a_full_total_the_whole_list():
+    from pathlib import Path
+
+    text = Path(__file__).resolve().parents[1].joinpath("app/scripts/build_study_guides.py").read_text(encoding="utf-8")
+    assert "the rest of the product" not in text.lower()
+    assert "The whole list sums to" in text

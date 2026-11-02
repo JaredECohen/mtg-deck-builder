@@ -82,7 +82,8 @@ export default function MethodPage() {
         </li>
         <li>
           <strong>Removal.</strong> A nonland that destroys or exiles a permanent, deals damage to a creature or any
-          target, gives a single creature -N/-N, fights, forces a sacrifice, or shuffles a permanent into a library.
+          target, gives a target creature -N/-N, gives all creatures or each creature -N/-N, fights, forces a
+          sacrifice, or shuffles a permanent into a library.
           A counterspell is not removal. Exiling your own creatures and returning them, including blink and a spell
           that exiles the creatures you control, is not removal. Damage to any target still counts when the deck
           points it at a player.

@@ -291,43 +291,37 @@
     "text": "eight",
     "path": "summary.pioneer_challenger",
     "as": "words",
-    "context": "In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes eight of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on 2026-11-01, so none of these sums is missing a name. The sums are the lowest such price, not the printing in the box. The deck block is that other price, and this page will not repeat the distinction in every section. Definitions are on the [method page](/method)."
+    "context": "In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes eight of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on 2026-11-01, so none of these sums is missing a name. Those sums are the lowest such price. The deck block is the printing in the box. Definitions are on the [method page](/method)."
   },
   {
     "text": "19",
     "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
     "as": "int",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
   },
   {
     "text": "26",
     "path": "decks.mtgjson-DimirControl_Q08.land_count",
     "as": "int",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
-  },
-  {
-    "text": "20",
-    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
-    "as": "int",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
   },
   {
     "text": "25",
     "path": "decks.mtgjson-GruulStompy_Q08.land_count",
     "as": "int",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
   },
   {
     "text": "$16.20",
     "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
     "as": "usd",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
   },
   {
     "text": "$43.67",
     "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
     "as": "usd",
-    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Mono-Red Burn, at 20 lands, is not the lowest list here. Gruul Stompy, the other red deck, plays 25. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
   },
   {
     "text": "31",
@@ -429,49 +423,49 @@
     "text": "23",
     "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "4",
     "path": "decks.mtgjson-IzzetPhoenix_Q08.mana_curve.7.card_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "4",
     "path": "decks.mtgjson-LotusFieldCombo_Q06.ramp_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "8",
     "path": "decks.mtgjson-LotusFieldCombo_Q06.draw_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "0",
     "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "26",
     "path": "decks.mtgjson-DimirControl_Q08.land_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "12",
     "path": "decks.mtgjson-DimirControl_Q08.removal_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "4",
     "path": "decks.mtgjson-DimirControl_Q08.draw_count",
     "as": "int",
-    "context": "Izzet Phoenix draws 23 times because the deck is cantrips, and it still has 4 cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
   },
   {
     "text": "20",
@@ -513,49 +507,37 @@
     "text": "21",
     "path": "decks.mtgjson-IzzetPhoenix_Q08.land_count",
     "as": "int",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "$27.41",
     "path": "decks.mtgjson-IzzetPhoenix_Q08.price_usd",
     "as": "usd",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "23",
     "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
     "as": "int",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "19",
     "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
     "as": "int",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "$34.75",
     "path": "decks.mtgjson-OrzhovAuras_Q06.price_usd",
     "as": "usd",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "31",
     "path": "decks.mtgjson-OrzhovAuras_Q06.mana_curve.1.card_count",
     "as": "int",
-    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The draw count of 23 includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
-  },
-  {
-    "text": "19",
-    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
-    "as": "int",
-    "context": "- Calling Mono-Red Burn the lowest land count in the file. Orzhov Auras plays 19. Burn plays 20."
-  },
-  {
-    "text": "20",
-    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
-    "as": "int",
-    "context": "- Calling Mono-Red Burn the lowest land count in the file. Orzhov Auras plays 19. Burn plays 20."
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
   },
   {
     "text": "16",

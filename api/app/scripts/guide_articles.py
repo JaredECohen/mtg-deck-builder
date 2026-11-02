@@ -100,6 +100,13 @@ def cost_sentence(deck: dict, fetched_at: str) -> str:
     )
 
 
+def _whole_number(value: object) -> str:
+    number = float(value)
+    if number == int(number):
+        return str(int(number))
+    return str(value)
+
+
 def fish_sentence(deck: dict) -> str:
     fish = deck["analysis"]["goldfish"]
     if fish["wins"] == 0:
@@ -110,7 +117,7 @@ def fish_sentence(deck: dict) -> str:
         )
     return (
         f"{deck['name']} won {pct(fish['win_rate'])} of {fish['games']} goldfish games, "
-        f"average winning turn {fish['avg_kill_turn']} (median {fish['median_kill_turn']}, seed {fish['seed']}, "
+        f"average winning turn {fish['avg_kill_turn']} (median {_whole_number(fish['median_kill_turn'])}, seed {fish['seed']}, "
         f"{fish['policy']} policy, opponent at {fish['starting_life']} life)."
     )
 
@@ -584,7 +591,7 @@ GUIDES: list[dict] = [
     {
         "slug": "mtg-tokens-deck-guide",
         "title": "When Do MTG Token Decks Fall Apart?",
-        "description": "When do token decks fall apart in Magic: The Gathering? Emmara's precon is $36.09 and turn 10.90. Neyali's is $131.72, and two protection spells are $32.76 of it.",
+        "description": "When do token decks fall apart in Magic: The Gathering? Emmara's precon is $36.09. Neyali's Flawless Maneuver is $21.13 and Clever Concealment is $11.63.",
         "date": "2026-12-11",
         "keywords": ["token deck mtg", "emmara precon price", "neyali tokens", "when token decks fail"],
         "related": ["should-you-play-aggro", "mtg-ramp-deck-guide", "mtg-tribal-decks-guide", "mtg-deck-archetypes-explained"],

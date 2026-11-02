@@ -1,7 +1,7 @@
 import { getPost, isCategory } from "@/lib/blog";
 
 /** Routes that are noindex and must not load an ad slot or the AdSense script. */
-const NO_ADS_PATHS = new Set(["/signin", "/library", "/auth/verify"]);
+const NO_ADS_PATHS = new Set(["/signin", "/library", "/auth/verify", "/method"]);
 
 /**
  * True when this path may load AdSense. Unreviewed guides are noindex, so

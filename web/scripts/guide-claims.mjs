@@ -215,19 +215,134 @@ function countLiteral(literal) {
   return value == null ? null : String(value);
 }
 
-export function legacyClaimProblems({ file, body, catalog }) {
-  const deckIds = [...body.matchAll(/<DeckBlock\s+id="([^"]+)"/g)].map((match) => match[1]);
-  const allowed = numbersForDecks(catalog, deckIds);
-  const found = extractLiterals(body, factNames(null, catalog));
+function deckIdsIn(body) {
+  return [...String(body).matchAll(/<DeckBlock\s+id="([^"]+)"/g)].map((match) => match[1]);
+}
+
+function pricePercentCountProblems({ file, text, allowed, catalog, deckIds, where }) {
   const problems = [];
-  for (const price of misplacedPrices(body, catalog, deckIds)) {
-    problems.push(`${file}: price $${price} does not match the cited deck facts`);
+  const found = extractLiterals(text, factNames(null, catalog));
+  for (const price of misplacedPrices(text, catalog, deckIds)) {
+    problems.push(`${file}: price $${price} in the ${where} does not match the cited deck facts`);
   }
   for (const percent of unmatched(found.percents, allowed.percents)) {
-    problems.push(`${file}: percentage ${percent}% does not match the cited deck facts`);
+    problems.push(`${file}: percentage ${percent}% in the ${where} does not match the cited deck facts`);
   }
   for (const count of unmatched(found.counts.map(countLiteral).filter(Boolean), allowed.counts)) {
-    problems.push(`${file}: count ${count} does not match the cited deck facts`);
+    problems.push(`${file}: count ${count} in the ${where} does not match the cited deck facts`);
+  }
+  return problems;
+}
+
+export function legacyClaimProblems({ file, body, catalog }) {
+  const deckIds = deckIdsIn(body);
+  const allowed = numbersForDecks(catalog, deckIds);
+  return pricePercentCountProblems({ file, text: body, allowed, catalog, deckIds, where: "prose" });
+}
+
+/** Title and description use the decks the article cites, not a separate source. */
+export function legacyHeadlineProblems({ file, title, description, body, catalog }) {
+  const headline = `${title ?? ""}\n${description ?? ""}`.trim();
+  if (!headline) return [];
+  const deckIds = deckIdsIn(body);
+  const allowed = numbersForDecks(catalog, deckIds);
+  return pricePercentCountProblems({ file, text: headline, allowed, catalog, deckIds, where: "title or description" });
+}
+
+function claimTexts(claims) {
+  return (claims ?? []).map((claim) => claim.text);
+}
+
+export function headlineLiteralProblems({ file, title, description, claims, facts }) {
+  const headline = `${title ?? ""}\n${description ?? ""}`.trim();
+  if (!headline) return [];
+  const texts = claimTexts(claims);
+  const found = extractLiterals(headline, factNames(facts, null));
+  const expected = {
+    prices: texts.filter((text) => text.startsWith("$")).map((text) => text.slice(1)),
+    percents: texts.filter((text) => text.endsWith("%")).map((text) => text.slice(0, -1)),
+    counts: texts.filter((text) => !text.startsWith("$") && !text.endsWith("%")),
+  };
+  const problems = [];
+  for (const kind of ["prices", "percents", "counts"]) {
+    const extras = found[kind].filter((literal) => !expected[kind].includes(literal));
+    for (const literal of extras) {
+      const label = kind === "prices" ? `$${literal}` : kind === "percents" ? `${literal}%` : literal;
+      problems.push(`${file}: ${label} is in the title or description and not in the claims`);
+    }
+  }
+  return problems;
+}
+
+function hitsIn(text, names) {
+  const found = [];
+  const taken = [];
+  const ordered = names.filter((name) => typeof name === "string" && name.length > 2 && text.includes(name));
+  ordered.sort((left, right) => right.length - left.length);
+  for (const name of ordered) {
+    let from = 0;
+    while (from < text.length) {
+      const index = text.indexOf(name, from);
+      if (index < 0) break;
+      const end = index + name.length;
+      const beforeOk = index === 0 || !/[A-Za-z0-9]/.test(text[index - 1]);
+      const afterOk = end >= text.length || !/[A-Za-z0-9]/.test(text[end]);
+      const overlaps = taken.some(([start, stop]) => index < stop && end > start);
+      if (beforeOk && afterOk && !overlaps) {
+        taken.push([index, end]);
+        found.push(name);
+        break;
+      }
+      from = index + 1;
+    }
+  }
+  return found;
+}
+
+function maskDeckNames(text, deckNames) {
+  let masked = text;
+  for (const name of [...deckNames].sort((left, right) => right.length - left.length)) {
+    masked = masked.split(name).join(" ".repeat(name.length));
+  }
+  return masked;
+}
+
+/**
+ * A sentence that puts a card in a deck must name a deck that actually contains it.
+ * "Farewell is in Arcane Maelstrom" fails. "Farewell is in Timey-Wimey" does not.
+ */
+export function cardDeckProblems({ file, text, decks }) {
+  if (!decks?.length) return [];
+  const deckNames = decks.map((deck) => deck.name);
+  const cardsByDeck = new Map(decks.map((deck) => [deck.name, new Set(deck.cards ?? [])]));
+  const allCards = [...new Set(decks.flatMap((deck) => deck.cards ?? []))];
+  const problems = [];
+  for (const sentence of String(text).split(/\n+|(?<=[.!?])\s+/)) {
+    const verbs = [
+      { pattern: /\bis in\b/i, cardsFirst: true },
+      { pattern: /\bshows up in\b/i, cardsFirst: true },
+      { pattern: /\bincludes\b/i, cardsFirst: false },
+      { pattern: /\bGame Changer is\b/i, cardsFirst: false },
+    ];
+    for (const verb of verbs) {
+      const match = verb.pattern.exec(sentence);
+      if (!match) continue;
+      const before = sentence.slice(0, match.index);
+      const after = sentence.slice(match.index + match[0].length);
+      const beforeDecks = hitsIn(before, deckNames);
+      const afterDecks = hitsIn(after, deckNames);
+      const beforeCards = hitsIn(maskDeckNames(before, deckNames), allCards);
+      const afterCards = hitsIn(maskDeckNames(after, deckNames), allCards);
+      const cards = verb.cardsFirst ? beforeCards : afterCards;
+      const namedDecks = verb.cardsFirst ? afterDecks : beforeDecks;
+      for (const card of cards) {
+        for (const deck of namedDecks) {
+          if (!cardsByDeck.get(deck)?.has(card)) {
+            problems.push(`${file}: ${card} is not in ${deck}`);
+          }
+        }
+      }
+    }
   }
   return problems;
 }
