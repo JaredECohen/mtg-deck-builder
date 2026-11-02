@@ -55,6 +55,13 @@ def bracket_data() -> dict:
     }
 
 
+def _is_game_changer(name: str, names: frozenset[str]) -> bool:
+    """Match the oracle name, or the front face of a double-faced Game Changer."""
+    if name in names:
+        return True
+    return any(entry.split(" // ", 1)[0] == name for entry in names if " // " in entry)
+
+
 def _text(card: CardRecord) -> str:
     return card.oracle_text or " ".join(face.oracle_text or "" for face in card.faces)
 
@@ -77,7 +84,7 @@ def assess(names: list[str], repository: _Lookup, target: int | None = None) -> 
     data = bracket_data()
     cards = [card for name in dict.fromkeys(names) if (card := repository.get_card(name)) is not None]
     present = {card.name for card in cards}
-    game_changers = sorted(card.name for card in cards if card.name in data["game_changers"])
+    game_changers = sorted(card.name for card in cards if _is_game_changer(card.name, data["game_changers"]))
     mld = sorted(card.name for card in cards if is_mass_land_denial(card))
     extra_turns = sorted(card.name for card in cards if is_extra_turn(card))
     tutors = sorted(card.name for card in cards if is_tutor(card))

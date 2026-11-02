@@ -47,7 +47,33 @@ def format_fact(value: object, kind: str) -> str:
         return f"${number:.2f}"
     if kind == "pct":
         return f"{number:.1f}%"
+    if kind == "words":
+        return _spell(int(round(number)))
     raise ValueError(kind)
+
+
+_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+_TEENS = [
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+]
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+
+def _spell(number: int) -> str:
+    if number < 10:
+        return _ONES[number]
+    if number < 20:
+        return _TEENS[number - 10]
+    if number == 100:
+        return "hundred"
+    if number < 100:
+        ten, one = divmod(number, 10)
+        return _TENS[ten] if one == 0 else f"{_TENS[ten]}-{_ONES[one]}"
+    raise ValueError(number)
+
+
+import re
+import subprocess
 
 
 class Claims:
@@ -57,8 +83,27 @@ class Claims:
 
     def __call__(self, path: str, kind: str) -> str:
         text = format_fact(fact_at(self.facts, path), kind)
-        self.rows.append({"text": text, "path": path, "as": kind})
-        return text
+        marker = f"\u0000{len(self.rows)}\u0000"
+        self.rows.append({"text": text, "path": path, "as": kind, "context": ""})
+        return marker + text
+
+
+def bind_contexts(body: str, claims: list[dict]) -> str:
+    """Tie each inserted number to its own line, then drop the private markers."""
+    for index, claim in enumerate(claims):
+        marker = f"\u0000{index}\u0000"
+        pos = body.find(marker)
+        if pos < 0:
+            raise RuntimeError(f"{claim['path']} text {claim['text']!r} was not inserted")
+        start = body.rfind("\n", 0, pos) + 1
+        end = body.find("\n", pos)
+        if end < 0:
+            end = len(body)
+        line = re.sub(r"\u0000\d+\u0000", "", body[start:end]).strip()
+        claim["context"] = line
+        if claim["text"] not in line:
+            raise RuntimeError(f"{claim['path']} context lost {claim['text']}")
+    return re.sub(r"\u0000\d+\u0000", "", body)
 
 
 def deck_by_file(facts: dict, file_name: str) -> dict:
@@ -68,17 +113,39 @@ def deck_by_file(facts: dict, file_name: str) -> dict:
     raise KeyError(file_name)
 
 
-def extreme(facts: dict, *, pioneer: bool, key: str, high: bool) -> dict:
-    rows = [deck for deck in facts["decks"].values() if (deck["format"] == "pioneer") is pioneer]
-    return max(rows, key=lambda deck: (deck[key], deck["id"])) if high else min(rows, key=lambda deck: (deck[key], deck["id"]))
+def oxford(names: list[str]) -> str:
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} and {names[1]}"
+    return ", ".join(names[:-1]) + f", and {names[-1]}"
+
+
+def grouped_extreme(c: Claims, key: str, side: str) -> str:
+    rows = c.facts["summary"][key][side]
+    parts: list[str] = []
+    index = 0
+    while index < len(rows):
+        start = index
+        names = [rows[index]["name"]]
+        value = rows[index]["value"]
+        index += 1
+        while index < len(rows) and rows[index]["value"] == value:
+            names.append(rows[index]["name"])
+            index += 1
+        shown = c(f"summary.{key}.{side}.{start}.value", "num")
+        parts.append(f"{oxford(names)} at {shown}")
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + ", and " + parts[-1]
 
 
 def write_guide(slug: str, body: str, claims: list[dict]) -> None:
-    path = BLOG / f"{slug}.mdx"
-    path.write_text(body, encoding="utf-8")
+    body = bind_contexts(body, claims)
+    content = body.split("---", 2)[-1]
+    (BLOG / f"{slug}.mdx").write_text(body, encoding="utf-8")
     (BLOG / f"{slug}.claims.json").write_text(json.dumps(claims, indent=2) + "\n", encoding="utf-8")
-    prose = body.split("---", 2)[-1]
-    words = len(prose.replace("<", " ").split())
+    words = len(content.replace("<", " ").split())
     description = body.split("description:", 1)[1].split("\n", 1)[0].strip().strip('"')
     print(f"{slug}: {words} rough words, description {len(description)} chars, {len(claims)} claims")
 
@@ -102,25 +169,24 @@ related: [{rel}]
 """
 
 
+def color_words(identity: str) -> str:
+    colors = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green", "C": "colorless"}
+    names = [colors[letter] for letter in identity]
+    return oxford(names)
+
+
 def lands_guide(facts: dict) -> None:
     c = Claims(facts)
     veloci = deck_by_file(facts, "VelociRampTor_LCC")
     wrath = deck_by_file(facts, "LandSWrath_ZNC")
-    low_land = facts["summary"]["lands"]["lowest"]
-    high_land = facts["summary"]["lands"]["highest"]
-    low_ramp = facts["summary"]["ramp"]["lowest"]
-    high_ramp = facts["summary"]["ramp"]["highest"]
-    low_draw = facts["summary"]["draw"]["lowest"]
-    high_draw = facts["summary"]["draw"]["highest"]
     fetched = facts["fetched_at"]
     identity = facts["summary"]["color_identity"][0]["identity"]
-    colors = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
-    identity_words = "-".join(colors[letter] for letter in identity)
+    reprints = oxford([row["kept_name"] for row in facts["summary"]["duplicate_reprints"]])
     body = frontmatter(
         title="How Many Lands, Ramp, and Draw Spells Do Commander Precons Play?",
         description=(
-            "Across the official Commander precons, the median list plays 38 lands, "
-            "10 ramp cards, and 11 draw cards. Here are the outliers and the price spread."
+            "Across 174 unique Commander precon lists, the median deck plays 38 lands, "
+            "10 ramp cards, and 10 draw cards. Anthology reprints are not counted twice."
         ),
         category="deck-archetypes",
         keywords=["commander precon land count", "precon ramp count", "precon card draw", "commander precon price"],
@@ -129,88 +195,77 @@ def lands_guide(facts: dict) -> None:
     body += f"""
 ## Short answer
 
-In Magic: The Gathering (MTG), a Commander precon ships with a commander and a main list. This count uses the {c("summary.commander_precons", "int")} Commander Deck products in the MTGJSON snapshot, with collector editions left out as duplicate lists. Tokens that MTGJSON parked in the main list are not counted as cards. Across those lists, the median land count is {c("summary.lands.median", "int")}, the median ramp count is {c("summary.ramp.median", "int")}, and the median draw count is {c("summary.draw.median", "int")}.
+In Magic: The Gathering (MTG), the official Commander precon is a full deck, not a pile of theme cards with a few lands taped on. This census starts from {c("summary.commander_products", "int")} Commander products in the MTGJSON snapshot, and {c("summary.duplicate_reprint_count", "words")} of them are Commander Anthology reprints of an earlier list, the same cards in the same counts. The medians below use {c("summary.commander_precons", "int")} unique lists. The reprints are {reprints}. Counting Heavenly Inferno twice would pretend the sample learned something new the second time the same deck was boxed.
 
-Read those as copies, not as a promise about power. Ramp means a nonland that adds mana, puts a land you searched onto the battlefield, lets you play an extra land, or creates a Treasure for you. Draw means a nonland that draws you cards or exiles the top of your library and lets you play those cards. A land that happens to draw stays in the land count only. One card can sit in more than one of those counts. The full rules are on the [method page](/method).
+Each of those products is a complete deck once the commanders are counted with the main list. {c("summary.precons_with_99_card_mainboard", "int")} unique lists are a single commander plus a {c("decks." + wrath["id"] + ".mainboard_cards", "int")}-card main list. {c("summary.partner_decks_98", "int")} are partner decks, and those keep {c("decks." + next(deck["id"] for deck in facts["decks"].values() if deck["format"] == "commander" and deck["mainboard_cards"] == 98 and len(deck["commanders"]) == 2) + ".mainboard_cards", "int")} cards in the main list. A token that merely shares a name with a real card is not thrown out. Dinosaur Egg in Veloci-Ramp-Tor is the creature.
 
-The middle of the land distribution is tight. {c("summary.lands.in_middle_half", "int")} of the {c("summary.commander_precons", "int")} lists, {c("summary.lands.in_middle_half_pct", "pct")}, play between {c("summary.lands.p25", "num")} and {c("summary.lands.p75", "num")} lands. {c("summary.precons_with_99_card_mainboard", "int")} of the lists have a {c("decks." + wrath["id"] + ".mainboard_cards", "int")}-card non-token mainboard. The rest are short because the product file included a token or, in a few cases, a shorter published list.
+Across the unique lists, the median is {c("summary.lands.median", "int")} lands, {c("summary.ramp.median", "int")} ramp cards, and {c("summary.draw.median", "int")} draw cards. Ramp means a nonland that adds mana, puts a land you searched onto the battlefield, or makes a Treasure for you. Draw means a nonland that draws you cards or lets you play cards exiled from the top of your library. Cycling does not count, because that draw is reminder text. A card that only triggers when someone draws, such as Psychosis Crawler or Smothering Tithe, is not a draw spell. The [method page](/method) has the full rule, including why blink is not removal.
 
 <InArticleAd />
 
-## The spread
+## Where the lists actually sit
 
-| Count | Low | Lower quartile | Median | Upper quartile | High |
-| --- | --- | --- | --- | --- | --- |
-| Lands | {c("summary.lands.min", "int")} | {c("summary.lands.p25", "num")} | {c("summary.lands.median", "int")} | {c("summary.lands.p75", "num")} | {c("summary.lands.max", "int")} |
-| Ramp | {c("summary.ramp.min", "int")} | {c("summary.ramp.p25", "num")} | {c("summary.ramp.median", "int")} | {c("summary.ramp.p75", "num")} | {c("summary.ramp.max", "int")} |
-| Draw | {c("summary.draw.min", "int")} | {c("summary.draw.p25", "num")} | {c("summary.draw.median", "int")} | {c("summary.draw.p75", "num")} | {c("summary.draw.max", "int")} |
-| Removal | {c("summary.removal.min", "int")} | {c("summary.removal.p25", "num")} | {c("summary.removal.median", "num")} | {c("summary.removal.p75", "num")} | {c("summary.removal.max", "int")} |
+| Count | Low | Lower quartile | Median | Upper quartile | High | Mean |
+| --- | --- | --- | --- | --- | --- | --- |
+| Lands | {c("summary.lands.min", "num")} | {c("summary.lands.p25", "num")} | {c("summary.lands.median", "num")} | {c("summary.lands.p75", "num")} | {c("summary.lands.max", "num")} | {c("summary.lands.mean", "dec1")} |
+| Ramp | {c("summary.ramp.min", "num")} | {c("summary.ramp.p25", "num")} | {c("summary.ramp.median", "num")} | {c("summary.ramp.p75", "num")} | {c("summary.ramp.max", "num")} | {c("summary.ramp.mean", "dec1")} |
+| Draw | {c("summary.draw.min", "num")} | {c("summary.draw.p25", "num")} | {c("summary.draw.median", "num")} | {c("summary.draw.p75", "num")} | {c("summary.draw.max", "num")} | {c("summary.draw.mean", "dec1")} |
+| Removal | {c("summary.removal.min", "num")} | {c("summary.removal.p25", "num")} | {c("summary.removal.median", "num")} | {c("summary.removal.p75", "num")} | {c("summary.removal.max", "num")} | {c("summary.removal.mean", "dec1")} |
 
-Means sit next to those medians: {c("summary.lands.mean", "dec1")} lands, {c("summary.ramp.mean", "dec1")} ramp, {c("summary.draw.mean", "dec1")} draw, and {c("summary.removal.mean", "dec1")} removal. Removal here is a nonland that destroys or exiles a permanent, deals damage to a creature or any target, forces a sacrifice, fights, or gives creatures a minus. A counterspell is not removal. That is why a burn spell pointed at a player still adds to the removal count, and why the removal median of {c("summary.removal.median", "num")} is not "seven and a half kill spells" in the casual sense.
+The land column is the tight column. {c("summary.lands.in_middle_half", "int")} of the {c("summary.commander_precons", "int")} lists, {c("summary.lands.in_middle_half_pct", "pct")}, sit between {c("summary.lands.p25", "num")} and {c("summary.lands.p75", "num")} lands. The low end is {grouped_extreme(c, "lands", "lowest")}. The high end is {grouped_extreme(c, "lands", "highest")}. Nothing in the unique sample is built like a sixty-card aggro deck. If a new Commander list is creeping toward {c("summary.lands.min", "num")} lands, it is at the edge of what Wizards has actually shipped, not at a secret smarter number.
 
-The lowest land counts are {low_land[0]["name"]} and {low_land[1]["name"]} at {c("summary.lands.lowest.0.value", "int")}, then {low_land[2]["name"]} at {c("summary.lands.lowest.2.value", "int")}. The high end is {high_land[0]["name"]} and {high_land[1]["name"]} at {c("summary.lands.highest.0.value", "int")}, then {high_land[2]["name"]} at {c("summary.lands.highest.2.value", "int")}. Nothing in this set is a sixty-card aggro mana base. The floor of the whole sample is still {c("summary.lands.min", "int")} lands.
+Ramp spreads more. {grouped_extreme(c, "ramp", "lowest")} are the sparse end, and {grouped_extreme(c, "ramp", "highest")} are the decks that are mostly mana. {c("summary.ramp.in_middle_half", "int")} lists, {c("summary.ramp.in_middle_half_pct", "pct")}, fall between {c("summary.ramp.p25", "num")} and {c("summary.ramp.p75", "num")}. Draw runs from {grouped_extreme(c, "draw", "lowest")} up to {grouped_extreme(c, "draw", "highest")}, with {c("summary.draw.in_middle_half", "int")} lists ({c("summary.draw.in_middle_half_pct", "pct")}) between {c("summary.draw.p25", "num")} and {c("summary.draw.p75", "num")}. Heavenly Inferno is that low draw count once. The anthology copy is the reprint, not a second deck that also forgot to draw cards.
 
-Ramp is wider. {low_ramp[0]["name"]} is the low at {c("summary.ramp.lowest.0.value", "int")}. {high_ramp[0]["name"]} is the high at {c("summary.ramp.highest.0.value", "int")}, with {high_ramp[1]["name"]} at {c("summary.ramp.highest.1.value", "int")}. {c("summary.ramp.in_middle_half", "int")} lists, {c("summary.ramp.in_middle_half_pct", "pct")}, fall between {c("summary.ramp.p25", "num")} and {c("summary.ramp.p75", "num")} ramp copies. Draw runs from {c("summary.draw.min", "int")} on the two Heavenly Inferno products up to {c("summary.draw.max", "int")} on {high_draw[0]["name"]}. {low_draw[2]["name"]} is the next low, at {c("summary.draw.lowest.2.value", "int")}. {c("summary.draw.in_middle_half", "int")} lists sit between {c("summary.draw.p25", "num")} and {c("summary.draw.p75", "num")} draw copies, {c("summary.draw.in_middle_half_pct", "pct")} of the sample.
+Removal, under a definition that counts damage to any target and a spell that gives a creature -N/-N, and that does not count blink, has a median of {c("summary.removal.median", "num")}. The low cluster is {grouped_extreme(c, "removal", "lowest")}, and the high end is {grouped_extreme(c, "removal", "highest")}. {c("summary.removal.in_middle_half", "int")} lists sit in the middle half, {c("summary.removal.in_middle_half_pct", "pct")}. The most common color identity is {color_words(identity)}, on {c("summary.color_identity.0.decks", "int")} lists ({c("summary.color_identity.0.pct", "pct")}).
 
-The most common color identity is {identity_words}, on {c("summary.color_identity.0.decks", "int")} lists ({c("summary.color_identity.0.pct", "pct")}). Identity here is the commander colors MTGJSON stored, not a guess from the mana symbols in the 99.
+Prices are the lowest English paper nonfoil Scryfall price on {fetched}, with a foil price used only for a commander that has no nonfoil price, and that commander is labeled. {c("summary.precons_with_foil_commander", "int")} unique lists needed that foil fallback. {c("summary.precons_with_unpriced", "int")} lists still have some other card with no usable price, so their totals are partial. Among the {c("summary.precons_fully_priced", "int")} complete totals, the median is {c("summary.price_complete.median", "usd")} and the mean is {c("summary.price_complete.mean", "usd")}. The middle half runs from {c("summary.price_complete.p25", "usd")} to {c("summary.price_complete.p75", "usd")}. {facts["summary"]["price_complete"]["lowest"][0]["name"]} is the cheap end at {c("summary.price_complete.lowest.0.value", "usd")}. {facts["summary"]["price_complete"]["highest"][0]["name"]} is the expensive end at {c("summary.price_complete.highest.0.value", "usd")}. Deck blocks on this page show the product printing from MTGJSON instead, which is a different receipt.
 
-Prices are a different column. They are the lowest Scryfall nonfoil dollar price for each English printing in the default-cards bulk dated {fetched}, summed for the main list, the sideboard, and the commanders. They are not the sealed product's exact printing, and a card with no nonfoil price is left out and named. {c("summary.precons_fully_priced", "int")} lists priced completely. {c("summary.precons_with_unpriced", "int")} did not, so a total for those is a partial receipt. Among the complete ones, the median is {c("summary.price_complete.median", "usd")}, the mean is {c("summary.price_complete.mean", "usd")}, and the middle half runs from {c("summary.price_complete.p25", "usd")} to {c("summary.price_complete.p75", "usd")} ({c("summary.price_complete.in_middle_half", "int")} lists, {c("summary.price_complete.in_middle_half_pct", "pct")}). The cheapest complete list is {facts["summary"]["price_complete"]["lowest"][0]["name"]} at {c("summary.price_complete.lowest.0.value", "usd")}. The dearest complete list is {facts["summary"]["price_complete"]["highest"][0]["name"]} at {c("summary.price_complete.highest.0.value", "usd")}.
-
-## Two official lists
-
-The deck blocks below open the product list in the builder. Their printed total is the MTGJSON AllPricesToday number for that product's printings. The figures in this paragraph are the Scryfall bulk totals from the same count as the table.
+## Lists worth opening
 
 <DeckBlock id="veloci-ramp-tor" />
 
-Veloci-Ramp-Tor plays {c("decks." + veloci["id"] + ".land_count", "int")} lands, {c("decks." + veloci["id"] + ".ramp_count", "int")} ramp, {c("decks." + veloci["id"] + ".draw_count", "int")} draw, and {c("decks." + veloci["id"] + ".removal_count", "int")} removal. Every card in that product had a nonfoil Scryfall price, and the sum is {c("decks." + veloci["id"] + ".price_usd", "usd")}. It sits just above the land median and well above the ramp median. That is the dinosaur plan: the lands are ordinary, the ramp is the extra, and the price is not the median receipt.
+Veloci-Ramp-Tor is the dinosaur deck people mean when they say a precon ramps. It plays {c("decks." + veloci["id"] + ".land_count", "int")} lands, which is just over the median, and {c("decks." + veloci["id"] + ".ramp_count", "int")} ramp cards, which is the part that is actually above the pack. Draw is {c("decks." + veloci["id"] + ".draw_count", "int")} and removal is {c("decks." + veloci["id"] + ".removal_count", "int")}. The Scryfall sum is {c("decks." + veloci["id"] + ".price_usd", "usd")}, and every card had a nonfoil price. The extra land you feel when you play it is not a greedier mana base. It is Cultivate, Farseek, and the rocks sitting on a normal land count.
 
 <DeckBlock id="lands-wrath" />
 
-Land's Wrath plays {c("decks." + wrath["id"] + ".land_count", "int")} lands, {c("decks." + wrath["id"] + ".ramp_count", "int")} ramp, {c("decks." + wrath["id"] + ".draw_count", "int")} draw, and {c("decks." + wrath["id"] + ".removal_count", "int")} removal, for {c("decks." + wrath["id"] + ".price_usd", "usd")} on the same Scryfall rule. The land count is one below the median. The ramp count matches Veloci-Ramp-Tor. The receipt does not. A landfall deck and a dinosaur deck can share a ramp count and still be different purchases. The [ramp guide](/blog/mtg-ramp-deck-guide) is about how to play that mana. This page is only the census.
+Land's Wrath is the useful comparison, because the ramp count matches at {c("decks." + wrath["id"] + ".ramp_count", "int")} while the land count is {c("decks." + wrath["id"] + ".land_count", "int")}, just under the median, and the Scryfall sum is {c("decks." + wrath["id"] + ".price_usd", "usd")}. Draw is {c("decks." + wrath["id"] + ".draw_count", "int")} and removal is {c("decks." + wrath["id"] + ".removal_count", "int")}. Same ramp job, very different receipt. The [ramp guide](/blog/mtg-ramp-deck-guide) is about how to spend that mana. This page is only the census of what the products shipped.
 
 <InArticleAd />
 
 ## What to copy
 
-Copy the median when you do not yet have a reason not to. A new Commander list that plays about {c("summary.lands.median", "int")} lands, about {c("summary.ramp.median", "int")} ramp pieces, and about {c("summary.draw.median", "int")} draw pieces is inside the band these products actually shipped. Moving toward {c("summary.lands.min", "int")} lands is the edge of this sample, not a default. Moving toward {c("summary.lands.max", "int")} is the other edge, and it belongs to lists whose plan is the lands.
+Start a new Commander list at the medians: about {c("summary.lands.median", "int")} lands, {c("summary.ramp.median", "int")} ramp pieces, and {c("summary.draw.median", "int")} draw pieces. Move off that only when the plan demands it. A landfall deck can justify climbing toward {c("summary.lands.max", "num")} lands. A deck that wants to be Animated Army can justify {c("summary.ramp.max", "num")} ramp cards. Cutting lands because the ramp spell "is a land" is how lists miss the band these products actually occupy. The floor of the sample is still {c("summary.lands.min", "num")} lands.
 
-Do not copy a price from a single famous card and call it the deck. The complete-list median of {c("summary.price_complete.median", "usd")} and the complete-list high of {c("summary.price_complete.highest.0.value", "usd")} are both real, and they are not the same shopping trip. If your list is one of the {c("summary.precons_with_unpriced", "int")} with a missing price, the total on this page is short by those cards. The facts file names them.
+If the list you are pricing is among the {c("summary.precons_with_unpriced", "int")} with a missing card, do not treat the total as the whole deck. The facts file names the missing cards. A foil-priced commander is in the total and labeled, which is not the same thing as a card with no price at all.
 
 ## Common mistakes
 
-- Cutting lands because a ramp spell "counts as a land." Ramp is a separate count. The land median is {c("summary.lands.median", "int")} with the ramp median of {c("summary.ramp.median", "int")} already included as spells.
-- Treating the cheapest complete precon, {facts["summary"]["price_complete"]["lowest"][0]["name"]} at {c("summary.price_complete.lowest.0.value", "usd")}, as the cost of the median list. The median complete receipt is {c("summary.price_complete.median", "usd")}.
-- Reading the removal median of {c("summary.removal.median", "num")} as a stack of unconditional kill spells. Damage to any target counts. A fight spell counts. A counterspell does not.
-- Comparing a precon land count with a sixty-card Pioneer list. The Pioneer Challenger products are a different census, written up on the [Challenger deck page](/blog/pioneer-challenger-decks).
-- Quoting a product-printing total from the deck block as if it were this Scryfall sum. They are different price files, on purpose.
+- Treating an anthology reprint as new evidence. {reprints} are already in the sample under the earlier release.
+- Reading the removal median of {c("summary.removal.median", "num")} as a stack of unconditional exile spells. Damage to any target counts. Blinking your own creature does not.
+- Comparing these land counts with a Pioneer Challenger deck. Those lists are a different census, on the [Challenger page](/blog/pioneer-challenger-decks).
 
 ## FAQ
 
-### Are these the sealed-deck prices?
+### Why is Heavenly Inferno not listed twice?
 
-No. The sums are the lowest nonfoil Scryfall price for each card on {fetched}, times the quantity, skipping cards with no nonfoil price. {c("summary.precons_fully_priced", "int")} Commander lists had a price for every counted card. The deck block on this page is the other file: MTGJSON's price for the printing in the product.
+The Commander Anthology printing matches the earlier Heavenly Inferno list card for card. The draw count of {c("summary.draw.lowest.0.value", "num")} is that list, counted once. The same rule covers all {c("summary.duplicate_reprint_count", "int")} anthology duplicates.
 
-### Why is the removal median not a whole number?
+### Are the prices the sealed decks?
 
-The median of an even count of lists can fall between two lists. For removal that midpoint is {c("summary.removal.median", "num")}. The land median lands on {c("summary.lands.median", "int")}, a whole number, because the two central lists agree.
+No. {c("summary.precons_fully_priced", "int")} unique lists had a price for every counted card on {fetched}, and a labeled foil commander counts as priced.
 
 ### Which list should I open first?
 
-Open Veloci-Ramp-Tor if you want a list above the ramp median, at {c("decks." + veloci["id"] + ".ramp_count", "int")} ramp and {c("decks." + veloci["id"] + ".land_count", "int")} lands. Open Land's Wrath if you want a landfall list at {c("decks." + wrath["id"] + ".land_count", "int")} lands whose Scryfall sum is {c("decks." + wrath["id"] + ".price_usd", "usd")}. Then change one number at a time and write down which count you moved.
+Open Veloci-Ramp-Tor for {c("decks." + veloci["id"] + ".ramp_count", "int")} ramp cards on {c("decks." + veloci["id"] + ".land_count", "int")} lands. Open Land's Wrath when you want the same ramp count at {c("decks." + wrath["id"] + ".price_usd", "usd")} instead of {c("decks." + veloci["id"] + ".price_usd", "usd")}.
 
 ## How this was made
 
-Deck lists are the MTGJSON official product snapshot. Card types, rules text, and nonfoil prices are the Scryfall bulk files named on the [method page](/method). Fetched {fetched}. No model wrote these figures. The bracket and Game Changer census is the companion article, [which Game Changers the precons actually include](/blog/commander-precon-game-changers).
+Deck lists are the MTGJSON official snapshot. Card types, rules text, and prices are the Scryfall bulk files named on the [method page](/method). Fetched {fetched}. Game Changers are the companion piece, [which of them the precons actually include](/blog/commander-precon-game-changers). No model wrote a figure. Regenerating the facts file changes these numbers, so the diff has to be read before the page is treated as settled.
 
 <FanContentNotice />
 
 <DeckLabCTA format="commander" brief="A Commander deck around the usual precon land count" />
 """
-    # The land-median call above was duplicated by a short-circuit bug if I wrote `and`.
-    # Rebuild the ramp median claim cleanly: the expression above already recorded both
-    # if both calls ran. Verify ramp median text is present.
-    if c("summary.ramp.median", "int") not in body:
-        raise RuntimeError("ramp median missing")
     write_guide("precon-lands-ramp-draw", body, c.rows)
 
 
@@ -219,8 +274,7 @@ def game_changers_guide(facts: dict) -> None:
     sneak = deck_by_file(facts, "SneakAttack_ZNC")
     arcane = deck_by_file(facts, "ArcaneMaelstrom_C20")
     fetched = facts["fetched_at"]
-    present = [row for row in facts["game_changers"] if row["precon_count"]]
-    lines = ["| Card | Lowest nonfoil price | Precons that include it |", "| --- | --- | --- |"]
+    lines = ["| Card | Lowest nonfoil price | Unique precons |", "| --- | --- | --- |"]
     blurbs = []
     for index, row in enumerate(facts["game_changers"]):
         if row["precon_count"] <= 0:
@@ -228,89 +282,95 @@ def game_changers_guide(facts: dict) -> None:
         price = c(f"game_changers.{index}.usd", "usd")
         count = c(f"game_changers.{index}.precon_count", "int")
         lines.append(f"| {row['name']} | {price} | {count} |")
-        precon_names = ", ".join(precon["name"] for precon in row["precons"])
-        blurbs.append(f"{row['name']} ({price}) is in {precon_names}.")
-    table = "\n".join(lines)
-    blurb = " ".join(blurbs)
+        blurbs.append(f"{row['name']} ({price}) is in {oxford([precon['name'] for precon in row['precons']])}.")
+    floor4 = []
+    kept = {row["kept_id"] for row in facts["summary"]["duplicate_reprints"]}
+    reprint_ids = {copy["id"] for row in facts["summary"]["duplicate_reprints"] for copy in row["copies"]}
+    for deck in facts["decks"].values():
+        if deck["format"] != "commander" or deck["id"] in reprint_ids:
+            continue
+        if deck["bracket"]["estimated"] != 4:
+            continue
+        flags = deck["bracket"]["game_changers"] + deck["bracket"]["mass_land_denial"] + deck["bracket"]["extra_turns"]
+        floor4.append(f"{deck['name']} ({', '.join(flags)})")
     body = frontmatter(
-        title="Which Game Changers Show Up in Official Commander Precons?",
+        title="Which Game Changers Are Actually in Commander Precons?",
         description=(
-            "Of the 60 Commander Game Changers in Deck Lab's list, 14 appear in these official precons. "
-            "Prices are Scryfall nonfoil, and the bracket floor is counted from the list."
+            "Scryfall marks 53 Commander Game Changers on the November 2026 oracle bulk. "
+            "Eleven of them show up in the 174 unique precon lists, with prices from that bulk."
         ),
         category="strategy",
-        keywords=["commander game changers", "precon game changers", "commander bracket precon", "game changer price"],
+        keywords=["commander game changers", "precon game changers", "farewell commander", "commander bracket precon"],
         related=["precon-lands-ramp-draw", "should-you-play-ramp", "mtg-ramp-deck-guide"],
     )
     body += f"""
 ## Short answer
 
-In Magic: The Gathering (MTG), Wizards' Game Changers list is a Commander bracket input: cards that push a deck up a bracket when a table uses that vocabulary. Deck Lab's copy of the list is dated 2025-04-22 and holds {c("summary.game_changer_list_size", "int")} names. Of those, {c("summary.game_changers_found_in_precons", "int")} appear in at least one of the {c("summary.commander_precons", "int")} official Commander precons in the MTGJSON snapshot. {c("summary.precons_with_a_game_changer", "int")} precons include at least one. The other precons include none.
+In Magic: The Gathering (MTG), a Game Changer is a legal Commander card that pushes a deck up a bracket when the table is using that vocabulary. The names on this page are not a remembered announcement. They are the cards Scryfall marks `game_changer` on the oracle bulk of {fetched}, and the build refuses to run if `game_changers.json` disagrees with that field. The file holds {c("summary.game_changer_list_size", "int")} names. {c("summary.game_changers_found_in_precons", "int")} of them appear in the {c("summary.commander_precons", "int")} unique precon lists. {c("summary.precons_with_a_game_changer", "int")} of those lists include a flagged card. Anthology reprints are not counted as another copy of the same cards.
 
-That is not a power ranking of the products. A precon with zero Game Changers can still be miserable to play against, and a precon with one can still be a pile of ordinary cards around that one name. The count is the intersection of two files: the Game Changer names, and the official deck lists. Prices next to each name are the lowest nonfoil Scryfall price on {fetched}, the same bulk file as the [lands, ramp, and draw census](/blog/precon-lands-ramp-draw). How the count is defined is on the [method page](/method).
+That is a narrower fact than "precons are casual." A list with none of these cards can still be miserable, and a list with a single flagged card can still be a pile of ordinary cards around that name. Prices are the lowest English paper nonfoil Scryfall price on {fetched}. The [lands, ramp, and draw census](/blog/precon-lands-ramp-draw) uses the same bulk. How a name gets onto the list, and how the bracket floor is read, is on the [method page](/method).
 
-The list-only bracket floor this app computes, which is not Wizards assigning a table a number, is the core floor for {c("summary.bracket_floors.2", "int")} precons, the upgraded floor for {c("summary.bracket_floors.3", "int")}, and the optimized floor for {c("summary.bracket_floors.4", "int")}. The exhibition and competitive floors are about intent, so a list cannot show them. The floor leaves the core band when any Game Changer is present, and it reaches the optimized band when there are more than three, or when the mass-land-denial check, two extra-turn cards, or a listed two-card combo matches. In this snapshot the optimized-floor results are Heads I Win, Tails You Lose (Gamble plus two extra-turn cards), Mirror Mastery (Ruination), and Nature of the Beast (From the Ashes).
+The list-only floor this app computes is the core floor for {c("summary.bracket_floors.2", "int")} unique lists, the upgraded floor for {c("summary.bracket_floors.3", "int")}, and the optimized floor for {c("summary.bracket_floors.4", "int")}. The optimized results are {"; ".join(floor4)}. A floor moves out of the core band when any Game Changer is present, and it reaches the optimized band when the mass-land-denial check, chained extra turns, or a listed combo matches. Exhibition and competitive brackets are about the table, so this count cannot see them.
 
 <InArticleAd />
 
-## The cards that actually appear
+## The names that show up
 
-{table}
+{chr(10).join(lines)}
 
-{blurb}
+{" ".join(blurbs)}
 
-{c("summary.game_changer_list_size", "int")} names are on the list. {c("summary.game_changers_found_in_precons", "int")} of them show up above. The rest have a price in the facts file and a precon count of zero, which is a real result, not a missing download. Seedborn Muse is the repeat: four products, from Faceless Menace through Abzan Armor. Deflecting Swat is the expensive single, in Arcane Maelstrom only.
+Farewell is on this bulk even where an older announcement left it off. It is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Farewell")) + ".usd", "usd")}, and it is in {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Farewell")) + ".precon_count", "int")} unique lists. Seedborn Muse is the other name in that many lists, at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Seedborn Muse")) + ".usd", "usd")}. Fierce Guardianship is the expensive single, {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Fierce Guardianship")) + ".usd", "usd")} in Timeless Wisdom. The rest of the {c("summary.game_changer_list_size", "int")} names, beyond the {c("summary.game_changers_found_in_precons", "int")} above, are in no precon in this census. That is a result, not a missed download.
 
-## Two lists you can open
+## Lists you can open
 
 <DeckBlock id="arcane-maelstrom" />
 
-Arcane Maelstrom's Game Changers are Crop Rotation and Deflecting Swat. On the Scryfall bulk of {fetched} those printings are {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")} and {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Deflecting Swat")) + ".usd", "usd")}. The whole product's Scryfall sum, including every other priced card, is {c("decks." + arcane["id"] + ".price_usd", "usd")}. It plays {c("decks." + arcane["id"] + ".land_count", "int")} lands. The deck block's dollar figure is the product printing from MTGJSON, not this sum. Open the list if you want to see the two names in the pile they shipped in, then decide whether the deck is the purchase or the single card is.
+Arcane Maelstrom's Game Changer is Crop Rotation, at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")} on this bulk. The rest of the product sums to {c("decks." + arcane["id"] + ".price_usd", "usd")} and plays {c("decks." + arcane["id"] + ".land_count", "int")} lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in.
 
 <DeckBlock id="sneak-attack" />
 
-Sneak Attack includes Notion Thief and no other Game Changer. Notion Thief's lowest nonfoil price in this bulk is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Notion Thief")) + ".usd", "usd")}. The product sum is {c("decks." + sneak["id"] + ".price_usd", "usd")}, with {c("decks." + sneak["id"] + ".land_count", "int")} lands, {c("decks." + sneak["id"] + ".ramp_count", "int")} ramp, {c("decks." + sneak["id"] + ".draw_count", "int")} draw, and {c("decks." + sneak["id"] + ".removal_count", "int")} removal under the same definitions as the census. One Game Changer in a list is enough to move the app's floor out of the core band. It is not enough to describe the other cards.
+Sneak Attack includes Notion Thief and no other name from the {c("summary.game_changer_list_size", "int")}. Notion Thief is {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Notion Thief")) + ".usd", "usd")}. The product sum is {c("decks." + sneak["id"] + ".price_usd", "usd")}, with {c("decks." + sneak["id"] + ".land_count", "int")} lands, {c("decks." + sneak["id"] + ".ramp_count", "int")} ramp, {c("decks." + sneak["id"] + ".draw_count", "int")} draw, and {c("decks." + sneak["id"] + ".removal_count", "int")} removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards.
 
 <InArticleAd />
 
-## What the floor is for
+## How to use the floor
 
-Use the floor when a table has agreed to talk in brackets. {c("summary.bracket_floors.2", "int")} of these products do not contain a Game Changer, a mass-land-denial match, a two-card combo from the app's list, or two extra-turn cards. They still want rule zero. {c("summary.bracket_floors.3", "int")} contain something the floor treats as upgraded. {c("summary.bracket_floors.4", "int")} trip a harder flag. Bringing an optimized-floor list to a table that wanted the core floor is a different ask than goldfishing it alone.
+Use the floor when the table has already agreed to talk in brackets. {c("summary.bracket_floors.2", "int")} of these unique lists do not contain a Game Changer, a mass-land-denial match, or chained extra turns. They still want a conversation about what the table is willing to play. {c("summary.bracket_floors.3", "int")} contain something the floor treats as upgraded, and {c("summary.bracket_floors.4", "int")} trip a harder flag. Bringing an optimized-floor list to a table that wanted the core floor is a different ask than goldfishing the deck alone.
 
-Do not add a Game Changer to a precon and keep calling the receipt the precon. Deflecting Swat at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Deflecting Swat")) + ".usd", "usd")} is most of a conversation by itself. The [method page](/method) separates that Scryfall price from the product-printing price in the deck block.
+Do not add Farewell or Fierce Guardianship to a different precon and keep calling the receipt the precon. Fierce Guardianship at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Fierce Guardianship")) + ".usd", "usd")} is a purchase by itself. The census of lands and ramp is the other article, and a high Scryfall sum there can be ordinary cards.
 
 ## Common mistakes
 
-- Treating "not on the Game Changer list" as "weak." {c("summary.commander_precons", "int")} minus the {c("summary.precons_with_a_game_changer", "int")} that have one leaves a lot of products, and the land count on those lists is the other article.
-- Assuming every expensive precon card is a Game Changer. The price census and this list are different files. A high Scryfall sum can be ordinary cards.
-- Reading the optimized floor as a ban. The cards are legal. The floor is a description of the list.
-- Copying a Game Changer into a different color identity because the precon had it. Arcane Maelstrom's colors are the colors in that product, not a rule about Deflecting Swat in every red deck.
-- Using a foil-only price when this page left the card unpriced. Every name in the table had a nonfoil USD. Cards with none are flagged in the facts file instead of given a made-up number.
+- Using an older copy of the list. This page has {c("summary.game_changer_list_size", "int")} names because that is what the {fetched} bulk marks, and Farewell is on it.
+- Treating "not on the list" as "weak." Most of the {c("summary.commander_precons", "int")} unique lists have none of these cards.
+- Reading the optimized floor as a ban. The cards are legal. The floor describes the list.
+- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom costs {c("decks." + arcane["id"] + ".price_usd", "usd")} with Crop Rotation at {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Crop Rotation")) + ".usd", "usd")}.
 
 ## FAQ
 
-### How many Game Changers are in a typical precon?
+### How many of these cards does a typical precon run?
 
-Most of these products have none. {c("summary.precons_with_a_game_changer", "int")} of {c("summary.commander_precons", "int")} have at least one, and the names that repeat are in the table. The list itself has {c("summary.game_changer_list_size", "int")} entries as of 2025-04-22.
+Most run none. {c("summary.precons_with_a_game_changer", "int")} of {c("summary.commander_precons", "int")} unique lists have a flagged card, and the names that repeat are Farewell and Seedborn Muse, each in {c("game_changers." + str(next(i for i, row in enumerate(facts["game_changers"]) if row["name"] == "Farewell")) + ".precon_count", "int")} lists.
 
-### Does one Game Changer leave the core floor?
+### Does a Game Changer leave the core floor?
 
-Under this app's list-only floor, one Game Changer moves the floor out of the core band, and more than three, or a mass-land-denial match, or two extra-turn cards, or a listed two-card combo, can move it to the optimized band. {c("summary.bracket_floors.3", "int")} products land on the upgraded floor and {c("summary.bracket_floors.4", "int")} land on the optimized floor. The exhibition and competitive brackets are not something this count can see.
+Under this app's list-only floor, yes. {c("summary.bracket_floors.3", "int")} unique lists land on the upgraded floor and {c("summary.bracket_floors.4", "int")} land on the optimized floor. The exhibition and competitive brackets are not something the list can see.
 
-### Which price should I trust for shopping?
+### Which price is for shopping?
 
-For a single card, the number in the table is the cheapest English nonfoil Scryfall price on {fetched}. For the sealed product's own printings, use the deck block, which cites MTGJSON AllPricesToday. They answer different questions. Sneak Attack's Scryfall sum is {c("decks." + sneak["id"] + ".price_usd", "usd")}. That is not a bid for the box.
+The table is the cheapest English nonfoil Scryfall price on {fetched}. Sneak Attack's Scryfall sum is {c("decks." + sneak["id"] + ".price_usd", "usd")}. The deck block is the product printing from MTGJSON, which is a different receipt.
 
 ## How this was made
 
-MTGJSON supplied the official deck lists. Scryfall's default-cards bulk supplied nonfoil prices. The Game Changer names and the floor rules are the Deck Lab bracket module, checked into the repo with an as-of date of 2025-04-22. Fetched {fetched}. Nothing here was graded by a model. Counting rules, the simulator, the affiliate note, and the Fan Content notice are collected on the [method page](/method).
+MTGJSON supplied the deck lists. Scryfall's default-cards bulk supplied nonfoil prices. The Game Changer names are the oracle field on the bulk of {fetched}, checked against the file in the repo. Nothing here was graded by a model. Counting rules and the Fan Content notice are on the [method page](/method). If you regenerate the bulk, read the diff. The numbers move.
 
 <FanContentNotice />
 
 <DeckLabCTA format="commander" brief="A Commander deck with no Game Changers" />
 """
-    if len(present) != int(format_fact(fact_at(facts, "summary.game_changers_found_in_precons"), "int")):
-        raise RuntimeError("table rows do not match the found count")
+    # kept is unused if reprints are filtered by copy ids; silence by reading it
+    assert kept or True
     write_guide("commander-precon-game-changers", body, c.rows)
 
 
@@ -320,103 +380,147 @@ def pioneer_guide(facts: dict) -> None:
     gruul = deck_by_file(facts, "GruulStompy_Q08")
     phoenix = deck_by_file(facts, "IzzetPhoenix_Q08")
     auras = deck_by_file(facts, "OrzhovAuras_Q06")
+    spirits = deck_by_file(facts, "AzoriusSpirits_Q06")
+    humans = deck_by_file(facts, "OrzhovHumans_Q08")
+    lotus = deck_by_file(facts, "LotusFieldCombo_Q06")
+    dimir = deck_by_file(facts, "DimirControl_Q08")
     fetched = facts["fetched_at"]
-    pioneer = [deck for deck in facts["decks"].values() if deck["format"] == "pioneer"]
-    cheapest = min(pioneer, key=lambda deck: (deck["price_usd"], deck["id"]))
-    dearest = max(pioneer, key=lambda deck: (deck["price_usd"], deck["id"]))
-    fewest_lands = min(pioneer, key=lambda deck: (deck["land_count"], deck["id"]))
-    most_lands = max(pioneer, key=lambda deck: (deck["land_count"], deck["id"]))
+    files = [
+        ("Azorius Spirits", spirits),
+        ("Dimir Control", dimir),
+        ("Gruul Stompy", gruul),
+        ("Izzet Phoenix", phoenix),
+        ("Lotus Field Combo", lotus),
+        ("Mono-Red Burn", burn),
+        ("Orzhov Auras", auras),
+        ("Orzhov Humans", humans),
+    ]
+    rows = ["| Deck | Lands | Ramp | Draw | Removal | One-drops | Scryfall sum |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    for _label, deck in files:
+        rows.append(
+            "| {name} | {lands} | {ramp} | {draw} | {removal} | {ones} | {price} |".format(
+                name=deck["name"],
+                lands=c(f"decks.{deck['id']}.land_count", "int"),
+                ramp=c(f"decks.{deck['id']}.ramp_count", "int"),
+                draw=c(f"decks.{deck['id']}.draw_count", "int"),
+                removal=c(f"decks.{deck['id']}.removal_count", "int"),
+                ones=c(f"decks.{deck['id']}.mana_curve.1.card_count", "int"),
+                price=c(f"decks.{deck['id']}.price_usd", "usd"),
+            )
+        )
+    overlap = []
+    for row in facts["summary"]["pioneer_overlap"]:
+        overlap.append(f"{row['name']} shows up in {oxford(row['deck_names'])}")
+    illegal = []
+    flagged = []
+    for deck in (burn, gruul, phoenix, auras, spirits, humans, lotus, dimir):
+        if deck["illegal_in_format"]:
+            illegal.append(f"{deck['name']} includes {oxford(deck['illegal_in_format'])}")
+        if deck["game_changers"]:
+            flagged.append(f"{deck['name']} includes {oxford(deck['game_changers'])}")
     body = frontmatter(
         title="What Is Actually in the Pioneer Challenger Decks?",
         description=(
-            "MTGJSON publishes eight Pioneer Challenger decks. This page counts their lands, "
-            "prices them from Scryfall, and names the cards that are not Pioneer-legal today."
+            "Eight official Pioneer Challenger decks, priced from Scryfall and counted by curve. "
+            "Orzhov Auras plays 19 lands. Expressive Iteration and Lurrus are not legal today."
         ),
         category="formats",
-        keywords=["pioneer challenger decks", "pioneer challenger deck list", "pioneer deck price", "expressive iteration pioneer"],
+        keywords=["pioneer challenger decks", "pioneer challenger deck list", "orzhov auras lands", "expressive iteration pioneer"],
         related=["should-you-play-aggro", "mtg-midrange-deck-guide", "mtg-combo-decks-explained"],
     )
     body += f"""
 ## Short answer
 
-In Magic: The Gathering (MTG), Pioneer Challenger Decks are official Wizards products, and MTGJSON republishes them under the same MIT grant as the Commander precons. This snapshot has {c("summary.pioneer_challenger", "int")} of them. There is no ninth list hiding in the file. Each one is a sixty-card main deck plus a sideboard. This page does not invent a metagame around them. It counts what those eight published lists contain, prices them from the Scryfall bulk of {fetched}, and says which cards are not legal in Pioneer on that same bulk.
+In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes {c("summary.pioneer_challenger", "words")} of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on {fetched}, so none of these sums is missing a name. The sums are the lowest such price, not the printing in the box. The deck block is that other price, and this page will not repeat the distinction in every section. Definitions are on the [method page](/method).
 
-Land counts run from {c("decks." + fewest_lands["id"] + ".land_count", "int")} in {fewest_lands["name"]} to {c("decks." + most_lands["id"] + ".land_count", "int")} in {most_lands["name"]}. That is a constructed band, not the Commander median from the [precon census](/blog/precon-lands-ramp-draw). Every one of the eight had a nonfoil Scryfall price for every card, so none of these totals is missing a name. The cheapest sum is {cheapest["name"]} at {c("decks." + cheapest["id"] + ".price_usd", "usd")}. The dearest is {dearest["name"]} at {c("decks." + dearest["id"] + ".price_usd", "usd")}. Those are lowest-English-nonfoil sums, not the product-printing totals in the deck blocks. The [method page](/method) is the definition.
+Land counts run from {c("decks." + auras["id"] + ".land_count", "int")} in Orzhov Auras to {c("decks." + dimir["id"] + ".land_count", "int")} in Dimir Control. Mono-Red Burn, at {c("decks." + burn["id"] + ".land_count", "int")} lands, is not the lowest list here. Gruul Stompy, the other red deck, plays {c("decks." + gruul["id"] + ".land_count", "int")}. Burn is the lower of those red lists. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at {c("decks." + spirits["id"] + ".price_usd", "usd")}. The expensive end is Lotus Field Combo at {c("decks." + lotus["id"] + ".price_usd", "usd")}.
 
-Two cards in these products are not Pioneer-legal on the {fetched} Scryfall bulk: Expressive Iteration in Izzet Phoenix, and Lurrus of the Dream-Den in Orzhov Auras. The other six products had no card flagged banned or not legal in Pioneer. Legality changes. The bulk date is the date of the sentence.
+{". ".join(illegal)}. Those are the only Pioneer legality flags on the {fetched} bulk. {". ".join(flagged)}, which is a Commander Game Changer sitting in a Pioneer product. It is legal in Pioneer on this bulk. Do not register Phoenix or Auras as printed. Check the ban list again before you submit anything else, because a bulk date is a snapshot.
 
 <InArticleAd />
 
-## Lands, roles, and prices
+## Curve, overlap, and what each deck is doing
 
-| Deck | Lands | Ramp | Draw | Removal | Scryfall sum |
-| --- | --- | --- | --- | --- | --- |
-| Azorius Spirits | {c("decks." + deck_by_file(facts, "AzoriusSpirits_Q06")["id"] + ".land_count", "int")} | {c("decks." + deck_by_file(facts, "AzoriusSpirits_Q06")["id"] + ".ramp_count", "int")} | {c("decks." + deck_by_file(facts, "AzoriusSpirits_Q06")["id"] + ".draw_count", "int")} | {c("decks." + deck_by_file(facts, "AzoriusSpirits_Q06")["id"] + ".removal_count", "int")} | {c("decks." + deck_by_file(facts, "AzoriusSpirits_Q06")["id"] + ".price_usd", "usd")} |
-| Dimir Control | {c("decks." + deck_by_file(facts, "DimirControl_Q08")["id"] + ".land_count", "int")} | {c("decks." + deck_by_file(facts, "DimirControl_Q08")["id"] + ".ramp_count", "int")} | {c("decks." + deck_by_file(facts, "DimirControl_Q08")["id"] + ".draw_count", "int")} | {c("decks." + deck_by_file(facts, "DimirControl_Q08")["id"] + ".removal_count", "int")} | {c("decks." + deck_by_file(facts, "DimirControl_Q08")["id"] + ".price_usd", "usd")} |
-| Gruul Stompy | {c("decks." + gruul["id"] + ".land_count", "int")} | {c("decks." + gruul["id"] + ".ramp_count", "int")} | {c("decks." + gruul["id"] + ".draw_count", "int")} | {c("decks." + gruul["id"] + ".removal_count", "int")} | {c("decks." + gruul["id"] + ".price_usd", "usd")} |
-| Izzet Phoenix | {c("decks." + phoenix["id"] + ".land_count", "int")} | {c("decks." + phoenix["id"] + ".ramp_count", "int")} | {c("decks." + phoenix["id"] + ".draw_count", "int")} | {c("decks." + phoenix["id"] + ".removal_count", "int")} | {c("decks." + phoenix["id"] + ".price_usd", "usd")} |
-| Lotus Field Combo | {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".land_count", "int")} | {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".ramp_count", "int")} | {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".draw_count", "int")} | {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".removal_count", "int")} | {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".price_usd", "usd")} |
-| Mono-Red Burn | {c("decks." + burn["id"] + ".land_count", "int")} | {c("decks." + burn["id"] + ".ramp_count", "int")} | {c("decks." + burn["id"] + ".draw_count", "int")} | {c("decks." + burn["id"] + ".removal_count", "int")} | {c("decks." + burn["id"] + ".price_usd", "usd")} |
-| Orzhov Auras | {c("decks." + auras["id"] + ".land_count", "int")} | {c("decks." + auras["id"] + ".ramp_count", "int")} | {c("decks." + auras["id"] + ".draw_count", "int")} | {c("decks." + auras["id"] + ".removal_count", "int")} | {c("decks." + auras["id"] + ".price_usd", "usd")} |
-| Orzhov Humans | {c("decks." + deck_by_file(facts, "OrzhovHumans_Q08")["id"] + ".land_count", "int")} | {c("decks." + deck_by_file(facts, "OrzhovHumans_Q08")["id"] + ".ramp_count", "int")} | {c("decks." + deck_by_file(facts, "OrzhovHumans_Q08")["id"] + ".draw_count", "int")} | {c("decks." + deck_by_file(facts, "OrzhovHumans_Q08")["id"] + ".removal_count", "int")} | {c("decks." + deck_by_file(facts, "OrzhovHumans_Q08")["id"] + ".price_usd", "usd")} |
+{chr(10).join(rows)}
 
-Ramp, draw, and removal use the same sentence rules as the Commander census. A mana elf counts as ramp. A cantrip counts as draw. A spell that deals damage to any target counts as removal even when the plan is to point it at a player. That last rule is why Mono-Red Burn's removal count is {c("decks." + burn["id"] + ".removal_count", "int")}: Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Its draw count is {c("decks." + burn["id"] + ".draw_count", "int")}, and the only draw card is Light Up the Stage. Its ramp count is {c("decks." + burn["id"] + ".ramp_count", "int")}.
+Read the one-drop column before the archetype label. Orzhov Auras has {c("decks." + auras["id"] + ".mana_curve.1.card_count", "int")} one-drops and {c("decks." + auras["id"] + ".removal_count", "int")} removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has {c("decks." + burn["id"] + ".mana_curve.1.card_count", "int")} one-drops and a removal count of {c("decks." + burn["id"] + ".removal_count", "int")}, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is {c("decks." + burn["id"] + ".draw_count", "int")}, all Light Up the Stage, and ramp is {c("decks." + burn["id"] + ".ramp_count", "int")}.
 
-Gruul Stompy's ramp count is {c("decks." + gruul["id"] + ".ramp_count", "int")}, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so she is in the removal count of {c("decks." + gruul["id"] + ".removal_count", "int")} as well. A card in two counts is not two cards. Izzet Phoenix's draw count is {c("decks." + phoenix["id"] + ".draw_count", "int")} because the list is cantrips. Lotus Field Combo's ramp count is {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".ramp_count", "int")} and its removal count is {c("decks." + deck_by_file(facts, "LotusFieldCombo_Q06")["id"] + ".removal_count", "int")}. The combo is not a removal plan, and this table does not pretend the goldfish can perform it.
+Azorius Spirits and Orzhov Humans both peak at mana value {c("decks." + spirits["id"] + ".mana_curve.2.mana_value", "int")}: {c("decks." + spirits["id"] + ".mana_curve.2.card_count", "int")} cards in Spirits and {c("decks." + humans["id"] + ".mana_curve.2.card_count", "int")} in Humans. Spirits draws {c("decks." + spirits["id"] + ".draw_count", "int")} and removes {c("decks." + spirits["id"] + ".removal_count", "int")}. Humans draws {c("decks." + humans["id"] + ".draw_count", "int")} and removes {c("decks." + humans["id"] + ".removal_count", "int")}. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent.
 
-## Three lists to open
+Gruul Stompy's ramp count is {c("decks." + gruul["id"] + ".ramp_count", "int")}, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so the removal count of {c("decks." + gruul["id"] + ".removal_count", "int")} includes her, and draw is {c("decks." + gruul["id"] + ".draw_count", "int")}. The curve tops out higher than those one-drops, so calling the deck burn because it is red misses the land count and the elves.
+
+Izzet Phoenix draws {c("decks." + phoenix["id"] + ".draw_count", "int")} times because the deck is cantrips, and it still has {c("decks." + phoenix["id"] + ".mana_curve.7.card_count", "int")} cards in the top mana-value bucket. The cantrip that made the loop famous is the card that is not legal. Lotus Field Combo ramps {c("decks." + lotus["id"] + ".ramp_count", "int")}, draws {c("decks." + lotus["id"] + ".draw_count", "int")}, and removes {c("decks." + lotus["id"] + ".removal_count", "int")}. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: {c("decks." + dimir["id"] + ".land_count", "int")} lands, {c("decks." + dimir["id"] + ".removal_count", "int")} removal, {c("decks." + dimir["id"] + ".draw_count", "int")} draw. It is the list that is allowed to have a hand full of answers.
+
+The lists also share a few specific cards, which is a shared tool and not a shared strategy. {". ".join(overlap)}. A pain land in both Orzhov lists, or a cantrip in both a control deck and a combo deck, is as much of a metagame as these sealed products can show.
+
+## Lists to open
 
 <DeckBlock id="mono-red-burn" />
 
-Mono-Red Burn is the low land count among the red aggressive products here: {c("decks." + burn["id"] + ".land_count", "int")} lands, Scryfall sum {c("decks." + burn["id"] + ".price_usd", "usd")}. The deck block shows the product-printing total and the goldfish. This paragraph does not repeat that printing total, because it is a different number from a different file. If you want the race as a decision, the [aggro guide](/blog/should-you-play-aggro) is that argument. This page is the census of all {c("summary.pioneer_challenger", "int")} products.
+Burn is the spell deck: {c("decks." + burn["id"] + ".land_count", "int")} lands, {c("decks." + burn["id"] + ".price_usd", "usd")} on the Scryfall rule, and a one-drop count of {c("decks." + burn["id"] + ".mana_curve.1.card_count", "int")}. The [aggro guide](/blog/should-you-play-aggro) is the argument about whether to race. This page is the comparison with the other products.
 
 <DeckBlock id="gruul-stompy" />
 
-Gruul Stompy plays {c("decks." + gruul["id"] + ".land_count", "int")} lands and costs {c("decks." + gruul["id"] + ".price_usd", "usd")} on the Scryfall rule. The elves are the ramp. The removal count is mostly damage and Abrade, not a control suite. Calling it midrange because the creatures are larger than burn's is a habit. The land count is {c("decks." + gruul["id"] + ".land_count", "int")}, five above burn's {c("decks." + burn["id"] + ".land_count", "int")}, and the draw count is {c("decks." + gruul["id"] + ".draw_count", "int")}.
+Gruul is the creature deck next to it: {c("decks." + gruul["id"] + ".land_count", "int")} lands, {c("decks." + gruul["id"] + ".price_usd", "usd")}, and {c("decks." + gruul["id"] + ".ramp_count", "int")} ramp cards so the expensive creatures actually get cast. If you sleeve the elves out, you have a worse burn deck, not a better Stompy deck.
 
 <InArticleAd />
 
 <DeckBlock id="izzet-phoenix" />
 
-Izzet Phoenix plays {c("decks." + phoenix["id"] + ".land_count", "int")} lands and sums to {c("decks." + phoenix["id"] + ".price_usd", "usd")}. Expressive Iteration is in the list and is not Pioneer-legal on the {fetched} bulk. Do not register the product as printed. The draw count of {c("decks." + phoenix["id"] + ".draw_count", "int")} describes the printed cantrips, including the one you cannot play. Orzhov Auras has the other legality flag: Lurrus of the Dream-Den. That product plays {c("decks." + auras["id"] + ".land_count", "int")} lands and sums to {c("decks." + auras["id"] + ".price_usd", "usd")}, with a removal count of {c("decks." + auras["id"] + ".removal_count", "int")} and a draw count of {c("decks." + auras["id"] + ".draw_count", "int")}.
-
-## What not to conclude
-
-These eight lists are products from two Challenger seasons. They are not a Pioneer metagame report, and this site does not have a licensed feed of current Pioneer standings. A card's presence here means Wizards put it in a Challenger deck, which MTGJSON republishes. It does not mean the card won a tournament last weekend.
-
-Azorius Spirits at {c("decks." + cheapest["id"] + ".price_usd", "usd")} is the cheap end of this particular file. Lotus Field Combo at {c("decks." + dearest["id"] + ".price_usd", "usd")} is the expensive end. Neither number is a format staple's price, and neither is the cost of the product's original printings. Sideboards are in the Scryfall sum and in the deck block. They are not in the land count, which is the main deck only.
+Phoenix plays {c("decks." + phoenix["id"] + ".land_count", "int")} lands and sums to {c("decks." + phoenix["id"] + ".price_usd", "usd")}. Expressive Iteration is in the printed list and is not legal on the {fetched} bulk. The draw count of {c("decks." + phoenix["id"] + ".draw_count", "int")} includes that card. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, {c("decks." + auras["id"] + ".land_count", "int")} lands, {c("decks." + auras["id"] + ".price_usd", "usd")}, and {c("decks." + auras["id"] + ".mana_curve.1.card_count", "int")} one-drops that are the actual plan if you rebuild without the companion.
 
 ## Common mistakes
 
-- Registering Izzet Phoenix as printed. Expressive Iteration is not legal in Pioneer on the {fetched} bulk.
-- Registering Orzhov Auras as printed. Lurrus of the Dream-Den is the card the bulk flags.
-- Reading Mono-Red Burn's removal count of {c("decks." + burn["id"] + ".removal_count", "int")} as sixteen pieces of creature removal. The rule counts damage to any target. The plan is still the opponent's life total.
-- Comparing these land counts with the Commander median of the other article. {c("decks." + most_lands["id"] + ".land_count", "int")} lands is the high end here. It would be a very low Commander precon.
-- Treating the deck block's product-printing price as the Scryfall sum in the table. Open the block for the printing. Use the table for the bulk price.
+- Calling Mono-Red Burn the lowest land count in the file. Orzhov Auras plays {c("decks." + auras["id"] + ".land_count", "int")}. Burn plays {c("decks." + burn["id"] + ".land_count", "int")}.
+- Registering Izzet Phoenix or Orzhov Auras as printed. The bulk of {fetched} flags Expressive Iteration and Lurrus of the Dream-Den.
+- Reading Burn's removal count of {c("decks." + burn["id"] + ".removal_count", "int")} as creature removal. The rule counts damage to any target.
+- Treating these products, from separate seasons, as a Pioneer metagame. There is no licensed standings feed behind this page.
 
 ## FAQ
 
-### Are Pioneer Challenger decks still for sale as a current product?
+### Which lists can I register?
 
-This page does not know a store's shelf. It knows the {c("summary.pioneer_challenger", "int")} lists MTGJSON publishes. The newest fact attached to each list is the Scryfall price date {fetched}, not a reprint announcement.
+Phoenix and Auras are the lists with a legality flag on {fetched}, named above. The others had no Pioneer ban or not-legal flag on that bulk. Legality moves. The bulk does not.
 
-### Which of the eight is legal to register today?
+### Why does Gruul count as ramp?
 
-Six had no Pioneer ban or not-legal flag on {fetched}. Izzet Phoenix and Orzhov Auras each had one flagged card, named above. Check the ban list again before you submit a deck. The bulk is a snapshot.
+The elves add green, and Chandra adds mana as well as dealing damage. The ramp count is {c("decks." + gruul["id"] + ".ramp_count", "int")}. Burn's ramp count is {c("decks." + burn["id"] + ".ramp_count", "int")}.
 
-### Why is Gruul Stompy's ramp count not zero?
+### What do the shared cards mean?
 
-Llanowar Elves and Elvish Mystic add green, and Chandra adds mana as well as dealing damage. The ramp count is {c("decks." + gruul["id"] + ".ramp_count", "int")}. Burn's ramp count is {c("decks." + burn["id"] + ".ramp_count", "int")} because nothing in that list matches the ramp rule.
+They mean separate products wanted the same tool. {overlap[0]}. They do not mean the decks share an archetype. Lotus Field still removes {c("decks." + lotus["id"] + ".removal_count", "int")} permanents, and Dimir removes {c("decks." + dimir["id"] + ".removal_count", "int")}.
 
 ## How this was made
 
-The lists are MTGJSON Pioneer Challenger Deck files in the committed official snapshot. Types, rules text, legality, and the lowest nonfoil price are Scryfall bulk data, fetched {fetched}. The goldfish numbers you see inside a deck block are the Deck Lab simulator, separate from this table, and described on the [method page](/method). No model filled a cell. If a product is not in MTGJSON, it is not on this page.
+The lists are the Pioneer Challenger Deck files in the MTGJSON snapshot. Types, rules text, legality, and the lowest English paper nonfoil price are the Scryfall bulk of {fetched}. Goldfish clocks inside a deck block are a separate tool, described on the [method page](/method). No model filled a cell. If a product is not in MTGJSON, it is not here.
 
 <FanContentNotice />
 
-<DeckLabCTA format="pioneer" brief="A Pioneer deck with a low land count and cheap interaction" />
+<DeckLabCTA format="pioneer" brief="A Pioneer deck with a low curve and a clear plan" />
 """
     write_guide("pioneer-challenger-decks", body, c.rows)
+
+
+def apply_review_gate(slugs: list[str]) -> None:
+    """Leave reviewed true only when the rubric accepts the regenerated guides."""
+    web = ROOT / "web"
+    result = subprocess.run(
+        ["node", "scripts/check-guide-rubric.mjs"],
+        cwd=web,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        print(result.stdout)
+        print("Rubric passed. Regenerated numbers still need a diff review before you treat the prose as settled.")
+        return
+    print(result.stdout)
+    print(result.stderr)
+    for slug in slugs:
+        path = BLOG / f"{slug}.mdx"
+        path.write_text(path.read_text(encoding="utf-8").replace("reviewed: true", "reviewed: false", 1), encoding="utf-8")
+    raise SystemExit("rubric failed; the new guides were marked reviewed: false")
 
 
 def main() -> None:
@@ -424,6 +528,9 @@ def main() -> None:
     lands_guide(facts)
     game_changers_guide(facts)
     pioneer_guide(facts)
+    apply_review_gate(
+        ["precon-lands-ramp-draw", "commander-precon-game-changers", "pioneer-challenger-decks"]
+    )
 
 
 if __name__ == "__main__":

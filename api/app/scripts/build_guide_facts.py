@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from app.oracle.ast_to_profile import build_card_profile
+from app.scripts.precon_stats import is_bulk_token
 from app.rules import count_color_sources
 from app.scripts.ingest_official_decks import DECKLIST_URL, USER_AGENT, clean_card_name
 from app.sim.goldfish import GoldfishConfig, goldfish
@@ -174,7 +175,7 @@ def _stream_oracle(names: set[str]) -> dict[str, dict]:
         for line in handle:
             card = json.loads(line)
             name = card.get("name")
-            if name not in names or name in found:
+            if name not in names or name in found or is_bulk_token(card):
                 continue
             found[name] = {
                 "name": name,
@@ -582,8 +583,8 @@ def build(specs: list[tuple[str, str, str]] | None = None, *, merge: bool = Fals
             previous_cards = json.loads(CARD_CACHE.read_text(encoding="utf-8")).get("cards") or {}
             previous_cards.update(cache_cards)
             cache_cards = previous_cards
-    lists = {
-        deck_id: {
+    def list_row(deck_id: str, deck: dict) -> dict:
+        row = {
             "id": deck["id"],
             "name": deck["name"],
             "format": deck["format"],
@@ -591,8 +592,22 @@ def build(specs: list[tuple[str, str, str]] | None = None, *, merge: bool = Fals
             "mainboard": deck["mainboard"],
             "sideboard": deck["sideboard"],
         }
-        for deck_id, deck in examples.items()
-    }
+        if deck_id.startswith("wc-"):
+            illegal = list((deck.get("analysis") or {}).get("illegal_in_format") or [])
+            if illegal:
+                shown = ", ".join(illegal[:6])
+                extra = f" and {len(illegal) - 6} more" if len(illegal) > 6 else ""
+                row["note"] = (
+                    "Vintage/Old School example from a World Championship product, not a current Legacy deck. "
+                    f"Not legal in Legacy: {shown}{extra}."
+                )
+            else:
+                row["note"] = (
+                    "Vintage/Old School example from a World Championship product, not a current Legacy deck."
+                )
+        return row
+
+    lists = {deck_id: list_row(deck_id, deck) for deck_id, deck in examples.items()}
     _write_compact(EXAMPLE_OUT, document)
     lists_document = {"fetched_at": document["fetched_at"], "decks": lists}
     _write_compact(EXAMPLE_LISTS_OUT, lists_document)

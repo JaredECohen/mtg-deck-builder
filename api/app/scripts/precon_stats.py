@@ -17,12 +17,16 @@ search their library") is not ramp. Opponent-only Treasure creation is not ramp.
 
 Draw (nonland) is a card that draws you cards ("you draw", "target player
 draws", "each player draws", "you may draw") or exiles the top of your library
-and lets you play or cast those cards. A sentence that only draws for an
-opponent is not draw.
+and lets you play or cast those cards. Reminder text, including cycling's
+"draw a card", is ignored. A sentence that only draws for an opponent is not
+draw. "Whenever you draw a card, ..." is a trigger, not a draw effect, so
+Psychosis Crawler, Smothering Tithe, and Ominous Seas do not count.
 
-Removal (nonland) is a card that destroys or exiles a permanent, deals damage
-to a creature or any target, gives creatures -N/-N, fights, forces a sacrifice,
-or shuffles a permanent into a library. Counterspells are not removal.
+Removal (nonland) is a card that destroys or exiles an opponent's permanent,
+deals damage to a creature or any target, gives a creature -N/-N, fights,
+forces a sacrifice, or shuffles a permanent into a library. Counterspells are
+not removal. Exiling your own permanents and bringing them back (blink) is
+not removal.
 """
 
 from __future__ import annotations
@@ -68,16 +72,76 @@ _REMOVAL = re.compile(
     r"|\bdamage to any target\b"
     r"|\ball creatures get -"
     r"|\beach creature gets -"
+    r"|\btarget (?:creature|artifact creature) gets? -\d+/-"
+    r"|\btarget creature gets? -[Xx]/-"
     r"|\bfights? target\b"
     r"|\btarget (?:player|opponent) sacrifices\b"
     r"|\beach opponent sacrifices\b"
     r"|\bshuffles? (?:it|that card|target permanent) into\b",
     re.IGNORECASE,
 )
+_YOU_CONTROL = re.compile(r"\byou control\b", re.IGNORECASE)
+TOKEN_LAYOUTS = {"token", "double_faced_token", "emblem", "art_series"}
+EXCLUDED_PRICE_SET_TYPES = {"memorabilia", "token"}
 
 
 def sentences(text: str) -> list[str]:
     return [part.strip() for part in re.split(r"[.\n]", text or "") if part.strip()]
+
+
+def strip_reminder(text: str) -> str:
+    """Drop parenthetical reminder text. Cycling's draw lives there."""
+    kept: list[str] = []
+    depth = 0
+    for char in text or "":
+        if char == "(":
+            depth += 1
+            continue
+        if char == ")" and depth:
+            depth -= 1
+            continue
+        if depth == 0:
+            kept.append(char)
+    return "".join(kept)
+
+
+def is_bulk_token(card: dict) -> bool:
+    """A Scryfall row that is a token or emblem, not the card that shares its name."""
+    if str(card.get("layout") or "") in TOKEN_LAYOUTS:
+        return True
+    return card.get("set_type") == "token"
+
+
+def is_price_printing(card: dict) -> bool:
+    """English paper printing that can supply a retail nonfoil or foil price.
+
+    Gold-bordered World Championship copies, oversized cards, memorabilia, and
+    tokens are not the price of a sleeveable card.
+    """
+    if card.get("lang") != "en":
+        return False
+    games = card.get("games") or []
+    if "paper" not in games:
+        return False
+    if card.get("set_type") in EXCLUDED_PRICE_SET_TYPES:
+        return False
+    if card.get("border_color") == "gold":
+        return False
+    if card.get("oversized") is True:
+        return False
+    return not is_bulk_token(card)
+
+
+def _draw_trigger_only(sentence: str) -> bool:
+    """True when the only draw is the 'whenever someone draws' trigger."""
+    head, separator, tail = sentence.partition(",")
+    if not separator:
+        return False
+    if not re.match(r"^whenever\b", head.strip(), re.IGNORECASE):
+        return False
+    if not re.search(r"\bdraws?\b", head, re.IGNORECASE):
+        return False
+    return _DRAW.search(tail) is None
 
 
 def is_land_type(type_line: str) -> bool:
@@ -108,8 +172,11 @@ def is_ramp(type_line: str, oracle_text: str) -> bool:
 def is_draw(type_line: str, oracle_text: str) -> bool:
     if is_land_type(type_line):
         return False
-    parts = sentences(oracle_text)
+    text = strip_reminder(oracle_text)
+    parts = sentences(text)
     for index, sentence in enumerate(parts):
+        if _draw_trigger_only(sentence):
+            continue
         blob = sentence if index + 1 >= len(parts) else f"{sentence} {parts[index + 1]}"
         if _IMPULSE.search(blob):
             return True
@@ -124,7 +191,15 @@ def is_draw(type_line: str, oracle_text: str) -> bool:
 def is_removal(type_line: str, oracle_text: str) -> bool:
     if is_land_type(type_line):
         return False
-    return _REMOVAL.search(oracle_text or "") is not None
+    text = strip_reminder(oracle_text)
+    if not _REMOVAL.search(text):
+        return False
+    # Blink and "exile the creatures you control" are not removal.
+    if re.search(r"\bexile\b", text, re.IGNORECASE) and _YOU_CONTROL.search(text):
+        kept = [sentence for sentence in sentences(text) if not _YOU_CONTROL.search(sentence)]
+        if not _REMOVAL.search(" ".join(kept)):
+            return False
+    return True
 
 
 def parse_usd(value: object) -> float | None:

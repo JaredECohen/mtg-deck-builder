@@ -16,6 +16,8 @@ import matter from "gray-matter";
 export const SITE_URL = "https://mtgdecklab.app";
 export const SITE_NAME = "MTG Deck Lab";
 export const AUTHOR = "Jared Cohen";
+/** Guides are signed by the desk, including ones that are not reviewed yet. */
+export const GUIDE_AUTHOR = "Deck Lab Editorial";
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
@@ -133,7 +135,7 @@ function readPost(file: string): Post | null {
     readingMinutes: Math.max(1, Math.round(wordCount / 230)),
     wordCount,
     reviewed: data.reviewed === true,
-    author: data.author ? String(data.author) : AUTHOR,
+    author: data.author ? String(data.author) : GUIDE_AUTHOR,
     body: content,
     toc,
   };

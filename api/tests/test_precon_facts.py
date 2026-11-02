@@ -42,6 +42,34 @@ def test_draw_counts_your_cards_and_impulse_not_opponent_only():
     assert is_draw("Sorcery", "Exile the top two cards of your library. Until the end of your turn, you may play those cards.")
     assert not is_draw("Sorcery", "Each opponent draws a card.")
     assert not is_draw("Instant", "Counter target spell.")
+    # Cycling's draw is reminder text. A "whenever you draw" trigger is not a draw spell.
+    assert not is_draw("Instant", "Cycling {2} ({2}, Discard this card: Draw a card.)")
+    assert not is_draw("Artifact Creature — Phyrexian Horror", "Whenever you draw a card, put a +1/+1 counter on this creature.")
+    assert not is_draw(
+        "Enchantment",
+        "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token.",
+    )
+    assert not is_draw(
+        "Enchantment",
+        "Whenever you draw a card, surveil 1. (To surveil 1, look at the top card of your library. You may put that card into your graveyard.)",
+    )
+
+
+def test_blink_is_not_removal_and_a_minus_spell_is():
+    assert not is_removal(
+        "Instant",
+        "Exile target creature you control, then return that card to the battlefield under its owner's control.",
+    )
+    assert not is_removal(
+        "Artifact",
+        "{T}: Exile target nontoken creature you control, then return it to the battlefield under your control.",
+    )
+    assert not is_removal(
+        "Sorcery",
+        "Exile all creatures you control, then reveal cards from the top of your library until you reveal that many creature cards.",
+    )
+    assert is_removal("Instant", "Target creature gets -4/-4 until end of turn.")
+    assert is_removal("Instant", "Exile target creature. Its controller may search their library for a basic land card.")
 
 
 def test_removal_is_not_a_counterspell_or_a_graveyard_exile():
@@ -83,8 +111,11 @@ def test_committed_facts_cover_the_official_snapshot():
     summary = facts["summary"]
     decks = facts["decks"]
     assert summary["official_decks"] == 190
-    assert summary["commander_precons"] == 182
+    assert summary["commander_products"] == 182
+    assert summary["commander_precons"] == 174
+    assert len(summary["duplicate_reprints"]) == 8
     assert summary["pioneer_challenger"] == 8
+    assert summary["decks_at_100_cards"] == 182
     assert len(decks) == 190
     assert facts["sources"]["prices"]["price_field"] == "prices.usd"
     assert facts["sources"]["decks"]["license"].endswith("/license/")
@@ -99,12 +130,10 @@ def test_committed_facts_cover_the_official_snapshot():
         assert curve == deck["nonland_count"]
         if not deck["missing_oracle"]:
             assert deck["land_count"] + deck["nonland_count"] == deck["mainboard_cards"]
-    assert facts["summary"]["precons_fully_priced"] + facts["summary"]["precons_with_unpriced"] == 182
-    assert facts["summary"]["game_changer_list_size"] == len(facts["game_changers"])
+    assert facts["summary"]["precons_fully_priced"] + facts["summary"]["precons_with_unpriced"] == 174
+    assert facts["summary"]["game_changer_list_size"] == 53
     assert facts["summary"]["game_changers_found_in_precons"] == sum(1 for row in facts["game_changers"] if row["precon_count"])
-    assert facts["summary"]["precons_with_99_card_mainboard"] == sum(
-        1 for deck in commanders if deck["mainboard_cards"] == 99
-    )
+    assert all(deck["mainboard_cards"] + len(deck["commanders"]) == 100 for deck in commanders)
     assert "price_complete" in facts["summary"]
     pioneer = [deck for deck in decks.values() if deck["format"] == "pioneer"]
     assert len(pioneer) == 8

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { similarityProblems } from "./guide-claims.mjs";
+import { factNames, similarityProblems } from "./guide-claims.mjs";
 import { loadExampleIds, loadPosts, reviewPost } from "./guide-rubric.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -43,7 +43,7 @@ if (process.env.RUBRIC_VERBOSE === "1") {
   for (const line of excluded) console.log(`  ${line}`);
 }
 const reviewed = posts.filter((post) => post.data.reviewed === true);
-const duplicates = similarityProblems(reviewed);
+const duplicates = similarityProblems(reviewed, undefined, factNames(facts, catalog));
 if (duplicates.length) failures.push(...duplicates);
 
 if (failures.length) {

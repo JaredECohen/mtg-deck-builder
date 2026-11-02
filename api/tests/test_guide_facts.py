@@ -66,12 +66,22 @@ def test_world_championship_ids_and_a_missing_card_do_not_crash():
     assert report["cards_simulated"] >= 0
 
 
-def test_dinosaur_egg_is_filtered_and_a_real_spell_is_not():
+def test_a_real_card_with_a_token_namesake_is_kept():
+    from app.scripts.precon_stats import is_bulk_token
+
     oracle = {
-        "Dinosaur Egg": {"type_line": "Token Creature — Dinosaur Egg", "layout": "token"},
+        "Dinosaur Egg": {"type_line": "Creature — Dinosaur Egg", "layout": "normal"},
+        "Champion of Wits": {"type_line": "Creature — Snake Wizard", "layout": "normal"},
+        "Ornithopter": {"type_line": "Artifact Creature — Thopter", "layout": "normal"},
         "Akroma's Will": {"type_line": "Instant", "layout": "normal"},
     }
-    assert is_token_entry({"name": "Dinosaur Egg", "count": 1}, oracle)
+    assert not is_token_entry({"name": "Dinosaur Egg", "count": 1}, oracle)
+    assert not is_token_entry({"name": "Champion of Wits", "count": 1}, oracle)
+    assert not is_token_entry({"name": "Ornithopter", "count": 4}, oracle)
+    # The token printing is skipped while indexing, so the real card wins.
+    assert is_bulk_token({"name": "Ornithopter", "layout": "token", "set_type": "token"})
+    assert is_bulk_token({"name": "Dinosaur Egg", "layout": "token", "set_type": "token"})
+    assert not is_bulk_token({"name": "Ornithopter", "layout": "normal", "set_type": "masters"})
     assert is_token_entry({"name": "Treasure Token", "count": 1, "layout": "token"}, oracle)
     assert is_token_entry({"name": "Copy", "count": 1, "types": ["Token", "Creature"]}, {})
     assert not is_token_entry({"name": "Akroma's Will", "count": 1}, oracle)

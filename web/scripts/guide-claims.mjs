@@ -3,7 +3,34 @@
 // file. Guides without a sidecar are checked against the example-deck catalog
 // they cite. No model is called.
 
-export const SIMILARITY_THRESHOLD = 0.45;
+export const SIMILARITY_THRESHOLD = 0.15;
+
+const NUMBER_WORDS = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100,
+};
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+export function spellNumber(value) {
+  const number = Math.round(Number(value));
+  if (!Number.isInteger(number) || number < 0 || number > 100 || Math.abs(number - Number(value)) > 1e-6) return null;
+  if (number < 10) return ONES[number];
+  if (number < 20) return Object.entries(NUMBER_WORDS).find(([, amount]) => amount === number)?.[0] ?? null;
+  if (number === 100) return "hundred";
+  const ten = Math.floor(number / 10);
+  const one = number % 10;
+  return one === 0 ? TENS[ten] : `${TENS[ten]}-${ONES[one]}`;
+}
+
+export function numberWordValue(word) {
+  const text = String(word).toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(NUMBER_WORDS, text)) return NUMBER_WORDS[text];
+  const compound = text.match(/^(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(one|two|three|four|five|six|seven|eight|nine)$/);
+  if (!compound) return null;
+  return NUMBER_WORDS[compound[1]] + NUMBER_WORDS[compound[2]];
+}
 const SHINGLE = 5;
 
 export function formatFact(value, kind) {
@@ -19,6 +46,7 @@ export function formatFact(value, kind) {
   }
   if (kind === "usd") return `$${value.toFixed(2)}`;
   if (kind === "pct") return `${value.toFixed(1)}%`;
+  if (kind === "words") return spellNumber(value);
   return null;
 }
 
@@ -70,6 +98,7 @@ export function extractLiterals(body, names = []) {
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\[[^\]]*\]\([^)]*\)/g, " ")
     .replace(/`[^`]*`/g, " "),
     names,
   );
@@ -80,6 +109,10 @@ export function extractLiterals(body, names = []) {
     .replace(/\d+(?:\.\d+)?%/g, " ")
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
   const counts = [...stripped.matchAll(/\b\d+(?:\.\d+)?\b/g)].map((match) => match[0]);
+  const spelled = stripped.match(
+    /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b|(?<!-)\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b(?!-)/gi,
+  );
+  if (spelled) counts.push(...spelled.map((word) => word.toLowerCase()));
   return { prices, percents, counts };
 }
 
@@ -118,7 +151,7 @@ function collectNumbers(node, key, prices, percents, counts) {
 export function numbersForDecks(catalog, ids) {
   const prices = [];
   const percents = [];
-  const counts = [60, 75, 99, 100];
+  const counts = [];
   const decks = catalog?.decks ?? {};
   for (const id of ids) {
     const deck = decks[id];
@@ -138,19 +171,62 @@ function unmatched(literals, values) {
   return literals.filter((literal) => !values.some((value) => roundsTo(value, literal)));
 }
 
+function citedDecks(catalog, ids) {
+  const decks = catalog?.decks ?? {};
+  return ids.map((id) => decks[id]).filter(Boolean);
+}
+
+/**
+ * A deck total may appear anywhere. A card price may appear only beside that
+ * card's name, so swapping the list total for a card's price fails.
+ */
+function priceWindowOk(before, literal, decks) {
+  const window = before.slice(-220);
+  for (const deck of decks) {
+    const analysis = deck.analysis ?? {};
+    for (const key of ["total_cost_usd", "basic_land_cost_usd", "top3_cost_usd"]) {
+      if (typeof analysis[key] === "number" && roundsTo(analysis[key], literal)) return true;
+    }
+    for (const card of analysis.top_cards ?? []) {
+      const priced = [card.usd, card.line_usd].some((value) => typeof value === "number" && roundsTo(value, literal));
+      if (!priced) continue;
+      const short = String(card.name ?? "").split(",")[0];
+      if ((card.name && window.includes(card.name)) || (short.length > 3 && window.includes(short))) return true;
+    }
+  }
+  return false;
+}
+
+export function misplacedPrices(body, catalog, ids) {
+  const decks = citedDecks(catalog, ids);
+  const problems = [];
+  const pattern = /\$(\d+(?:\.\d+)?)/g;
+  for (const match of String(body).matchAll(pattern)) {
+    if (priceWindowOk(body.slice(0, match.index), match[1], decks)) continue;
+    problems.push(match[1]);
+  }
+  return problems;
+}
+
 /** Guides written before the claims sidecar: every literal must round to a cited deck fact. */
+function countLiteral(literal) {
+  if (/^\d/.test(literal)) return literal;
+  const value = numberWordValue(literal);
+  return value == null ? null : String(value);
+}
+
 export function legacyClaimProblems({ file, body, catalog }) {
-  const deckIds = Object.keys(catalog?.decks ?? {});
+  const deckIds = [...body.matchAll(/<DeckBlock\s+id="([^"]+)"/g)].map((match) => match[1]);
   const allowed = numbersForDecks(catalog, deckIds);
   const found = extractLiterals(body, factNames(null, catalog));
   const problems = [];
-  for (const price of unmatched(found.prices, allowed.prices)) {
+  for (const price of misplacedPrices(body, catalog, deckIds)) {
     problems.push(`${file}: price $${price} does not match the cited deck facts`);
   }
   for (const percent of unmatched(found.percents, allowed.percents)) {
     problems.push(`${file}: percentage ${percent}% does not match the cited deck facts`);
   }
-  for (const count of unmatched(found.counts, allowed.counts)) {
+  for (const count of unmatched(found.counts.map(countLiteral).filter(Boolean), allowed.counts)) {
     problems.push(`${file}: count ${count} does not match the cited deck facts`);
   }
   return problems;
@@ -177,8 +253,10 @@ export function claimProblems({ file, body, claims, facts }) {
     if (formatted !== claim.text) {
       problems.push(`${file}: claim ${claim.path} formats as ${formatted}, prose says ${claim.text}`);
     }
-    if (!claimAppears(body, claim.text)) {
-      problems.push(`${file}: claim ${claim.text} is not in the prose`);
+    if (!claim.context || !body.includes(claim.context)) {
+      problems.push(`${file}: claim ${claim.text} is not tied to its sentence`);
+    } else if (!claim.context.includes(claim.text)) {
+      problems.push(`${file}: claim context for ${claim.text} does not contain that value`);
     }
     texts.push(claim.text);
   }
@@ -222,15 +300,30 @@ export function jaccard(left, right) {
   return union ? intersection / union : 0;
 }
 
-export function similarityProblems(posts, threshold = SIMILARITY_THRESHOLD) {
+export function maskComparable(text, names = []) {
+  let masked = String(text);
+  const ordered = [...names].filter((name) => typeof name === "string" && name.length > 3).sort((a, b) => b.length - a.length);
+  for (const name of ordered) masked = masked.split(name).join(" card ");
+  return masked.replace(/\$?\d+(?:\.\d+)?%?/g, " n ").replace(
+    /\b(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(?:one|two|three|four|five|six|seven|eight|nine)\b|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b/gi,
+    " n ",
+  );
+}
+
+export function similarityProblems(posts, threshold = SIMILARITY_THRESHOLD, names = []) {
   const problems = [];
-  const sets = posts.map((post) => ({ file: post.file, shingles: shingleSet(post.body) }));
+  const sets = posts.map((post) => ({
+    file: post.file,
+    shingles: shingleSet(post.body),
+    masked: shingleSet(maskComparable(post.body, names)),
+  }));
   for (let i = 0; i < sets.length; i += 1) {
     for (let j = i + 1; j < sets.length; j += 1) {
       const score = jaccard(sets[i].shingles, sets[j].shingles);
-      if (score > threshold) {
+      const masked = jaccard(sets[i].masked, sets[j].masked);
+      if (score > threshold || masked > threshold) {
         problems.push(
-          `${sets[i].file} and ${sets[j].file}: shingle Jaccard ${score.toFixed(3)} is above ${threshold}`,
+          `${sets[i].file} and ${sets[j].file}: shingle Jaccard ${Math.max(score, masked).toFixed(3)} is above ${threshold}`,
         );
       }
     }

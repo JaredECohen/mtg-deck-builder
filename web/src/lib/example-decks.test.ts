@@ -64,13 +64,21 @@ test("the builder imports the slim list only when an example id is resolved", ()
   assert.match(workflow, /if \(exampleId\) \{[\s\S]*prepopulateFromExample\(exampleId\)/);
 });
 
-test("a product token is not in the sleeveable list", async () => {
+test("veloci-ramp-tor keeps Dinosaur Egg and is a full commander list", async () => {
   const deck = await prepopulateFromExample("veloci-ramp-tor");
   assert.ok(deck);
-  assert.equal(
-    deck.mainboard.some((card) => card.name === "Dinosaur Egg"),
-    false,
-  );
+  const egg = deck.mainboard.find((card) => card.name === "Dinosaur Egg");
+  assert.ok(egg && egg.quantity === 1);
+  const main = deck.mainboard.reduce((sum, card) => sum + card.quantity, 0);
+  assert.equal(main + (deck.commander ? 1 : 0), 100);
+});
+
+test("the Aeo Paquette World Championship list keeps its Ornithopters", async () => {
+  const deck = await prepopulateFromExample("wc-aeopaquetteaffinity-wc04");
+  assert.ok(deck);
+  const thopters = deck.mainboard.find((card) => card.name === "Ornithopter");
+  assert.ok(thopters && thopters.quantity === 4);
+  assert.match(deck.note, /Vintage\/Old School example/);
 });
 
 test("loading an example does not adopt or replace the saved draft", async () => {

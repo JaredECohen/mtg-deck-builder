@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 import { claimProblems, formatFact, legacyClaimProblems, similarityProblems } from "./guide-claims.mjs";
 import { reviewPost } from "./guide-rubric.mjs";
 
-const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "guide-rubric");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const fixtureDir = path.join(scriptDir, "fixtures", "guide-rubric");
+const root = path.join(scriptDir, "..");
 
 const IDS = new Set(["mono-red-burn"]);
 
@@ -138,6 +140,55 @@ test("a price that disagrees with the facts fixture fails", () => {
   assert.ok(problems.some((line) => line.includes("$9.99")));
 });
 
+test("swapping two claimed values fails even if both numbers still appear", () => {
+  const facts = { summary: { lands: { median: 38 }, ramp: { median: 10 } } };
+  const claims = [
+    { text: "38", path: "summary.lands.median", as: "int", context: "The median is 38 lands and 10 ramp cards." },
+    { text: "10", path: "summary.ramp.median", as: "int", context: "The median is 38 lands and 10 ramp cards." },
+  ];
+  const swapped = claimProblems({
+    file: "swap.mdx",
+    body: "The median is 10 lands and 38 ramp cards.",
+    claims,
+    facts,
+  });
+  assert.ok(swapped.some((line) => line.includes("not tied") || line.includes("not in the claims")));
+});
+
+test("a spelled-out number must match a claim", () => {
+  const problems = claimProblems({
+    file: "spelled.mdx",
+    body: "Seedborn Muse is in four products.",
+    claims: [{ text: "four", path: "summary.lands.median", as: "words", context: "Seedborn Muse is in four products." }],
+    facts: { summary: { lands: { median: 4 } } },
+  });
+  assert.deepEqual(problems, []);
+
+  const wrong = claimProblems({
+    file: "spelled-bad.mdx",
+    body: "Seedborn Muse is in forty-one products.",
+    claims: [{ text: "four", path: "summary.lands.median", as: "words", context: "Seedborn Muse is in four products." }],
+    facts: { summary: { lands: { median: 4 } } },
+  });
+  assert.ok(wrong.some((line) => line.includes("forty-one") || line.includes("not tied")));
+});
+
+test("changing the ramp guide to unsourced numbers fails", () => {
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, "src/data/example-decks.json"), "utf8"));
+  const raw = fs.readFileSync(path.join(root, "content/blog/mtg-ramp-deck-guide.mdx"), "utf8");
+  const body = raw
+    .split("---")
+    .slice(2)
+    .join("---")
+    .replace(/\$\d+\.\d{2}/, "$1.89")
+    .replace(/\d+\.\d+%/, "62.5%")
+    .replace(/(\d+) lands/, "33 lands");
+  const problems = legacyClaimProblems({ file: "mtg-ramp-deck-guide.mdx", body, catalog });
+  assert.ok(problems.some((line) => line.includes("$1.89")));
+  assert.ok(problems.some((line) => line.includes("62.5%")));
+  assert.ok(problems.some((line) => line.includes("33")));
+});
+
 test("a literal count with no claim fails", () => {
   const problems = claimProblems({
     file: "extra.mdx",
@@ -176,7 +227,7 @@ test("a near-copy fixture fails the similarity gate and a different guide does n
 test("an unsourced legacy price fails against the example catalog", () => {
   const problems = legacyClaimProblems({
     file: "legacy.mdx",
-    body: "The list costs $999.99 and wins 100.0% of the time.",
+    body: '<DeckBlock id="burn" /> The list costs $999.99 and wins 100.0% of the time.',
     catalog: { fetched_at: "2026-11-01", decks: { burn: { analysis: { total_cost_usd: 31.38, win_rate: 1 } } } },
   });
   assert.ok(problems.some((line) => line.includes("$999.99")));
