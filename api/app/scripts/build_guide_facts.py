@@ -16,14 +16,17 @@ price totals, land and spell counts, and the goldfish. Regenerate, from
 
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
+import re
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
 from app.oracle.ast_to_profile import build_card_profile
 from app.rules import count_color_sources
-from app.scripts.ingest_official_decks import USER_AGENT, clean_card_name
+from app.scripts.ingest_official_decks import DECKLIST_URL, USER_AGENT, clean_card_name
 from app.sim.goldfish import GoldfishConfig, goldfish
 from app.sim.policy import POLICIES
 
@@ -118,8 +121,10 @@ def _normal_price(blob: dict | None, vendor: str) -> tuple[float, str] | None:
 
 
 def _load_deck(file_name: str) -> dict:
-    dest = DECK_DIR / f"{file_name}.json"
-    _download(DECK_URL.format(file_name=file_name), dest)
+    # Cache names stay ASCII. The request percent-encodes letters such as ü.
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", file_name)
+    dest = DECK_DIR / f"{safe}.json"
+    _download(DECK_URL.format(file_name=quote(file_name, safe="")), dest)
     return json.loads(dest.read_text(encoding="utf-8"))["data"]
 
 
@@ -231,6 +236,48 @@ def _primary_type(type_line: str) -> str:
     return "Other"
 
 
+def example_format(raw: dict) -> str:
+    """Map an MTGJSON product type onto a format the builder can open."""
+    deck_type = str(raw.get("type") or "").lower()
+    if "commander" in deck_type:
+        return "commander"
+    if "pioneer" in deck_type:
+        return "pioneer"
+    # World Championship decks and any other constructed product open as Legacy
+    # so a missing format cannot crash ?example= prefill.
+    return "legacy"
+
+
+def worlds_example_id(file_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", file_name.lower()).strip("-")
+    return f"wc-{slug}"[:80]
+
+
+def world_championship_specs(index: dict | list | None = None) -> list[tuple[str, str, str]]:
+    """(example id, MTGJSON file name, goldfish policy) for World Championship decks."""
+    if index is None:
+        dest = CACHE_DIR / "DeckList.json.gz"
+        _download(DECKLIST_URL, dest)
+        with gzip.open(dest, "rt", encoding="utf-8") as handle:
+            index = json.load(handle)
+    rows = index.get("data") if isinstance(index, dict) else index
+    specs: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for row in rows or []:
+        if not isinstance(row, dict) or row.get("type") != "World Championship Deck":
+            continue
+        file_name = str(row.get("fileName") or "").strip()
+        if not file_name:
+            continue
+        deck_id = worlds_example_id(file_name)
+        if deck_id in seen:
+            continue
+        seen.add(deck_id)
+        specs.append((deck_id, file_name, "midrange"))
+    specs.sort()
+    return specs
+
+
 def _goldfish(mainboard: list[dict], oracle: dict[str, dict], *, policy: str, fmt: str) -> dict:
     deck: list[tuple] = []
     unresolved: list[str] = []
@@ -239,23 +286,42 @@ def _goldfish(mainboard: list[dict], oracle: dict[str, dict], *, policy: str, fm
         if info is None:
             unresolved.append(card["name"])
             continue
-        profile = build_card_profile(
-            {
-                "name": card["name"],
-                "mana_cost": info["mana_cost"],
-                "mana_value": info["cmc"],
-                "type_line": info["type_line"],
-                "oracle_text": info["oracle_text"],
-                "keywords": info["keywords"],
-                "power": info["power"],
-                "toughness": info["toughness"],
-                "color_identity": info["color_identity"],
-            }
-        )
-        deck.extend([(profile, info["type_line"])] * card["quantity"])
+        try:
+            profile = build_card_profile(
+                {
+                    "name": card["name"],
+                    "mana_cost": info.get("mana_cost") or "",
+                    "mana_value": info.get("cmc") or 0,
+                    "type_line": info.get("type_line") or "",
+                    "oracle_text": info.get("oracle_text") or "",
+                    "keywords": info.get("keywords") or [],
+                    "power": info.get("power"),
+                    "toughness": info.get("toughness"),
+                    "color_identity": info.get("color_identity") or [],
+                }
+            )
+        except Exception:
+            unresolved.append(card["name"])
+            continue
+        deck.extend([(profile, info.get("type_line") or "")] * card["quantity"])
     life = 40 if fmt == "commander" else 20
     turns = 16 if fmt == "commander" else 12
     games = 120
+    if not deck:
+        return {
+            "games": games,
+            "seed": 1729,
+            "policy": policy,
+            "starting_life": life,
+            "max_turns": turns,
+            "wins": 0,
+            "win_rate": 0.0,
+            "avg_kill_turn": None,
+            "median_kill_turn": None,
+            "unresolved_cards": unresolved,
+            "cards_simulated": 0,
+            "note": "No resolvable cards, so the goldfish was not run.",
+        }
     report = goldfish(
         deck,
         policy=POLICIES[policy],
@@ -284,12 +350,24 @@ def _goldfish(mainboard: list[dict], oracle: dict[str, dict], *, policy: str, fm
     }
 
 
-def build() -> dict:
+def build(specs: list[tuple[str, str, str]] | None = None, *, merge: bool = False) -> dict:
+    """Price and goldfish ``specs``.
+
+    The default list is the guide catalog. Pass World Championship specs with
+    ``merge=True`` to add them without replacing decks that are already priced.
+    A deck file that fails to download is skipped. A card the oracle file does
+    not know, or whose profile raises, is unresolved rather than fatal.
+    """
+    chosen = list(EXAMPLE_DECKS) if specs is None else specs
     prices_doc = None
     decks_raw = []
     names: set[str] = set()
-    for deck_id, file_name, policy in EXAMPLE_DECKS:
-        raw = _load_deck(file_name)
+    for deck_id, file_name, policy in chosen:
+        try:
+            raw = _load_deck(file_name)
+        except Exception as exc:
+            print(f"  skip {file_name}: {exc}")
+            continue
         decks_raw.append((deck_id, file_name, policy, raw))
         for entry in (raw.get("mainBoard") or []) + (raw.get("sideBoard") or []) + (raw.get("commander") or []):
             name = clean_card_name(str(entry.get("name") or ""))
@@ -310,7 +388,7 @@ def build() -> dict:
     cache_cards: dict[str, dict] = {}
 
     for deck_id, file_name, policy, raw in decks_raw:
-        fmt = "commander" if "commander" in str(raw.get("type") or "").lower() else "pioneer"
+        fmt = example_format(raw)
 
         def playable(entries: list[dict] | None) -> list[dict]:
             kept = []
@@ -327,6 +405,9 @@ def build() -> dict:
         commander_names = {card["name"] for card in commanders}
         mainboard = [card for card in playable(raw.get("mainBoard")) if card["name"] not in commander_names]
         sideboard = playable(raw.get("sideBoard"))
+        if not mainboard:
+            print(f"  skip empty {deck_id}")
+            continue
         identity: list[str] = []
         for commander in commanders:
             info = oracle.get(commander["name"]) or {}
@@ -430,7 +511,7 @@ def build() -> dict:
             "release_date": raw.get("releaseDate"),
             "source_url": raw.get("source") if isinstance(raw.get("source"), str) else None,
             "mtgjson_file": file_name,
-            "mtgjson_deck_url": DECK_URL.format(file_name=file_name),
+            "mtgjson_deck_url": DECK_URL.format(file_name=quote(file_name, safe="")),
             "mainboard": [{"name": card["name"], "quantity": card["quantity"]} for card in mainboard],
             "sideboard": [{"name": card["name"], "quantity": card["quantity"]} for card in sideboard],
             "analysis": {
@@ -489,6 +570,18 @@ def build() -> dict:
         },
         "decks": examples,
     }
+    if merge and EXAMPLE_OUT.exists():
+        previous = json.loads(EXAMPLE_OUT.read_text(encoding="utf-8"))
+        merged = dict(previous.get("decks") or {})
+        merged.update(examples)
+        # Keep the guide catalog's fetch date and source block. New decks are added.
+        document = previous
+        document["decks"] = merged
+        examples = merged
+        if CARD_CACHE.exists():
+            previous_cards = json.loads(CARD_CACHE.read_text(encoding="utf-8")).get("cards") or {}
+            previous_cards.update(cache_cards)
+            cache_cards = previous_cards
     lists = {
         deck_id: {
             "id": deck["id"],
@@ -501,10 +594,11 @@ def build() -> dict:
         for deck_id, deck in examples.items()
     }
     _write_compact(EXAMPLE_OUT, document)
-    _write_compact(EXAMPLE_LISTS_OUT, {"fetched_at": FETCHED_ON, "decks": lists})
+    lists_document = {"fetched_at": document["fetched_at"], "decks": lists}
+    _write_compact(EXAMPLE_LISTS_OUT, lists_document)
     _write_compact(
         CARD_CACHE,
-        {"fetched_at": FETCHED_ON, "sources": document["sources"], "cards": cache_cards},
+        {"fetched_at": document["fetched_at"], "sources": document["sources"], "cards": cache_cards},
     )
     print(f"wrote {EXAMPLE_OUT}, {EXAMPLE_LISTS_OUT}, and {CARD_CACHE}")
     return document
@@ -516,4 +610,14 @@ def _write_compact(path: Path, payload: object) -> None:
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description="Price and goldfish official example decks.")
+    parser.add_argument(
+        "--worlds",
+        action="store_true",
+        help="Add MTGJSON World Championship decks to the example catalog without replacing the guide decks",
+    )
+    args = parser.parse_args()
+    if args.worlds:
+        build(world_championship_specs(), merge=True)
+    else:
+        build()

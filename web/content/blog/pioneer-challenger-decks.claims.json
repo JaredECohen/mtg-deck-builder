@@ -1,0 +1,377 @@
+[
+  {
+    "text": "8",
+    "path": "summary.pioneer_challenger",
+    "as": "int"
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$16.20",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "$43.67",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$16.20",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-DimirControl_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "9",
+    "path": "decks.mtgjson-DimirControl_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "12",
+    "path": "decks.mtgjson-DimirControl_Q08.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$29.21",
+    "path": "decks.mtgjson-DimirControl_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-GruulStompy_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "13",
+    "path": "decks.mtgjson-GruulStompy_Q08.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$34.70",
+    "path": "decks.mtgjson-GruulStompy_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "21",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$27.41",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "24",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "12",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$43.67",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$24.76",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$34.75",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "22",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "6",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$38.56",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "13",
+    "path": "decks.mtgjson-GruulStompy_Q08.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$24.76",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "8",
+    "path": "summary.pioneer_challenger",
+    "as": "int"
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$34.70",
+    "path": "decks.mtgjson-GruulStompy_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-GruulStompy_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "21",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$27.41",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$34.75",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "$16.20",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "$43.67",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int"
+  },
+  {
+    "text": "8",
+    "path": "summary.pioneer_challenger",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int"
+  }
+]

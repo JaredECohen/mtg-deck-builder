@@ -19,7 +19,7 @@ related: ["how-to-read-a-magic-card", "your-first-game-of-magic"]  # 2-4 slugs
 draft: false              # true hides it everywhere (index, sitemap, RSS)
 archived: false           # true pulls a scheduled guide off the site; the file stays
 reviewed: false           # true is required for the sitemap; failing guides are noindex
-author: Jared Cohen       # required on reviewed guides
+author: Deck Lab Editorial  # required on reviewed guides
 ---
 ```
 

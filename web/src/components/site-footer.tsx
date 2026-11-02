@@ -22,6 +22,7 @@ export function SiteFooter() {
       <nav className="site-footer-links" aria-label="Site">
         <Link href="/">Deck Builder</Link>
         <Link href="/blog">Guides</Link>
+        <Link href="/method">Method</Link>
         <Link href="/about">About</Link>
         <Link href="/contact">Contact</Link>
         <Link href="/privacy">Privacy</Link>

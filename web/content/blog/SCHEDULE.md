@@ -6,7 +6,9 @@ they cannot publish and can be restored by removing that flag. The 14 reviewed
 archetype guides publish together on 2026-11-01 (merge day). Their rows below
 use that date and are not dripped through 2027. Older unreviewed posts that are already
 public stay reachable, noindex, and out of the sitemap, index, and RSS.
-New question-driven pilots may share a day.
+New question-driven pilots may share a day. On 2026-11-02 three reviewed
+guides publish together from `precon_facts.json`: the precon lands, ramp, and
+draw census, the Game Changers intersection, and the Pioneer Challenger census.
 
 One guide a day at midnight New York time still applies to unreviewed guides
 (each file's `date`; see README.md).

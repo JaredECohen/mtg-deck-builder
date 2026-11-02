@@ -1,0 +1,492 @@
+[
+  {
+    "text": "182",
+    "path": "summary.commander_precons",
+    "as": "int"
+  },
+  {
+    "text": "38",
+    "path": "summary.lands.median",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "summary.ramp.median",
+    "as": "int"
+  },
+  {
+    "text": "11",
+    "path": "summary.draw.median",
+    "as": "int"
+  },
+  {
+    "text": "138",
+    "path": "summary.lands.in_middle_half",
+    "as": "int"
+  },
+  {
+    "text": "182",
+    "path": "summary.commander_precons",
+    "as": "int"
+  },
+  {
+    "text": "75.8%",
+    "path": "summary.lands.in_middle_half_pct",
+    "as": "pct"
+  },
+  {
+    "text": "37",
+    "path": "summary.lands.p25",
+    "as": "num"
+  },
+  {
+    "text": "39",
+    "path": "summary.lands.p75",
+    "as": "num"
+  },
+  {
+    "text": "169",
+    "path": "summary.precons_with_99_card_mainboard",
+    "as": "int"
+  },
+  {
+    "text": "99",
+    "path": "decks.mtgjson-LandSWrath_ZNC.mainboard_cards",
+    "as": "int"
+  },
+  {
+    "text": "34",
+    "path": "summary.lands.min",
+    "as": "int"
+  },
+  {
+    "text": "37",
+    "path": "summary.lands.p25",
+    "as": "num"
+  },
+  {
+    "text": "38",
+    "path": "summary.lands.median",
+    "as": "int"
+  },
+  {
+    "text": "39",
+    "path": "summary.lands.p75",
+    "as": "num"
+  },
+  {
+    "text": "44",
+    "path": "summary.lands.max",
+    "as": "int"
+  },
+  {
+    "text": "2",
+    "path": "summary.ramp.min",
+    "as": "int"
+  },
+  {
+    "text": "8",
+    "path": "summary.ramp.p25",
+    "as": "num"
+  },
+  {
+    "text": "10",
+    "path": "summary.ramp.median",
+    "as": "int"
+  },
+  {
+    "text": "13",
+    "path": "summary.ramp.p75",
+    "as": "num"
+  },
+  {
+    "text": "27",
+    "path": "summary.ramp.max",
+    "as": "int"
+  },
+  {
+    "text": "2",
+    "path": "summary.draw.min",
+    "as": "int"
+  },
+  {
+    "text": "8.2",
+    "path": "summary.draw.p25",
+    "as": "num"
+  },
+  {
+    "text": "11",
+    "path": "summary.draw.median",
+    "as": "int"
+  },
+  {
+    "text": "13.8",
+    "path": "summary.draw.p75",
+    "as": "num"
+  },
+  {
+    "text": "28",
+    "path": "summary.draw.max",
+    "as": "int"
+  },
+  {
+    "text": "3",
+    "path": "summary.removal.min",
+    "as": "int"
+  },
+  {
+    "text": "6",
+    "path": "summary.removal.p25",
+    "as": "num"
+  },
+  {
+    "text": "7.5",
+    "path": "summary.removal.median",
+    "as": "num"
+  },
+  {
+    "text": "10",
+    "path": "summary.removal.p75",
+    "as": "num"
+  },
+  {
+    "text": "19",
+    "path": "summary.removal.max",
+    "as": "int"
+  },
+  {
+    "text": "38.1",
+    "path": "summary.lands.mean",
+    "as": "dec1"
+  },
+  {
+    "text": "10.6",
+    "path": "summary.ramp.mean",
+    "as": "dec1"
+  },
+  {
+    "text": "11.1",
+    "path": "summary.draw.mean",
+    "as": "dec1"
+  },
+  {
+    "text": "7.9",
+    "path": "summary.removal.mean",
+    "as": "dec1"
+  },
+  {
+    "text": "7.5",
+    "path": "summary.removal.median",
+    "as": "num"
+  },
+  {
+    "text": "34",
+    "path": "summary.lands.lowest.0.value",
+    "as": "int"
+  },
+  {
+    "text": "34",
+    "path": "summary.lands.lowest.2.value",
+    "as": "int"
+  },
+  {
+    "text": "44",
+    "path": "summary.lands.highest.0.value",
+    "as": "int"
+  },
+  {
+    "text": "42",
+    "path": "summary.lands.highest.2.value",
+    "as": "int"
+  },
+  {
+    "text": "34",
+    "path": "summary.lands.min",
+    "as": "int"
+  },
+  {
+    "text": "2",
+    "path": "summary.ramp.lowest.0.value",
+    "as": "int"
+  },
+  {
+    "text": "27",
+    "path": "summary.ramp.highest.0.value",
+    "as": "int"
+  },
+  {
+    "text": "23",
+    "path": "summary.ramp.highest.1.value",
+    "as": "int"
+  },
+  {
+    "text": "109",
+    "path": "summary.ramp.in_middle_half",
+    "as": "int"
+  },
+  {
+    "text": "59.9%",
+    "path": "summary.ramp.in_middle_half_pct",
+    "as": "pct"
+  },
+  {
+    "text": "8",
+    "path": "summary.ramp.p25",
+    "as": "num"
+  },
+  {
+    "text": "13",
+    "path": "summary.ramp.p75",
+    "as": "num"
+  },
+  {
+    "text": "2",
+    "path": "summary.draw.min",
+    "as": "int"
+  },
+  {
+    "text": "28",
+    "path": "summary.draw.max",
+    "as": "int"
+  },
+  {
+    "text": "4",
+    "path": "summary.draw.lowest.2.value",
+    "as": "int"
+  },
+  {
+    "text": "90",
+    "path": "summary.draw.in_middle_half",
+    "as": "int"
+  },
+  {
+    "text": "8.2",
+    "path": "summary.draw.p25",
+    "as": "num"
+  },
+  {
+    "text": "13.8",
+    "path": "summary.draw.p75",
+    "as": "num"
+  },
+  {
+    "text": "49.5%",
+    "path": "summary.draw.in_middle_half_pct",
+    "as": "pct"
+  },
+  {
+    "text": "13",
+    "path": "summary.color_identity.0.decks",
+    "as": "int"
+  },
+  {
+    "text": "7.1%",
+    "path": "summary.color_identity.0.pct",
+    "as": "pct"
+  },
+  {
+    "text": "160",
+    "path": "summary.precons_fully_priced",
+    "as": "int"
+  },
+  {
+    "text": "22",
+    "path": "summary.precons_with_unpriced",
+    "as": "int"
+  },
+  {
+    "text": "$74.22",
+    "path": "summary.price_complete.median",
+    "as": "usd"
+  },
+  {
+    "text": "$85.23",
+    "path": "summary.price_complete.mean",
+    "as": "usd"
+  },
+  {
+    "text": "$60.53",
+    "path": "summary.price_complete.p25",
+    "as": "usd"
+  },
+  {
+    "text": "$94.65",
+    "path": "summary.price_complete.p75",
+    "as": "usd"
+  },
+  {
+    "text": "80",
+    "path": "summary.price_complete.in_middle_half",
+    "as": "int"
+  },
+  {
+    "text": "50.0%",
+    "path": "summary.price_complete.in_middle_half_pct",
+    "as": "pct"
+  },
+  {
+    "text": "$23.84",
+    "path": "summary.price_complete.lowest.0.value",
+    "as": "usd"
+  },
+  {
+    "text": "$265.03",
+    "path": "summary.price_complete.highest.0.value",
+    "as": "usd"
+  },
+  {
+    "text": "39",
+    "path": "decks.mtgjson-VelociRampTor_LCC.land_count",
+    "as": "int"
+  },
+  {
+    "text": "14",
+    "path": "decks.mtgjson-VelociRampTor_LCC.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-VelociRampTor_LCC.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "9",
+    "path": "decks.mtgjson-VelociRampTor_LCC.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$106.81",
+    "path": "decks.mtgjson-VelociRampTor_LCC.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "37",
+    "path": "decks.mtgjson-LandSWrath_ZNC.land_count",
+    "as": "int"
+  },
+  {
+    "text": "14",
+    "path": "decks.mtgjson-LandSWrath_ZNC.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "9",
+    "path": "decks.mtgjson-LandSWrath_ZNC.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "9",
+    "path": "decks.mtgjson-LandSWrath_ZNC.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "$30.35",
+    "path": "decks.mtgjson-LandSWrath_ZNC.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "38",
+    "path": "summary.lands.median",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "summary.ramp.median",
+    "as": "int"
+  },
+  {
+    "text": "11",
+    "path": "summary.draw.median",
+    "as": "int"
+  },
+  {
+    "text": "34",
+    "path": "summary.lands.min",
+    "as": "int"
+  },
+  {
+    "text": "44",
+    "path": "summary.lands.max",
+    "as": "int"
+  },
+  {
+    "text": "$74.22",
+    "path": "summary.price_complete.median",
+    "as": "usd"
+  },
+  {
+    "text": "$265.03",
+    "path": "summary.price_complete.highest.0.value",
+    "as": "usd"
+  },
+  {
+    "text": "22",
+    "path": "summary.precons_with_unpriced",
+    "as": "int"
+  },
+  {
+    "text": "38",
+    "path": "summary.lands.median",
+    "as": "int"
+  },
+  {
+    "text": "10",
+    "path": "summary.ramp.median",
+    "as": "int"
+  },
+  {
+    "text": "$23.84",
+    "path": "summary.price_complete.lowest.0.value",
+    "as": "usd"
+  },
+  {
+    "text": "$74.22",
+    "path": "summary.price_complete.median",
+    "as": "usd"
+  },
+  {
+    "text": "7.5",
+    "path": "summary.removal.median",
+    "as": "num"
+  },
+  {
+    "text": "160",
+    "path": "summary.precons_fully_priced",
+    "as": "int"
+  },
+  {
+    "text": "7.5",
+    "path": "summary.removal.median",
+    "as": "num"
+  },
+  {
+    "text": "38",
+    "path": "summary.lands.median",
+    "as": "int"
+  },
+  {
+    "text": "14",
+    "path": "decks.mtgjson-VelociRampTor_LCC.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "39",
+    "path": "decks.mtgjson-VelociRampTor_LCC.land_count",
+    "as": "int"
+  },
+  {
+    "text": "37",
+    "path": "decks.mtgjson-LandSWrath_ZNC.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$30.35",
+    "path": "decks.mtgjson-LandSWrath_ZNC.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "10",
+    "path": "summary.ramp.median",
+    "as": "int"
+  }
+]

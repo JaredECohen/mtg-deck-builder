@@ -53,7 +53,23 @@ The snapshot committed in `api/app/data/official_decks.json` is names and
 quantities only. The weekly refresh (`bootstrap_data --refresh-cards`)
 re-downloads it onto the data volume and re-ingests.
 
-### Guide facts (prices, legality, goldfish)
+### Precon census facts
+
+`web/src/data/precon_facts.json` is the Week 1 census of the committed official
+snapshot (182 Commander precons and the Pioneer Challenger decks). Regenerate
+from `api/` with `python -m app.scripts.build_precon_facts`, then
+`python -m app.scripts.build_study_guides`.
+
+- Lists: the snapshot above. Not a fresh scrape of a retailer or a tournament site.
+- Rules text and types: Scryfall oracle-cards bulk.
+- Prices: lowest nonfoil `prices.usd` in the Scryfall default-cards bulk. Unpriced cards are named and left out of the sum. This is not the sealed product's printing. Guide deck blocks still use AllPricesToday for that printing.
+- Ramp, draw, removal, and the bracket floor are computed in `app.scripts.precon_stats` and `app.services.brackets`. The method page on the site states the same rules.
+
+World Championship decks are official MTGJSON products. They are added to the
+`?example=` catalog (`python -m app.scripts.build_guide_facts --worlds`) and
+are not part of this census.
+
+## Guide facts (prices, legality, goldfish)
 
 Reviewed guides cite a separate cache, `api/app/data/guide_card_cache.json`,
 built by `python -m app.scripts.build_guide_facts`.

@@ -1,6 +1,13 @@
 """Token cards in an official product list are not part of the deck."""
 
-from app.scripts.build_guide_facts import is_token_entry, is_token_type_line
+from app.scripts.build_guide_facts import (
+    _goldfish,
+    example_format,
+    is_token_entry,
+    is_token_type_line,
+    world_championship_specs,
+    worlds_example_id,
+)
 
 
 def test_token_type_line_matches_supertype_only():
@@ -28,6 +35,35 @@ def test_price_scope_and_legality_wording():
     )
     assert text == "Expressive Iteration is not legal today per the Scryfall bulk of 2026-11-01."
     assert "printed before" not in text
+
+
+def test_world_championship_ids_and_a_missing_card_do_not_crash():
+    assert example_format({"type": "World Championship Deck"}) == "legacy"
+    assert example_format({"type": "Commander Deck"}) == "commander"
+    assert example_format({"type": "Pioneer Challenger Deck"}) == "pioneer"
+    assert example_format({}) == "legacy"
+    assert worlds_example_id("JonFinkelMonoBlueTinker_WC00").startswith("wc-")
+    specs = world_championship_specs(
+        {
+            "data": [
+                {"type": "World Championship Deck", "fileName": "JonFinkelMonoBlueTinker_WC00"},
+                {"type": "World Championship Deck", "fileName": ""},
+                {"type": "Commander Deck", "fileName": "NotWorlds_C21"},
+                {"type": "Theme Deck", "fileName": "SkipMe"},
+            ]
+        }
+    )
+    assert specs == [("wc-jonfinkelmonobluetinker-wc00", "JonFinkelMonoBlueTinker_WC00", "midrange")]
+    # A typo and a profile that cannot be built are unresolved, not an exception.
+    report = _goldfish(
+        [{"name": "Not A Real Card", "quantity": 4}, {"name": "Broken Profile", "quantity": 1}],
+        {"Broken Profile": {"mana_cost": "{R}", "cmc": 1, "type_line": "Instant", "oracle_text": "Deal 3 damage."}},
+        policy="aggro",
+        fmt="legacy",
+    )
+    assert report["wins"] == 0
+    assert "Not A Real Card" in report["unresolved_cards"]
+    assert report["cards_simulated"] >= 0
 
 
 def test_dinosaur_egg_is_filtered_and_a_real_spell_is_not():

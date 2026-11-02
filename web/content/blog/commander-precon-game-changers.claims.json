@@ -1,0 +1,297 @@
+[
+  {
+    "text": "$16.09",
+    "path": "game_changers.0.usd",
+    "as": "usd"
+  },
+  {
+    "text": "4",
+    "path": "game_changers.0.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$38.68",
+    "path": "game_changers.1.usd",
+    "as": "usd"
+  },
+  {
+    "text": "2",
+    "path": "game_changers.1.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$1.75",
+    "path": "game_changers.2.usd",
+    "as": "usd"
+  },
+  {
+    "text": "2",
+    "path": "game_changers.2.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$17.95",
+    "path": "game_changers.3.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.3.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$3.35",
+    "path": "game_changers.4.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.4.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$30.20",
+    "path": "game_changers.5.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.5.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$75.15",
+    "path": "game_changers.6.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.6.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$62.99",
+    "path": "game_changers.7.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.7.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$15.18",
+    "path": "game_changers.8.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.8.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$15.72",
+    "path": "game_changers.9.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.9.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$0.91",
+    "path": "game_changers.10.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.10.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$36.89",
+    "path": "game_changers.11.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.11.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$4.90",
+    "path": "game_changers.12.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.12.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "$2.88",
+    "path": "game_changers.13.usd",
+    "as": "usd"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.13.precon_count",
+    "as": "int"
+  },
+  {
+    "text": "60",
+    "path": "summary.game_changer_list_size",
+    "as": "int"
+  },
+  {
+    "text": "14",
+    "path": "summary.game_changers_found_in_precons",
+    "as": "int"
+  },
+  {
+    "text": "182",
+    "path": "summary.commander_precons",
+    "as": "int"
+  },
+  {
+    "text": "17",
+    "path": "summary.precons_with_a_game_changer",
+    "as": "int"
+  },
+  {
+    "text": "163",
+    "path": "summary.bracket_floors.2",
+    "as": "int"
+  },
+  {
+    "text": "16",
+    "path": "summary.bracket_floors.3",
+    "as": "int"
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int"
+  },
+  {
+    "text": "60",
+    "path": "summary.game_changer_list_size",
+    "as": "int"
+  },
+  {
+    "text": "14",
+    "path": "summary.game_changers_found_in_precons",
+    "as": "int"
+  },
+  {
+    "text": "$3.35",
+    "path": "game_changers.4.usd",
+    "as": "usd"
+  },
+  {
+    "text": "$75.15",
+    "path": "game_changers.6.usd",
+    "as": "usd"
+  },
+  {
+    "text": "$132.04",
+    "path": "decks.mtgjson-ArcaneMaelstrom_C20.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "38",
+    "path": "decks.mtgjson-ArcaneMaelstrom_C20.land_count",
+    "as": "int"
+  },
+  {
+    "text": "$1.75",
+    "path": "game_changers.2.usd",
+    "as": "usd"
+  },
+  {
+    "text": "$41.70",
+    "path": "decks.mtgjson-SneakAttack_ZNC.price_usd",
+    "as": "usd"
+  },
+  {
+    "text": "38",
+    "path": "decks.mtgjson-SneakAttack_ZNC.land_count",
+    "as": "int"
+  },
+  {
+    "text": "7",
+    "path": "decks.mtgjson-SneakAttack_ZNC.ramp_count",
+    "as": "int"
+  },
+  {
+    "text": "11",
+    "path": "decks.mtgjson-SneakAttack_ZNC.draw_count",
+    "as": "int"
+  },
+  {
+    "text": "5",
+    "path": "decks.mtgjson-SneakAttack_ZNC.removal_count",
+    "as": "int"
+  },
+  {
+    "text": "163",
+    "path": "summary.bracket_floors.2",
+    "as": "int"
+  },
+  {
+    "text": "16",
+    "path": "summary.bracket_floors.3",
+    "as": "int"
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int"
+  },
+  {
+    "text": "$75.15",
+    "path": "game_changers.6.usd",
+    "as": "usd"
+  },
+  {
+    "text": "182",
+    "path": "summary.commander_precons",
+    "as": "int"
+  },
+  {
+    "text": "17",
+    "path": "summary.precons_with_a_game_changer",
+    "as": "int"
+  },
+  {
+    "text": "17",
+    "path": "summary.precons_with_a_game_changer",
+    "as": "int"
+  },
+  {
+    "text": "182",
+    "path": "summary.commander_precons",
+    "as": "int"
+  },
+  {
+    "text": "60",
+    "path": "summary.game_changer_list_size",
+    "as": "int"
+  },
+  {
+    "text": "16",
+    "path": "summary.bracket_floors.3",
+    "as": "int"
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int"
+  },
+  {
+    "text": "$41.70",
+    "path": "decks.mtgjson-SneakAttack_ZNC.price_usd",
+    "as": "usd"
+  }
+]

@@ -820,7 +820,7 @@ title: "{guide["title"]}"
 description: "{guide["description"]}"
 date: {PUBLISH_ON}
 updated: {fetched_at}
-author: Jared Cohen
+author: Deck Lab Editorial
 reviewed: true
 category: deck-archetypes
 keywords: [{keywords}]

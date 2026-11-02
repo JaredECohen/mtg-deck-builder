@@ -7,6 +7,8 @@ import path from "node:path";
 
 import matter from "gray-matter";
 
+import { claimProblems, legacyClaimProblems } from "./guide-claims.mjs";
+
 const DISCLOSURE = "may earn a commission";
 const AFFILIATE_URL = /pxf\.io|partner\.tcgplayer\.com|manapool\.com\/[^\s)]*(?:ref|aff|partner)/i;
 
@@ -15,7 +17,7 @@ export function wordCount(body) {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-export function reviewPost({ file, data, body, exampleIds }) {
+export function reviewPost({ file, data, body, exampleIds, claims = null, facts = null, catalog = null }) {
   const problems = [];
   const fail = (message) => problems.push(`${file}: ${message}`);
   if (data.archived === true) fail("reviewed guide is also archived");
@@ -42,6 +44,11 @@ export function reviewPost({ file, data, body, exampleIds }) {
   const disclosure = body.includes(DISCLOSURE);
   if (affiliate && !disclosure) fail("affiliate link without the disclosure");
   if (disclosure && !affiliate) fail("affiliate disclosure but no affiliate link on the page");
+  if (claims) {
+    for (const problem of claimProblems({ file, body, claims, facts })) problems.push(problem);
+  } else if (catalog) {
+    for (const problem of legacyClaimProblems({ file, body, catalog, exampleIds })) problems.push(problem);
+  }
   return problems;
 }
 

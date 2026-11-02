@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { claimProblems, formatFact, legacyClaimProblems, similarityProblems } from "./guide-claims.mjs";
 import { reviewPost } from "./guide-rubric.mjs";
+
+const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "guide-rubric");
 
 const IDS = new Set(["mono-red-burn"]);
 
@@ -111,4 +117,68 @@ test("affiliate disclosure is required only when an affiliate link is present", 
     exampleIds: IDS,
   });
   assert.deepEqual(both, []);
+});
+
+test("formatFact matches the study-guide formatter", () => {
+  assert.equal(formatFact(38, "int"), "38");
+  assert.equal(formatFact(38.1, "dec1"), "38.1");
+  assert.equal(formatFact(12.8, "num"), "12.8");
+  assert.equal(formatFact(8, "num"), "8");
+  assert.equal(formatFact(16.09, "usd"), "$16.09");
+  assert.equal(formatFact(75.8, "pct"), "75.8%");
+  assert.equal(formatFact(38.2, "int"), null);
+});
+
+test("a price that disagrees with the facts fixture fails", () => {
+  const facts = JSON.parse(fs.readFileSync(path.join(fixtureDir, "facts.json"), "utf8"));
+  const claims = JSON.parse(fs.readFileSync(path.join(fixtureDir, "bad-price.claims.json"), "utf8"));
+  const body = fs.readFileSync(path.join(fixtureDir, "bad-price.mdx"), "utf8");
+  const problems = claimProblems({ file: "bad-price.mdx", body, claims, facts });
+  assert.ok(problems.some((line) => line.includes("$38.00")));
+  assert.ok(problems.some((line) => line.includes("$9.99")));
+});
+
+test("a literal count with no claim fails", () => {
+  const problems = claimProblems({
+    file: "extra.mdx",
+    body: "The sample is 182 lists and also 7 mystery copies.",
+    claims: [{ text: "182", path: "summary.lands.median", as: "int" }],
+    facts: { summary: { lands: { median: 182 } } },
+  });
+  assert.ok(problems.some((line) => line.includes("7")));
+});
+
+test("a near-copy fixture fails the similarity gate and a different guide does not", () => {
+  const copy = fs.readFileSync(path.join(fixtureDir, "near-copy-a.mdx"), "utf8");
+  const same = fs.readFileSync(path.join(fixtureDir, "near-copy-b.mdx"), "utf8");
+  const problems = similarityProblems(
+    [
+      { file: "near-copy-a.mdx", body: copy },
+      { file: "near-copy-b.mdx", body: same },
+    ],
+    0.45,
+  );
+  assert.equal(problems.length, 1);
+
+  const distinct = similarityProblems(
+    [
+      { file: "near-copy-a.mdx", body: copy },
+      {
+        file: "other.mdx",
+        body: "Pioneer challenger products are sixty card lists with a sideboard and a legality note from the bulk file.",
+      },
+    ],
+    0.45,
+  );
+  assert.deepEqual(distinct, []);
+});
+
+test("an unsourced legacy price fails against the example catalog", () => {
+  const problems = legacyClaimProblems({
+    file: "legacy.mdx",
+    body: "The list costs $999.99 and wins 100.0% of the time.",
+    catalog: { fetched_at: "2026-11-01", decks: { burn: { analysis: { total_cost_usd: 31.38, win_rate: 1 } } } },
+  });
+  assert.ok(problems.some((line) => line.includes("$999.99")));
+  assert.ok(!problems.some((line) => line.includes("100.0%")));
 });

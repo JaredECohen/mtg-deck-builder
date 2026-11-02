@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exampleBuilderHref, getExampleDeck, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
+import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
 
 test("?example= prepopulates the official burn list", async () => {
   const deck = await prepopulateFromExample("mono-red-burn");
@@ -15,6 +15,17 @@ test("?example= prepopulates the official burn list", async () => {
   assert.ok(mountains && mountains.quantity >= 16);
   assert.equal(deck.mainboard.reduce((sum, card) => sum + card.quantity, 0), 60);
   assert.equal(exampleBuilderHref("mono-red-burn"), "/?example=mono-red-burn#builder");
+});
+
+test("world championship examples prefill as legacy and do not throw", async () => {
+  const worlds = (await listExampleDeckIds()).filter((id) => id.startsWith("wc-"));
+  assert.ok(worlds.length >= 30, `expected World Championship decks, found ${worlds.length}`);
+  const deck = await prepopulateFromExample(worlds[0]);
+  assert.ok(deck);
+  assert.equal(deck.format, "legacy");
+  assert.equal(deck.commander, "");
+  assert.ok(deck.mainboard.length > 0);
+  assert.equal(deck.mainboard.every((card) => card.name && card.quantity > 0), true);
 });
 
 test("an unknown example id does not invent a deck", async () => {

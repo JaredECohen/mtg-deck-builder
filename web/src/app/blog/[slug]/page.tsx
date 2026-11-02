@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       siteName: SITE_NAME,
       publishedTime: post.date,
       modifiedTime: post.updated,
-      authors: [AUTHOR],
+      authors: [post.author || AUTHOR],
     },
     twitter: { card: "summary", title: post.title, description: post.description },
   };
@@ -128,7 +128,10 @@ function Article({ post }: { post: Post }) {
     description: post.description,
     datePublished: post.date,
     dateModified: post.updated,
-    author: { "@type": "Person", name: AUTHOR },
+    author:
+      (post.author || AUTHOR) === "Deck Lab Editorial"
+        ? { "@type": "Organization", name: "Deck Lab Editorial" }
+        : { "@type": "Person", name: post.author || AUTHOR },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
     mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
     keywords: post.keywords.join(", "),
@@ -154,7 +157,7 @@ function Article({ post }: { post: Post }) {
                 · Updated <time dateTime={post.updated}>{formatDate(post.updated)}</time>
               </>
             ) : null}{" "}
-            · {post.readingMinutes} min read
+            · {post.readingMinutes} min read · <Link href="/method">How we count</Link>
           </p>
         </header>
         {post.toc.length >= 4 ? (
