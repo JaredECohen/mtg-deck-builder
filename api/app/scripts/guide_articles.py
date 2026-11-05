@@ -100,6 +100,13 @@ def cost_sentence(deck: dict, fetched_at: str) -> str:
     )
 
 
+def _whole_number(value: object) -> str:
+    number = float(value)
+    if number == int(number):
+        return str(int(number))
+    return str(value)
+
+
 def fish_sentence(deck: dict) -> str:
     fish = deck["analysis"]["goldfish"]
     if fish["wins"] == 0:
@@ -110,7 +117,7 @@ def fish_sentence(deck: dict) -> str:
         )
     return (
         f"{deck['name']} won {pct(fish['win_rate'])} of {fish['games']} goldfish games, "
-        f"average winning turn {fish['avg_kill_turn']} (median {fish['median_kill_turn']}, seed {fish['seed']}, "
+        f"average winning turn {fish['avg_kill_turn']} (median {_whole_number(fish['median_kill_turn'])}, seed {fish['seed']}, "
         f"{fish['policy']} policy, opponent at {fish['starting_life']} life)."
     )
 
@@ -367,7 +374,7 @@ GUIDES: list[dict] = [
     {
         "slug": "should-you-play-ramp",
         "title": "Should You Play a Ramp Deck in MTG?",
-        "description": "Should you play ramp in Magic: The Gathering? Pantlaza's precon costs $134.71 with 39 lands and goldfishes turn 11.26. Here is when that mana is worth it.",
+        "description": "Should you play ramp in Magic: The Gathering? Pantlaza's precon costs $135.24 with 39 lands and goldfishes turn 11.1. Here is when that mana is worth it.",
         "date": "2026-11-01",
         "keywords": ["should I play ramp mtg", "pantlaza precon cost", "commander ramp land count", "mtg ramp deck"],
         "related": ["mtg-ramp-deck-guide", "should-you-play-aggro", "how-to-build-your-first-commander-deck", "mtg-deck-archetypes-explained"],
@@ -394,7 +401,7 @@ GUIDES: list[dict] = [
             "Sleeving a token that came in the box as if it were one of the 99. The list below is the cards. A token card in the product is not a Commander-legal spell you copy into a new deck.",
         ],
         "faq": [
-            ("How many lands does Pantlaza's deck play?", "The land count is in the deck block, in the 99, with the commander separate. That is the published floor for this payoff curve, not a suggestion to play 30."),
+            ("How many lands does Pantlaza's deck play?", "The land count is in the deck block, in the 99, with the commander separate. That is the published floor for this payoff curve, not a suggestion to cut lands."),
             ("Is this a ramp deck or a dinosaur deck?", "It is both. The top of the curve is the dinosaurs. The lands and the three-mana ramp are how you cast them. If you cut the mana, you kept the creatures and lost the plan."),
             ("Why does one spell cost so much of the product?", "Akroma's Will is the protection for the turn you attack. It is not a ramp spell. Swapping it for a cheaper instant does not keep that turn."),
             ("Does the goldfish mean I win on that turn at a real table?", "It means the average winning solitaire game against one 40-life opponent ended then. A four-player table is a different game. The number is a speed ceiling for the creature plan."),
@@ -456,7 +463,7 @@ GUIDES: list[dict] = [
         "table": [
             ["You want a threat that costs four or five", "Gruul's curve includes both", "Humans, which stops at two mana"],
             ["You want the cheapest possible manabase", "Neither of these products. Their top costs are lands", "A mono-red basic-land burn list"],
-            ["The game often ends on turn five in your group", "You will not cast the five-drop", "Aggro, measured at turn 5.96 on the burn product"],
+            ["The game often ends on turn five in your group", "You will not cast the five-drop", "Aggro, which the aggro page measures on the burn product"],
             ["You want to answer a creature and then play a bigger one", "That is the midrange turn", "Control, which would rather not play the bigger creature yet"],
         ],
         "mistakes": [
@@ -467,7 +474,7 @@ GUIDES: list[dict] = [
             "Copying the 2022 list into a tournament without a ban-list check. The Scryfall bulk said these cards were Pioneer-legal on 2026-11-01. Confirm the day you play.",
         ],
         "faq": [
-            ("What is the difference between midrange and aggro?", "About a turn and a land count, on these products. Burn goldfishes turn 5.96 on 20 lands. Gruul goldfishes turn 7.02 on 25 lands with cards up to five mana."),
+            ("What is the difference between midrange and aggro?", "About a turn and a land count. Gruul goldfishes turn 7.02 on 25 lands with cards up to five mana. Burn is the aggro page, and it is a shorter race."),
             ("Why are the expensive cards lands?", "Because the creatures in a Challenger product are often reprints, and the shock lands are not. Humans' top three line items are all lands, 49.6% of the product price."),
             ("How do I play the midgame?", "Trade when your card is the worse creature, and stop trading when your card is the one that will win the next three turns. Gruul's four- and five-drops are those cards. Humans does not have them."),
             ("Is Chandra worth the price on this list?", "She is $7.36 of the Gruul product as a line cost in the file, one of the three names that make up 43.1%. A cheaper planeswalker from another product does not do her job. Pay for her only if the midgame plan is the plan you want."),
@@ -491,7 +498,7 @@ GUIDES: list[dict] = [
         ],
         "table": [
             ["You can name the winning cards", "Lotus Field plus the payoffs in the product list", "A good-stuff deck with no named pile"],
-            ["You want a turn-six combat kill", "This list won none of 120 goldfish games", "The burn product, turn 5.96"],
+            ["You want a turn-six combat kill", "This list won none of 120 goldfish games", "The burn product on the aggro page"],
             ["Half the budget can sit in three cards", "46.8% of $55.97 is the top three nonbasics", "A deck whose price is spread across twenty cheap spells"],
             ["You need the simulator to play the combo", "It will not. The zero is the evidence", "Practice the line by hand or in the builder"],
         ],
@@ -536,12 +543,12 @@ GUIDES: list[dict] = [
             "Playing tempo into a board stall. The two-drops do not win a game of five-drops. You needed the game to end while they were still large enough.",
             "Cutting the interaction to add more creatures, then wondering why the deck became a worse aggro deck. The disruption is the reason the small creatures get to attack.",
             "Paying Phoenix prices for a banned cantrip shell. Steam Vents is the top line item. The card you cannot cast is not worth the land.",
-            "Expecting a 100% goldfish rate. Spirits won 96.7%. Phoenix won 56.7%. The second number is a deck that does not reliably turn sideways.",
+            "Expecting every goldfish game to win. Spirits won 96.7%. Phoenix won 56.7%. The second number is a deck that does not reliably turn sideways.",
         ],
         "faq": [
             ("What does tempo mean if it is not just aggro?", "Aggro spends every card on damage. Tempo spends some cards to slow the opponent's expensive plays so the small creatures stay ahead. Spirits' curve is the creature half of that. The disruption is the other half."),
             ("Can I play the Phoenix Challenger deck in Pioneer?", "Not as printed. Expressive Iteration is not legal today per the Scryfall bulk of 2026-11-01. Check the current ban list before you rebuild the shell."),
-            ("Why is Spirits so much cheaper?", "The product-printing total is $22.40, and the top costs are creatures at a few dollars, not a $10 land. Phoenix is $35.25 with Steam Vents alone at $10.77."),
+            ("Why is Spirits so much cheaper?", "The product-printing total is $22.40, and the top costs are creatures at a few dollars, not one expensive land. Phoenix is $35.25 with Steam Vents alone at $10.77."),
             ("Is a turn-9 goldfish still tempo?", "No. Turn 9.78 for Phoenix says the printed list does not present a fast combat clock once the simulator is just attacking. Spirits at 6.62 does."),
         ],
     },
@@ -584,7 +591,7 @@ GUIDES: list[dict] = [
     {
         "slug": "mtg-tokens-deck-guide",
         "title": "When Do MTG Token Decks Fall Apart?",
-        "description": "When do token decks fall apart in Magic: The Gathering? Emmara's precon is $36.09 and turn 10.90. Neyali's is $131.72, and two protection spells are $32.76 of it.",
+        "description": "When do token decks fall apart in Magic: The Gathering? Emmara's precon is $36.09. Neyali's Flawless Maneuver is $21.13 and Clever Concealment is $11.63.",
         "date": "2026-12-11",
         "keywords": ["token deck mtg", "emmara precon price", "neyali tokens", "when token decks fail"],
         "related": ["should-you-play-aggro", "mtg-ramp-deck-guide", "mtg-tribal-decks-guide", "mtg-deck-archetypes-explained"],
@@ -774,7 +781,7 @@ GUIDES: list[dict] = [
         "cta_brief": "Spellslinger",
         "thesis": [
             "A spellslinger deck spends its mana on instants and sorceries, and on whatever permanent makes those spells better, and it is in trouble when it draws the permanent and not the spells. In Magic: The Gathering (MTG), the payoff might copy a spell, reduce its cost, or deal damage when you cast it. The mana still has to be there on the turn you cast two spells, not just on the turn you cast the payoff. If your curve is twelve seven-mana spells and one cost reducer, you do not have a spellslinger deck. You have expensive sorceries.",
-            "Arcane Maelstrom, Kalamax, the Stormsire, is the price lesson. The product total is $152.89 on priced printings. Deflecting Swat is $75.69 of that, 49.5% of the deck in one card, and the top three nonbasics are 61.7%. You are not buying a spellslinger deck at that receipt. You are buying a free counterspell that happens to live in a spellslinger precon. Twinning Staff is the next line at $14.52, and that one is actually a spell payoff. If Deflecting Swat is the card you want, say so. If the deck is the card you want, price the list without Swat and see if the plan is still the plan. The goldfish won zero games in 120. Kalamax copies spells. The simulator attacks. A zero is the wrong scoreboard, same as the combo page, and it is useful precisely because it refuses to pretend combat is the win.",
+            "Arcane Maelstrom, Kalamax, the Stormsire, is the price lesson. The product total is $152.89 on priced printings. Deflecting Swat is $75.69 of that, and the top three nonbasics are 61.7%. You are not buying a spellslinger deck at that receipt. You are buying a free counterspell that happens to live in a spellslinger precon. Twinning Staff is the next line at $14.52, and that one is actually a spell payoff. If Deflecting Swat is the card you want, say so. If the deck is the card you want, price the list without Swat and see if the plan is still the plan. The goldfish won zero games in 120. Kalamax copies spells. The simulator attacks. A zero is the wrong scoreboard, same as the combo page, and it is useful precisely because it refuses to pretend combat is the win.",
             "Prismari Performance, Zaffai, Thunder Conductor, is the curve lesson at $76.00 where prices existed. The nonland curve has 12 cards at seven or more and peaks in the middle at five. Seething Song is the top priced spell, a ritual, which is mana for a big spell rather than a threat. Zaffai wants you to cast large spells. That is a mana question: rituals and lands, 37 of them, under a top-heavy curve. The [combo guide](/blog/mtg-combo-decks-explained) covers the other kind of spell deck, the one with a named winning pile. Spellslinger can be that, or it can be a value deck that casts two spells a turn and never combos. Know which one you sleeved.",
         ],
         "table": [
@@ -820,7 +827,7 @@ title: "{guide["title"]}"
 description: "{guide["description"]}"
 date: {PUBLISH_ON}
 updated: {fetched_at}
-author: Jared Cohen
+author: Deck Lab Editorial
 reviewed: true
 category: deck-archetypes
 keywords: [{keywords}]

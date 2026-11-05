@@ -10,6 +10,8 @@ export type ExampleDeck = {
   commander: string;
   mainboard: ExampleCard[];
   sideboard: ExampleCard[];
+  /** Historical products say what they are. The builder format stays one it can open. */
+  note?: string;
 };
 
 const FORMATS = new Set<FormatName>(["standard", "modern", "pioneer", "legacy", "commander"]);
@@ -63,7 +65,8 @@ export function readExampleDeck(decks: object, id: string | null | undefined): E
   if (!FORMATS.has(record.format)) return null;
   if (typeof record.commander !== "string") return null;
   if (!isCardList(record.mainboard) || !isCardList(record.sideboard)) return null;
-  return record;
+  const note = "note" in record && typeof record.note === "string" ? record.note : "";
+  return { ...record, note };
 }
 
 export async function listExampleDeckIds(): Promise<string[]> {
@@ -90,6 +93,7 @@ export type PopulatedExample = {
   sideboard: ExampleCard[];
   commander: string;
   name: string;
+  note: string;
 };
 
 export async function prepopulateFromExample(id: string | null | undefined): Promise<PopulatedExample | null> {
@@ -102,6 +106,7 @@ export async function prepopulateFromExample(id: string | null | undefined): Pro
     sideboard: deck.sideboard.map((card) => ({ name: card.name, quantity: card.quantity })),
     commander: deck.commander,
     name: deck.name,
+    note: deck.note ?? "",
   };
 }
 
@@ -130,7 +135,9 @@ export function resolveAnalyzeSeed(options: {
       mainboard: options.example.mainboard,
       sideboard: options.example.sideboard,
       commander: options.example.commander,
-      notes: `Official list loaded: ${options.example.name}`,
+      notes: options.example.note
+        ? `Official list loaded: ${options.example.name}. ${options.example.note}`
+        : `Official list loaded: ${options.example.name}`,
       persistDraft: false,
     };
   }

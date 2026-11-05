@@ -53,7 +53,27 @@ The snapshot committed in `api/app/data/official_decks.json` is names and
 quantities only. The weekly refresh (`bootstrap_data --refresh-cards`)
 re-downloads it onto the data volume and re-ingests.
 
-### Guide facts (prices, legality, goldfish)
+### Precon census facts
+
+`web/src/data/precon_facts.json` is the census of the committed official snapshot:
+182 Commander products, of which 8 are exact Commander Anthology reprints, so
+medians use 174 unique lists, plus 8 Pioneer Challenger decks. Regenerate from
+`api/` with `python -m app.scripts.build_precon_facts`, then
+`python -m app.scripts.build_study_guides`. A regenerated diff needs a read
+before the guides are treated as settled. The study-guide script leaves
+`reviewed: true` only when `npm run check:guide-rubric` passes.
+
+- Lists: the snapshot above. Not a fresh scrape of a retailer or a tournament site.
+- Rules text and types: Scryfall oracle-cards bulk. Token, emblem, and art-series rows are skipped when a real card shares the name.
+- Game Changers: the `game_changer` field on that oracle bulk, written to `api/app/data/game_changers.json`. The facts build fails if the committed file disagrees with the bulk.
+- Prices: lowest English paper nonfoil `prices.usd` in the Scryfall default-cards bulk, excluding memorabilia, tokens, gold-bordered cards, and oversized cards. A commander with no nonfoil price can use `usd_foil` and is labeled. Other unpriced cards are named and left out of the sum. This is not the sealed product's printing. Guide deck blocks still use AllPricesToday for that printing.
+- Ramp, draw, removal, and the bracket floor are computed in `app.scripts.precon_stats` and `app.services.brackets`. Cycling and "whenever you draw" triggers are not draw. Blink is not removal. The method page on the site states the same rules.
+
+World Championship decks are official MTGJSON products. They are added to the
+`?example=` catalog (`python -m app.scripts.build_guide_facts --worlds`) and
+are not part of this census.
+
+## Guide facts (prices, legality, goldfish)
 
 Reviewed guides cite a separate cache, `api/app/data/guide_card_cache.json`,
 built by `python -m app.scripts.build_guide_facts`.

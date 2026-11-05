@@ -1,0 +1,572 @@
+[
+  {
+    "text": "23",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.land_count",
+    "as": "int",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.ramp_count",
+    "as": "int",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.draw_count",
+    "as": "int",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.removal_count",
+    "as": "int",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "$16.20",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
+    "as": "usd",
+    "context": "| Azorius Spirits | 23 | 0 | 4 | 0 | 8 | $16.20 |"
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-DimirControl_Q08.ramp_count",
+    "as": "int",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-DimirControl_Q08.draw_count",
+    "as": "int",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "12",
+    "path": "decks.mtgjson-DimirControl_Q08.removal_count",
+    "as": "int",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-DimirControl_Q08.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "$29.21",
+    "path": "decks.mtgjson-DimirControl_Q08.price_usd",
+    "as": "usd",
+    "context": "| Dimir Control | 26 | 0 | 4 | 12 | 8 | $29.21 |"
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-GruulStompy_Q08.draw_count",
+    "as": "int",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "13",
+    "path": "decks.mtgjson-GruulStompy_Q08.removal_count",
+    "as": "int",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-GruulStompy_Q08.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "$34.70",
+    "path": "decks.mtgjson-GruulStompy_Q08.price_usd",
+    "as": "usd",
+    "context": "| Gruul Stompy | 25 | 10 | 0 | 13 | 8 | $34.70 |"
+  },
+  {
+    "text": "21",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.land_count",
+    "as": "int",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.ramp_count",
+    "as": "int",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.removal_count",
+    "as": "int",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "15",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "$27.41",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.price_usd",
+    "as": "usd",
+    "context": "| Izzet Phoenix | 21 | 0 | 23 | 10 | 15 | $27.41 |"
+  },
+  {
+    "text": "24",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.land_count",
+    "as": "int",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.ramp_count",
+    "as": "int",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.draw_count",
+    "as": "int",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
+    "as": "int",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "$43.67",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
+    "as": "usd",
+    "context": "| Lotus Field Combo | 24 | 4 | 8 | 0 | 8 | $43.67 |"
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
+    "as": "int",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.draw_count",
+    "as": "int",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "$24.76",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.price_usd",
+    "as": "usd",
+    "context": "| Mono-Red Burn | 20 | 0 | 4 | 16 | 20 | $24.76 |"
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.ramp_count",
+    "as": "int",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.draw_count",
+    "as": "int",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.removal_count",
+    "as": "int",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "31",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "$34.75",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.price_usd",
+    "as": "usd",
+    "context": "| Orzhov Auras | 19 | 0 | 8 | 0 | 31 | $34.75 |"
+  },
+  {
+    "text": "22",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.land_count",
+    "as": "int",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.ramp_count",
+    "as": "int",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.draw_count",
+    "as": "int",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "6",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.removal_count",
+    "as": "int",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.mana_curve.1.card_count",
+    "as": "int",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "$38.56",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.price_usd",
+    "as": "usd",
+    "context": "| Orzhov Humans | 22 | 0 | 0 | 6 | 16 | $38.56 |"
+  },
+  {
+    "text": "eight",
+    "path": "summary.pioneer_challenger",
+    "as": "words",
+    "context": "In Magic: The Gathering (MTG), Pioneer Challenger decks are retail products, not a metagame report. MTGJSON publishes eight of them, and this page is only those lists. Each is a sixty-card main deck plus a sideboard. Every card had an English paper nonfoil price on 2026-11-01, so none of these sums is missing a name. Those sums are the lowest such price. The deck block is the printing in the box. Definitions are on the [method page](/method)."
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int",
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int",
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int",
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+  },
+  {
+    "text": "$16.20",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.price_usd",
+    "as": "usd",
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+  },
+  {
+    "text": "$43.67",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.price_usd",
+    "as": "usd",
+    "context": "Land counts run from 19 in Orzhov Auras to 26 in Dimir Control. Gruul Stompy plays 25. The [Commander census](/blog/precon-lands-ramp-draw) lives in a different band entirely. The cheap end of this file is Azorius Spirits at $16.20. The expensive end is Lotus Field Combo at $43.67."
+  },
+  {
+    "text": "31",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.removal_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.draw_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int",
+    "context": "Read the one-drop column before the archetype label. Orzhov Auras has 31 one-drops and 0 removal: the creature and the aura want to be down immediately, and the deck does not interact by killing things. Mono-Red Burn has 20 one-drops and a removal count of 16, which is Lightning Strike, Wild Slash, Wizard's Lightning, and Bonecrusher Giant. Under this count, damage to any target is removal even when you point it at the player. The draw count is 4, all Light Up the Stage, and ramp is 0."
+  },
+  {
+    "text": "2",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.mana_curve.2.mana_value",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "22",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.mana_curve.2.card_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "22",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.mana_curve.2.card_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.draw_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-AzoriusSpirits_Q06.removal_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.draw_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "6",
+    "path": "decks.mtgjson-OrzhovHumans_Q08.removal_count",
+    "as": "int",
+    "context": "Azorius Spirits and Orzhov Humans both peak at mana value 2: 22 cards in Spirits and 22 in Humans. Spirits draws 4 and removes 0. Humans draws 0 and removes 6. Humans is a creature deck that expects to be ahead before a four-drop arrives. Spirits spends its cheap interaction on the spell that would stabilize the opponent."
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int",
+    "context": "Gruul Stompy's ramp count is 10, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so the removal count of 13 includes her, and draw is 0. The curve tops out higher than those one-drops, so calling the deck burn because it is red misses the land count and the elves."
+  },
+  {
+    "text": "13",
+    "path": "decks.mtgjson-GruulStompy_Q08.removal_count",
+    "as": "int",
+    "context": "Gruul Stompy's ramp count is 10, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so the removal count of 13 includes her, and draw is 0. The curve tops out higher than those one-drops, so calling the deck burn because it is red misses the land count and the elves."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-GruulStompy_Q08.draw_count",
+    "as": "int",
+    "context": "Gruul Stompy's ramp count is 10, from Llanowar Elves, Elvish Mystic, and Chandra, Torch of Defiance. Chandra also deals damage, so the removal count of 13 includes her, and draw is 0. The curve tops out higher than those one-drops, so calling the deck burn because it is red misses the land count and the elves."
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.mana_curve.7.card_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.ramp_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "8",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.draw_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "26",
+    "path": "decks.mtgjson-DimirControl_Q08.land_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "12",
+    "path": "decks.mtgjson-DimirControl_Q08.removal_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "4",
+    "path": "decks.mtgjson-DimirControl_Q08.draw_count",
+    "as": "int",
+    "context": "Izzet Phoenix has 23 draw cards, mostly cantrips, and it still has 4 cards in the top mana-value bucket. Expressive Iteration is the spell the deck is known for. It is not a cantrip, and it is not legal. Lotus Field Combo ramps 4, draws 8, and removes 0. The combo is the land and the mana, not a combat plan, and it does not remove permanents, which is the tell. Dimir Control is the other end of the same format: 26 lands, 12 removal, 4 draw. It is the list that is allowed to have a hand full of answers."
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.land_count",
+    "as": "int",
+    "context": "Burn is the spell deck: 20 lands, $24.76 on the Scryfall rule, and a one-drop count of 20. The [aggro guide](/blog/should-you-play-aggro) is the argument about whether to race. This page is the comparison with the other products."
+  },
+  {
+    "text": "$24.76",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.price_usd",
+    "as": "usd",
+    "context": "Burn is the spell deck: 20 lands, $24.76 on the Scryfall rule, and a one-drop count of 20. The [aggro guide](/blog/should-you-play-aggro) is the argument about whether to race. This page is the comparison with the other products."
+  },
+  {
+    "text": "20",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "Burn is the spell deck: 20 lands, $24.76 on the Scryfall rule, and a one-drop count of 20. The [aggro guide](/blog/should-you-play-aggro) is the argument about whether to race. This page is the comparison with the other products."
+  },
+  {
+    "text": "25",
+    "path": "decks.mtgjson-GruulStompy_Q08.land_count",
+    "as": "int",
+    "context": "Gruul is the creature deck next to it: 25 lands, $34.70, and 10 ramp cards so the expensive creatures actually get cast. If you sleeve the elves out, you have a worse burn deck, not a better Stompy deck."
+  },
+  {
+    "text": "$34.70",
+    "path": "decks.mtgjson-GruulStompy_Q08.price_usd",
+    "as": "usd",
+    "context": "Gruul is the creature deck next to it: 25 lands, $34.70, and 10 ramp cards so the expensive creatures actually get cast. If you sleeve the elves out, you have a worse burn deck, not a better Stompy deck."
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int",
+    "context": "Gruul is the creature deck next to it: 25 lands, $34.70, and 10 ramp cards so the expensive creatures actually get cast. If you sleeve the elves out, you have a worse burn deck, not a better Stompy deck."
+  },
+  {
+    "text": "21",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.land_count",
+    "as": "int",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "$27.41",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.price_usd",
+    "as": "usd",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "23",
+    "path": "decks.mtgjson-IzzetPhoenix_Q08.draw_count",
+    "as": "int",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "19",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.land_count",
+    "as": "int",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "$34.75",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.price_usd",
+    "as": "usd",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "31",
+    "path": "decks.mtgjson-OrzhovAuras_Q06.mana_curve.1.card_count",
+    "as": "int",
+    "context": "Phoenix plays 21 lands and sums to $27.41. Expressive Iteration is in the printed list and is not legal on the 2026-11-01 bulk. The 23 draw cards include that spell, which is not a cantrip. Orzhov Auras is the other do-not-register list: Lurrus of the Dream-Den, 19 lands, $34.75, and 31 one-drops that are the actual plan if you rebuild without the companion."
+  },
+  {
+    "text": "16",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.removal_count",
+    "as": "int",
+    "context": "- Reading Burn's removal count of 16 as creature removal. The rule counts damage to any target."
+  },
+  {
+    "text": "10",
+    "path": "decks.mtgjson-GruulStompy_Q08.ramp_count",
+    "as": "int",
+    "context": "The elves add green, and Chandra adds mana as well as dealing damage. The ramp count is 10. Burn's ramp count is 0."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-MonoRedBurn_Q06.ramp_count",
+    "as": "int",
+    "context": "The elves add green, and Chandra adds mana as well as dealing damage. The ramp count is 10. Burn's ramp count is 0."
+  },
+  {
+    "text": "0",
+    "path": "decks.mtgjson-LotusFieldCombo_Q06.removal_count",
+    "as": "int",
+    "context": "They mean separate products wanted the same tool. Bonecrusher Giant // Stomp shows up in Gruul Stompy and Mono-Red Burn. They do not mean the decks share an archetype. Lotus Field still removes 0 permanents, and Dimir removes 12."
+  },
+  {
+    "text": "12",
+    "path": "decks.mtgjson-DimirControl_Q08.removal_count",
+    "as": "int",
+    "context": "They mean separate products wanted the same tool. Bonecrusher Giant // Stomp shows up in Gruul Stompy and Mono-Red Burn. They do not mean the decks share an archetype. Lotus Field still removes 0 permanents, and Dimir removes 12."
+  }
+]

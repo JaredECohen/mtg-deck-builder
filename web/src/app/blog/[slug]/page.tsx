@@ -10,7 +10,7 @@ import { mdxComponentsForPost } from "@/components/blog/mdx-components";
 import { EnableAds } from "@/components/enable-ads";
 import { GuideView } from "@/components/guide-view";
 import {
-  AUTHOR,
+  articleCredit,
   CATEGORIES,
   SITE_NAME,
   SITE_URL,
@@ -51,11 +51,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
   const post = getPost(slug);
   if (!post) return {};
+  const credit = articleCredit(post);
   return {
     title: `${post.title} | ${SITE_NAME}`,
     description: post.description,
     keywords: post.keywords,
-    authors: [{ name: post.author || AUTHOR }],
+    authors: [{ name: credit.byline }],
     alternates: { canonical: `/blog/${post.slug}` },
     robots: post.reviewed ? { index: true, follow: true } : { index: false, follow: true },
     openGraph: {
@@ -66,7 +67,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       siteName: SITE_NAME,
       publishedTime: post.date,
       modifiedTime: post.updated,
-      authors: [AUTHOR],
+      authors: [credit.byline],
     },
     twitter: { card: "summary", title: post.title, description: post.description },
   };
@@ -121,6 +122,7 @@ function CategoryHub({ category }: { category: CategoryId }) {
 function Article({ post }: { post: Post }) {
   const category = CATEGORIES[post.category];
   const related = relatedPosts(post);
+  const credit = articleCredit(post);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -128,7 +130,10 @@ function Article({ post }: { post: Post }) {
     description: post.description,
     datePublished: post.date,
     dateModified: post.updated,
-    author: { "@type": "Person", name: AUTHOR },
+    author:
+      credit.showMethod && credit.byline === "Deck Lab Editorial"
+        ? { "@type": "Organization", name: "Deck Lab Editorial" }
+        : { "@type": "Person", name: credit.byline },
     publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
     mainEntityOfPage: `${SITE_URL}/blog/${post.slug}`,
     keywords: post.keywords.join(", "),
@@ -147,7 +152,7 @@ function Article({ post }: { post: Post }) {
           <h1 className="headline">{post.title}</h1>
           <p className="subhead">{post.description}</p>
           <p className="blog-byline muted">
-            By {post.author || AUTHOR} · {SITE_NAME} · Published <time dateTime={post.date}>{formatDate(post.date)}</time>
+            By {credit.byline} · {SITE_NAME} · Published <time dateTime={post.date}>{formatDate(post.date)}</time>
             {post.updated !== post.date ? (
               <>
                 {" "}
@@ -155,6 +160,12 @@ function Article({ post }: { post: Post }) {
               </>
             ) : null}{" "}
             · {post.readingMinutes} min read
+            {credit.showMethod ? (
+              <>
+                {" "}
+                · <Link href="/method">How we count</Link>
+              </>
+            ) : null}
           </p>
         </header>
         {post.toc.length >= 4 ? (

@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-guide-rubric.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test src/lib/analytics.test.ts src/lib/backend-proxy-policy.test.ts src/lib/client-address.test.ts src/lib/deck-visibility.test.ts src/lib/sign-in-redirect.test.ts src/lib/account-payload.test.ts src/lib/session-cookie.test.ts src/lib/magic-link-verify.test.ts src/app/api/auth/magic-link/route.test.ts src/lib/example-decks.test.ts src/lib/affiliate-disclosure.test.ts src/lib/ads-policy.test.ts && node --test scripts/guide-rubric.test.mjs",
+    "test": "tsx --test src/lib/analytics.test.ts src/lib/backend-proxy-policy.test.ts src/lib/client-address.test.ts src/lib/deck-visibility.test.ts src/lib/sign-in-redirect.test.ts src/lib/account-payload.test.ts src/lib/session-cookie.test.ts src/lib/magic-link-verify.test.ts src/app/api/auth/magic-link/route.test.ts src/lib/example-decks.test.ts src/lib/affiliate-disclosure.test.ts src/lib/ads-policy.test.ts src/lib/blog-byline.test.ts && node --test scripts/guide-rubric.test.mjs",
     "check:guides": "node scripts/check-guides.mjs",
     "check:guide-rubric": "node scripts/check-guide-rubric.mjs"
   },

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exampleBuilderHref, getExampleDeck, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
+import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
 
 test("?example= prepopulates the official burn list", async () => {
   const deck = await prepopulateFromExample("mono-red-burn");
@@ -15,6 +15,17 @@ test("?example= prepopulates the official burn list", async () => {
   assert.ok(mountains && mountains.quantity >= 16);
   assert.equal(deck.mainboard.reduce((sum, card) => sum + card.quantity, 0), 60);
   assert.equal(exampleBuilderHref("mono-red-burn"), "/?example=mono-red-burn#builder");
+});
+
+test("world championship examples prefill as legacy and do not throw", async () => {
+  const worlds = (await listExampleDeckIds()).filter((id) => id.startsWith("wc-"));
+  assert.ok(worlds.length >= 30, `expected World Championship decks, found ${worlds.length}`);
+  const deck = await prepopulateFromExample(worlds[0]);
+  assert.ok(deck);
+  assert.equal(deck.format, "legacy");
+  assert.equal(deck.commander, "");
+  assert.ok(deck.mainboard.length > 0);
+  assert.equal(deck.mainboard.every((card) => card.name && card.quantity > 0), true);
 });
 
 test("an unknown example id does not invent a deck", async () => {
@@ -53,13 +64,21 @@ test("the builder imports the slim list only when an example id is resolved", ()
   assert.match(workflow, /if \(exampleId\) \{[\s\S]*prepopulateFromExample\(exampleId\)/);
 });
 
-test("a product token is not in the sleeveable list", async () => {
+test("veloci-ramp-tor keeps Dinosaur Egg and is a full commander list", async () => {
   const deck = await prepopulateFromExample("veloci-ramp-tor");
   assert.ok(deck);
-  assert.equal(
-    deck.mainboard.some((card) => card.name === "Dinosaur Egg"),
-    false,
-  );
+  const egg = deck.mainboard.find((card) => card.name === "Dinosaur Egg");
+  assert.ok(egg && egg.quantity === 1);
+  const main = deck.mainboard.reduce((sum, card) => sum + card.quantity, 0);
+  assert.equal(main + (deck.commander ? 1 : 0), 100);
+});
+
+test("the Aeo Paquette World Championship list keeps its Ornithopters", async () => {
+  const deck = await prepopulateFromExample("wc-aeopaquetteaffinity-wc04");
+  assert.ok(deck);
+  const thopters = deck.mainboard.find((card) => card.name === "Ornithopter");
+  assert.ok(thopters && thopters.quantity === 4);
+  assert.match(deck.note, /Vintage\/Old School example/);
 });
 
 test("loading an example does not adopt or replace the saved draft", async () => {

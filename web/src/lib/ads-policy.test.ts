@@ -18,6 +18,8 @@ test("unreviewed and noindex routes do not allow ads", () => {
   assert.equal(pageAllowsAds("/signin"), false);
   assert.equal(pageAllowsAds("/library"), false);
   assert.equal(pageAllowsAds("/auth/verify"), false);
+  assert.equal(pageAllowsAds("/method"), false);
+  assert.equal(pageAllowsAds("/method/"), false);
   assert.equal(pageAllowsAds("/"), true);
 });
 

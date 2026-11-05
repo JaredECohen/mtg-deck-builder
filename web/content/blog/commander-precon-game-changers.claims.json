@@ -1,0 +1,356 @@
+[
+  {
+    "text": "$3.31",
+    "path": "game_changers.0.usd",
+    "as": "usd",
+    "context": "| Farewell | $3.31 | 4 |"
+  },
+  {
+    "text": "4",
+    "path": "game_changers.0.precon_count",
+    "as": "int",
+    "context": "| Farewell | $3.31 | 4 |"
+  },
+  {
+    "text": "$16.09",
+    "path": "game_changers.1.usd",
+    "as": "usd",
+    "context": "| Seedborn Muse | $16.09 | 4 |"
+  },
+  {
+    "text": "4",
+    "path": "game_changers.1.precon_count",
+    "as": "int",
+    "context": "| Seedborn Muse | $16.09 | 4 |"
+  },
+  {
+    "text": "$38.68",
+    "path": "game_changers.2.usd",
+    "as": "usd",
+    "context": "| Jeska's Will | $38.68 | 2 |"
+  },
+  {
+    "text": "2",
+    "path": "game_changers.2.precon_count",
+    "as": "int",
+    "context": "| Jeska's Will | $38.68 | 2 |"
+  },
+  {
+    "text": "$1.75",
+    "path": "game_changers.3.usd",
+    "as": "usd",
+    "context": "| Notion Thief | $1.75 | 2 |"
+  },
+  {
+    "text": "2",
+    "path": "game_changers.3.precon_count",
+    "as": "int",
+    "context": "| Notion Thief | $1.75 | 2 |"
+  },
+  {
+    "text": "$17.95",
+    "path": "game_changers.4.usd",
+    "as": "usd",
+    "context": "| Aura Shards | $17.95 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.4.precon_count",
+    "as": "int",
+    "context": "| Aura Shards | $17.95 | 1 |"
+  },
+  {
+    "text": "$3.35",
+    "path": "game_changers.5.usd",
+    "as": "usd",
+    "context": "| Crop Rotation | $3.35 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.5.precon_count",
+    "as": "int",
+    "context": "| Crop Rotation | $3.35 | 1 |"
+  },
+  {
+    "text": "$30.20",
+    "path": "game_changers.6.usd",
+    "as": "usd",
+    "context": "| Cyclonic Rift | $30.20 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.6.precon_count",
+    "as": "int",
+    "context": "| Cyclonic Rift | $30.20 | 1 |"
+  },
+  {
+    "text": "$62.99",
+    "path": "game_changers.7.usd",
+    "as": "usd",
+    "context": "| Fierce Guardianship | $62.99 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.7.precon_count",
+    "as": "int",
+    "context": "| Fierce Guardianship | $62.99 | 1 |"
+  },
+  {
+    "text": "$15.18",
+    "path": "game_changers.8.usd",
+    "as": "usd",
+    "context": "| Gamble | $15.18 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.8.precon_count",
+    "as": "int",
+    "context": "| Gamble | $15.18 | 1 |"
+  },
+  {
+    "text": "$0.91",
+    "path": "game_changers.9.usd",
+    "as": "usd",
+    "context": "| Narset, Parter of Veils | $0.91 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.9.precon_count",
+    "as": "int",
+    "context": "| Narset, Parter of Veils | $0.91 | 1 |"
+  },
+  {
+    "text": "$36.89",
+    "path": "game_changers.10.usd",
+    "as": "usd",
+    "context": "| Teferi's Protection | $36.89 | 1 |"
+  },
+  {
+    "text": "1",
+    "path": "game_changers.10.precon_count",
+    "as": "int",
+    "context": "| Teferi's Protection | $36.89 | 1 |"
+  },
+  {
+    "text": "53",
+    "path": "summary.game_changer_list_size",
+    "as": "int",
+    "context": "In Magic: The Gathering (MTG), a Game Changer is a legal Commander card that pushes a deck up a bracket when the table is using that vocabulary. The names on this page are not a remembered announcement. They are the cards Scryfall marks `game_changer` on the oracle bulk of 2026-11-01, and the build refuses to run if `game_changers.json` disagrees with that field. The file holds 53 names. 11 of them appear in the 174 unique precon lists. 18 of those lists include a flagged card. Anthology reprints are not counted as another copy of the same cards."
+  },
+  {
+    "text": "11",
+    "path": "summary.game_changers_found_in_precons",
+    "as": "int",
+    "context": "In Magic: The Gathering (MTG), a Game Changer is a legal Commander card that pushes a deck up a bracket when the table is using that vocabulary. The names on this page are not a remembered announcement. They are the cards Scryfall marks `game_changer` on the oracle bulk of 2026-11-01, and the build refuses to run if `game_changers.json` disagrees with that field. The file holds 53 names. 11 of them appear in the 174 unique precon lists. 18 of those lists include a flagged card. Anthology reprints are not counted as another copy of the same cards."
+  },
+  {
+    "text": "174",
+    "path": "summary.commander_precons",
+    "as": "int",
+    "context": "In Magic: The Gathering (MTG), a Game Changer is a legal Commander card that pushes a deck up a bracket when the table is using that vocabulary. The names on this page are not a remembered announcement. They are the cards Scryfall marks `game_changer` on the oracle bulk of 2026-11-01, and the build refuses to run if `game_changers.json` disagrees with that field. The file holds 53 names. 11 of them appear in the 174 unique precon lists. 18 of those lists include a flagged card. Anthology reprints are not counted as another copy of the same cards."
+  },
+  {
+    "text": "18",
+    "path": "summary.precons_with_a_game_changer",
+    "as": "int",
+    "context": "In Magic: The Gathering (MTG), a Game Changer is a legal Commander card that pushes a deck up a bracket when the table is using that vocabulary. The names on this page are not a remembered announcement. They are the cards Scryfall marks `game_changer` on the oracle bulk of 2026-11-01, and the build refuses to run if `game_changers.json` disagrees with that field. The file holds 53 names. 11 of them appear in the 174 unique precon lists. 18 of those lists include a flagged card. Anthology reprints are not counted as another copy of the same cards."
+  },
+  {
+    "text": "154",
+    "path": "summary.bracket_floors.2",
+    "as": "int",
+    "context": "The list-only floor this app computes is the core floor for 154 unique lists, the upgraded floor for 17, and the optimized floor for 3. The optimized results are Heads I Win, Tails You Lose (Gamble, Ral Zarek, Stitch in Time); Mirror Mastery (Ruination); Nature of the Beast (From the Ashes). A floor moves out of the core band when any Game Changer is present, and it reaches the optimized band when the mass-land-denial check, chained extra turns, or a listed combo matches. Exhibition and competitive brackets are about the table, so this count cannot see them."
+  },
+  {
+    "text": "17",
+    "path": "summary.bracket_floors.3",
+    "as": "int",
+    "context": "The list-only floor this app computes is the core floor for 154 unique lists, the upgraded floor for 17, and the optimized floor for 3. The optimized results are Heads I Win, Tails You Lose (Gamble, Ral Zarek, Stitch in Time); Mirror Mastery (Ruination); Nature of the Beast (From the Ashes). A floor moves out of the core band when any Game Changer is present, and it reaches the optimized band when the mass-land-denial check, chained extra turns, or a listed combo matches. Exhibition and competitive brackets are about the table, so this count cannot see them."
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int",
+    "context": "The list-only floor this app computes is the core floor for 154 unique lists, the upgraded floor for 17, and the optimized floor for 3. The optimized results are Heads I Win, Tails You Lose (Gamble, Ral Zarek, Stitch in Time); Mirror Mastery (Ruination); Nature of the Beast (From the Ashes). A floor moves out of the core band when any Game Changer is present, and it reaches the optimized band when the mass-land-denial check, chained extra turns, or a listed combo matches. Exhibition and competitive brackets are about the table, so this count cannot see them."
+  },
+  {
+    "text": "$3.31",
+    "path": "game_changers.0.usd",
+    "as": "usd",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "4",
+    "path": "game_changers.0.precon_count",
+    "as": "int",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "$16.09",
+    "path": "game_changers.1.usd",
+    "as": "usd",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "$62.99",
+    "path": "game_changers.7.usd",
+    "as": "usd",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "53",
+    "path": "summary.game_changer_list_size",
+    "as": "int",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "11",
+    "path": "summary.game_changers_found_in_precons",
+    "as": "int",
+    "context": "Farewell is on this bulk even where an older announcement left it off. It is $3.31, and it is in 4 unique lists. Seedborn Muse is the other name in that many lists, at $16.09. Fierce Guardianship is the expensive single, $62.99 in Timeless Wisdom. The rest of the 53 names, beyond the 11 above, are in no precon in this census. That is a result, not a missed download."
+  },
+  {
+    "text": "$3.35",
+    "path": "game_changers.5.usd",
+    "as": "usd",
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+  },
+  {
+    "text": "$132.04",
+    "path": "decks.mtgjson-ArcaneMaelstrom_C20.price_usd",
+    "as": "usd",
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+  },
+  {
+    "text": "38",
+    "path": "decks.mtgjson-ArcaneMaelstrom_C20.land_count",
+    "as": "int",
+    "context": "Arcane Maelstrom's Game Changer is Crop Rotation, at $3.35 on this bulk. The whole list sums to $132.04, Crop Rotation included, and it plays 38 lands. Crop Rotation is not why the receipt is large. Open the list if you want to see that flagged card sitting in the spell deck it shipped in."
+  },
+  {
+    "text": "53",
+    "path": "summary.game_changer_list_size",
+    "as": "int",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "$1.75",
+    "path": "game_changers.3.usd",
+    "as": "usd",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "$41.70",
+    "path": "decks.mtgjson-SneakAttack_ZNC.price_usd",
+    "as": "usd",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "38",
+    "path": "decks.mtgjson-SneakAttack_ZNC.land_count",
+    "as": "int",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "7",
+    "path": "decks.mtgjson-SneakAttack_ZNC.ramp_count",
+    "as": "int",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "11",
+    "path": "decks.mtgjson-SneakAttack_ZNC.draw_count",
+    "as": "int",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "5",
+    "path": "decks.mtgjson-SneakAttack_ZNC.removal_count",
+    "as": "int",
+    "context": "Sneak Attack includes Notion Thief and no other name from the 53. Notion Thief is $1.75. The whole list sums to $41.70, with 38 lands, 7 ramp, 11 draw, and 5 removal under the census rules. A flagged card is enough to move the app's floor out of the core band. It does not describe the other cards."
+  },
+  {
+    "text": "154",
+    "path": "summary.bracket_floors.2",
+    "as": "int",
+    "context": "Use the floor when the table has already agreed to talk in brackets. 154 of these unique lists do not contain a Game Changer, a mass-land-denial match, or chained extra turns. They still want a conversation about what the table is willing to play. 17 contain something the floor treats as upgraded, and 3 trip a harder flag. Bringing an optimized-floor list to a table that wanted the core floor is a different ask than goldfishing the deck alone."
+  },
+  {
+    "text": "17",
+    "path": "summary.bracket_floors.3",
+    "as": "int",
+    "context": "Use the floor when the table has already agreed to talk in brackets. 154 of these unique lists do not contain a Game Changer, a mass-land-denial match, or chained extra turns. They still want a conversation about what the table is willing to play. 17 contain something the floor treats as upgraded, and 3 trip a harder flag. Bringing an optimized-floor list to a table that wanted the core floor is a different ask than goldfishing the deck alone."
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int",
+    "context": "Use the floor when the table has already agreed to talk in brackets. 154 of these unique lists do not contain a Game Changer, a mass-land-denial match, or chained extra turns. They still want a conversation about what the table is willing to play. 17 contain something the floor treats as upgraded, and 3 trip a harder flag. Bringing an optimized-floor list to a table that wanted the core floor is a different ask than goldfishing the deck alone."
+  },
+  {
+    "text": "$62.99",
+    "path": "game_changers.7.usd",
+    "as": "usd",
+    "context": "Do not add Farewell or Fierce Guardianship to a different precon and keep calling the receipt the precon. Fierce Guardianship at $62.99 is a purchase by itself. The census of lands and ramp is the other article, and a high Scryfall sum there can be ordinary cards."
+  },
+  {
+    "text": "53",
+    "path": "summary.game_changer_list_size",
+    "as": "int",
+    "context": "- Using an older copy of the list. This page has 53 names because that is what the 2026-11-01 bulk marks, and Farewell is on it."
+  },
+  {
+    "text": "174",
+    "path": "summary.commander_precons",
+    "as": "int",
+    "context": "- Treating \"not on the list\" as \"weak.\" Most of the 174 unique lists have none of these cards."
+  },
+  {
+    "text": "$132.04",
+    "path": "decks.mtgjson-ArcaneMaelstrom_C20.price_usd",
+    "as": "usd",
+    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom's whole list sums to $132.04, and Crop Rotation is $3.35 of that total."
+  },
+  {
+    "text": "$3.35",
+    "path": "game_changers.5.usd",
+    "as": "usd",
+    "context": "- Assuming an expensive precon card is a Game Changer. Arcane Maelstrom's whole list sums to $132.04, and Crop Rotation is $3.35 of that total."
+  },
+  {
+    "text": "18",
+    "path": "summary.precons_with_a_game_changer",
+    "as": "int",
+    "context": "Most run none. 18 of 174 unique lists have a flagged card, and the names that repeat are Farewell and Seedborn Muse, each in 4 lists."
+  },
+  {
+    "text": "174",
+    "path": "summary.commander_precons",
+    "as": "int",
+    "context": "Most run none. 18 of 174 unique lists have a flagged card, and the names that repeat are Farewell and Seedborn Muse, each in 4 lists."
+  },
+  {
+    "text": "4",
+    "path": "game_changers.0.precon_count",
+    "as": "int",
+    "context": "Most run none. 18 of 174 unique lists have a flagged card, and the names that repeat are Farewell and Seedborn Muse, each in 4 lists."
+  },
+  {
+    "text": "17",
+    "path": "summary.bracket_floors.3",
+    "as": "int",
+    "context": "Under this app's list-only floor, yes. 17 unique lists land on the upgraded floor and 3 land on the optimized floor. The exhibition and competitive brackets are not something the list can see."
+  },
+  {
+    "text": "3",
+    "path": "summary.bracket_floors.4",
+    "as": "int",
+    "context": "Under this app's list-only floor, yes. 17 unique lists land on the upgraded floor and 3 land on the optimized floor. The exhibition and competitive brackets are not something the list can see."
+  },
+  {
+    "text": "$41.70",
+    "path": "decks.mtgjson-SneakAttack_ZNC.price_usd",
+    "as": "usd",
+    "context": "The table is the cheapest English nonfoil Scryfall price on 2026-11-01. Sneak Attack's Scryfall sum is $41.70. The deck block is the product printing from MTGJSON, which is a different receipt."
+  }
+]
