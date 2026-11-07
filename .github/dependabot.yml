@@ -1,0 +1,64 @@
+# Version updates only. Dependabot alerts and security updates are repository
+# settings (Settings → Code security), not this file.
+version: 2
+updates:
+  # The web app's dependencies are declared in web/package.json, but that
+  # package is an npm workspace of the root package.json and the only
+  # package-lock.json is at the repository root. Dependabot reads
+  # package-lock.json only in `directory` (it does not walk up), so this
+  # entry is "/" and still updates the web workspace manifest and lockfile.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # The API installs from api/requirements.txt. api/requirements-dev.txt
+  # includes that file (`-r requirements.txt`) and pins pytest. api/pyproject.toml
+  # is Ruff configuration only and declares no project dependencies.
+  - package-ecosystem: pip
+    directory: /api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # Fly builds api/Dockerfile (see fly.toml [build].dockerfile).
+  - package-ecosystem: docker
+    directory: /api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      docker-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
