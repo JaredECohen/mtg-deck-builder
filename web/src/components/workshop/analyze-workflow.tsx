@@ -9,11 +9,19 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
-import { prepopulateFromExample, resolveAnalyzeSeed } from "@/lib/example-decks";
+import { prepopulateFromExample, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
 const DEFAULT_NOTES = "Tell me how this deck plays, what shell it resembles, and what I should improve.";
+
+/** True when focus is in a field the user is typing in, so a late result must not move it. */
+export function isEditingFormControl(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement)) return false;
+  const tag = element.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  return element.isContentEditable;
+}
 
 type Props = {
   dataStatus: DataStatusResponse | null;
@@ -48,10 +56,18 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const [analyzedKey, setAnalyzedKey] = useState<string | null>(null);
   const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  // Set only after ?example= actually fills the editor. A failed load leaves this null.
+  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
   const loadedToken = useRef<string | null>(null);
   // ?example= fills the editor from the catalog. That load must not replace the
   // saved draft, and the draft must not replace the example.
   const persistDraft = useRef(true);
+  // Claimed when an example auto-analyze actually starts, so a later render
+  // (or React strict mode's second effect) cannot fire a second request.
+  const autoAnalyzeClaim = useRef<string | null>(null);
+  const resultsRef = useRef<HTMLElement | null>(null);
+  // Example id whose results we already tried to reveal. A later example can reveal again.
+  const revealedExampleId = useRef<string | null>(null);
 
   const analyzer = useDeckAnalyzer();
   const analysis = analyzer.analysis;
@@ -87,6 +103,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       setManualSideboard(seed.sideboard);
       setManualCommander(seed.commander);
       setManualNotes(seed.notes);
+      setLoadedExampleId(example && exampleId ? exampleId : null);
       setDraftHydrated(true);
     }
     void hydrate();
@@ -205,7 +222,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     if (persistDraft.current) clearManualDraft();
   }
 
-  function handleAnalyze() {
+  function runAnalysis(options: { deepAnalysis: boolean }) {
     if (!format) return;
     const snapshot: Snapshot = {
       format,
@@ -220,9 +237,59 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       mainboard: snapshot.mainboard,
       sideboard: snapshot.sideboard,
       notes: manualNotes,
-      deep_analysis: deepAnalysis
+      deep_analysis: options.deepAnalysis
     });
   }
+
+  function handleAnalyze() {
+    runAnalysis({ deepAnalysis });
+  }
+
+  // Same list as the Analyze button, but the automatic run is always heuristic.
+  // The Deep analysis checkbox can flip while the example list is loading, and
+  // that must not spend a Claude call. The timeout is cleared on cleanup so
+  // React 19 strict mode's double-invoked effect starts the request once.
+  const runAutoAnalyze = useRef(runAnalysis);
+  runAutoAnalyze.current = runAnalysis;
+  useEffect(() => {
+    const id = loadedExampleId;
+    if (!shouldAutoAnalyzeArrival({
+      exampleId: id,
+      exampleResolved: Boolean(id),
+      sharedToken,
+      formatReady: Boolean(format)
+    })) return;
+    if (!id || autoAnalyzeClaim.current === id) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled || autoAnalyzeClaim.current === id) return;
+      autoAnalyzeClaim.current = id;
+      runAutoAnalyze.current({ deepAnalysis: false });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loadedExampleId, sharedToken, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
+
+  // After that automatic run, bring off-screen results up on a phone. Skip it
+  // when the summary is already in view, and never steal focus from a field
+  // the user is editing while the request is in flight.
+  useEffect(() => {
+    if (!loadedExampleId || analyzer.loading) return;
+    if (!analysis && !analyzer.error) return;
+    if (revealedExampleId.current === loadedExampleId) return;
+    revealedExampleId.current = loadedExampleId;
+    if (isEditingFormControl(document.activeElement)) return;
+    const node = resultsRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.top < window.innerHeight * 0.85;
+    if (inView) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    node.focus({ preventScroll: true });
+  }, [loadedExampleId, analysis, analyzer.loading, analyzer.error]);
 
   const openCard = (name: string) => onOpenCard(name, { format: format ?? undefined });
 
@@ -278,7 +345,13 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
         ) : null}
       </section>
 
-      <section className="results-grid" aria-label="Deck analysis output" aria-busy={analyzer.loading}>
+      <section
+        ref={resultsRef}
+        className="results-grid analysis-output"
+        aria-label="Deck analysis output"
+        aria-busy={analyzer.loading}
+        tabIndex={-1}
+      >
         <p className="sr-only" role="status">{statusMessage}</p>
         <WorkflowSummary
           title={analysis?.inferred_archetype ?? "Manual deck analysis appears here"}

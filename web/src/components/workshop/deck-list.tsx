@@ -27,9 +27,9 @@ export function DeckCardRow({ card, quantityLabel, note, onOpen }: RowProps) {
   return (
     <li className="card-row card-row-action deck-card-row">
       <div className="deck-card-main">
-        <button type="button" className="card-button" onClick={() => onOpen(card.name)}>
-          <span>{card.name}</span>
-          <span className="muted">{quantityLabel}</span>
+        <button type="button" className="card-button deck-line" onClick={() => onOpen(card.name)}>
+          <span className="deck-line-name">{card.name}</span>
+          <span className="muted deck-line-qty">{quantityLabel}</span>
         </button>
         {note ? (
           <button

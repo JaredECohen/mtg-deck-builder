@@ -16,9 +16,9 @@ type Props = {
 function DeckCardRow({ card, suffix, quantityLabel, onOpen }: { card: CardRef; suffix: string; quantityLabel: string; onOpen: (name: string) => void }) {
   return (
     <li key={`${card.name}-${suffix}`} className="card-row card-row-action">
-      <button type="button" className="card-button" onClick={() => onOpen(card.name)}>
-        <span>{card.name}</span>
-        <span className="muted">{quantityLabel}</span>
+      <button type="button" className="card-button deck-line" onClick={() => onOpen(card.name)}>
+        <span className="deck-line-name">{card.name}</span>
+        <span className="muted deck-line-qty">{quantityLabel}</span>
       </button>
     </li>
   );
