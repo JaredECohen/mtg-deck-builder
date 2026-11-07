@@ -1,7 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { AnalyzeWorkflow } from "./workshop/analyze-workflow";
 import { CardDetailModal } from "./workshop/card-detail-modal";
@@ -20,20 +19,21 @@ const MODE_TABS = [
 ];
 
 export function DeckWorkshop() {
-  // ?deck=<share_token> opens a shared deck in the Analyze workflow.
-  const searchParams = useSearchParams();
-  const sharedToken = searchParams.get("deck");
-  const exampleId = searchParams.get("example");
-  const [mode, setMode] = useState<BuilderMode>(sharedToken || exampleId ? "analyze" : "generate");
+  // The static homepage always paints the generate tab. A shared deck or an
+  // official example switches to Analyze before the browser paints. Reading
+  // the URL here keeps the shell static; the search-params hook would bail it
+  // out to an empty fallback.
+  const [mode, setMode] = useState<BuilderMode>("generate");
 
   // Shared by both workflows, so the data-status request and the card modal
   // exist once on the page.
   const dataStatus = useDataStatus();
   const cardDetail = useCardDetail();
 
-  useEffect(() => {
-    if (sharedToken || exampleId) setMode("analyze");
-  }, [sharedToken, exampleId]);
+  useLayoutEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("deck")?.trim() || params.get("example")?.trim()) setMode("analyze");
+  }, []);
 
   return (
     <section className="workshop-root" aria-label="MTG deck workshop">
@@ -49,7 +49,7 @@ export function DeckWorkshop() {
         <GenerateWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} />
       </div>
       <div id={panelId("workshop", "analyze")} role="tabpanel" aria-labelledby={tabId("workshop", "analyze")} hidden={mode !== "analyze"}>
-        <AnalyzeWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} sharedToken={sharedToken} exampleId={exampleId} />
+        <AnalyzeWorkflow dataStatus={dataStatus} onOpenCard={cardDetail.open} />
       </div>
       <div id={panelId("workshop", "precon")} role="tabpanel" aria-labelledby={tabId("workshop", "precon")} hidden={mode !== "precon"}>
         <PreconUpgrade onOpenCard={cardDetail.open} />

@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CommanderPicker, type CommanderMode } from "./commander-picker";
@@ -52,16 +51,16 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
   const [colors, setColors] = useState<string[]>([]);
   const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
   const [prompt, setPrompt] = useState("");
-  const searchParams = useSearchParams();
 
   // Guide links open the builder pre-filled: /?format=commander&brief=...
+  // Read the URL here so the static homepage can include this form. The
+  // search-params hook would bail that shell out to an empty fallback.
   useEffect(() => {
-    const linkedFormat = searchParams.get("format");
+    const params = new URLSearchParams(window.location.search);
+    const linkedFormat = params.get("format");
     if (linkedFormat && linkedFormat in FORMAT_LABEL) setFormat(linkedFormat as FormatName);
-    const linkedBrief = searchParams.get("brief");
+    const linkedBrief = params.get("brief");
     if (linkedBrief) setPrompt(linkedBrief.slice(0, MAX_PROMPT_CHARS));
-    // Only on arrival: later edits belong to the user.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [refinePrompt, setRefinePrompt] = useState(DEFAULT_REFINE_PROMPT);
   const [refineDraftLoaded, setRefineDraftLoaded] = useState(false);

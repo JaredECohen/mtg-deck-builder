@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "./example-decks";
+import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, planExampleResultReveal, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "./example-decks";
 
 test("?example= prepopulates the official burn list", async () => {
   const deck = await prepopulateFromExample("mono-red-burn");
@@ -203,11 +203,55 @@ test("the analyze workflow refuses to autosave an example over the draft", () =>
   assert.match(workflow, /persistDraft\.current = seed\.persistDraft/);
   assert.match(workflow, /if \(!draftHydrated \|\| !persistDraft\.current\) return;/);
   assert.match(workflow, /if \(persistDraft\.current\) clearManualDraft\(\)/);
-  assert.match(workflow, /if \(revealedExampleId\.current === loadedExampleId\) return;/);
-  assert.match(workflow, /if \(isEditingFormControl\(document\.activeElement\)\) return;/);
-  const reveal = workflow.slice(workflow.indexOf("revealedExampleId.current = loadedExampleId"));
+  assert.match(workflow, /planExampleResultReveal\(/);
+  assert.match(workflow, /isEditingFormControl\(document\.activeElement\)/);
+  assert.match(workflow, /addEventListener\("focusout"/);
+  const planAt = workflow.indexOf("planExampleResultReveal");
+  const assignAt = workflow.indexOf("revealedExampleId.current = loadedExampleId");
+  assert.ok(planAt !== -1 && assignAt > planAt);
+  const reveal = workflow.slice(assignAt);
   const scrollAt = reveal.indexOf("scrollIntoView");
   const focusAt = reveal.indexOf("node.focus");
   assert.ok(scrollAt !== -1 && focusAt > scrollAt);
   assert.doesNotMatch(reveal.slice(0, scrollAt), /node\.focus\(/);
+});
+
+test("the homepage stays on the hourly static cache and still reads arrival query params", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const read = (rel: string) => fs.readFileSync(path.join(root, rel), "utf8");
+  const page = read("app/page.tsx");
+  const workshop = read("components/deck-workshop.tsx");
+  const generate = read("components/workshop/generate-workflow.tsx");
+  const analyze = read("components/workshop/analyze-workflow.tsx");
+  assert.match(page, /export const revalidate = 3600/);
+  assert.doesNotMatch(page, /await searchParams/);
+  assert.doesNotMatch(`${workshop}\n${generate}\n${analyze}`, /useSearchParams\(/);
+  assert.match(workshop, /window\.location\.search/);
+  assert.match(generate, /window\.location\.search/);
+  assert.match(analyze, /window\.location\.search/);
+  assert.match(analyze, /prepopulateFromExample\(exampleId\)/);
+  assert.match(page, /rel="canonical" href=\{`\$\{SITE_URL\}\/`\}/);
+});
+
+test("example results wait to scroll until the user leaves a focused field", () => {
+  assert.equal(
+    planExampleResultReveal({ alreadyRevealed: false, editing: true, hasResultsNode: true, inView: false }),
+    "wait",
+  );
+  assert.equal(
+    planExampleResultReveal({ alreadyRevealed: false, editing: false, hasResultsNode: true, inView: false }),
+    "scroll",
+  );
+  assert.equal(
+    planExampleResultReveal({ alreadyRevealed: false, editing: true, hasResultsNode: true, inView: true }),
+    "mark",
+  );
+  assert.equal(
+    planExampleResultReveal({ alreadyRevealed: true, editing: false, hasResultsNode: true, inView: false }),
+    "done",
+  );
+  assert.equal(
+    planExampleResultReveal({ alreadyRevealed: false, editing: false, hasResultsNode: false, inView: false }),
+    "wait",
+  );
 });

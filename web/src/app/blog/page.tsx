@@ -4,15 +4,33 @@ import Link from "next/link";
 import { PostCard } from "@/components/blog/post-card";
 import { EnableAds } from "@/components/enable-ads";
 import { CATEGORIES, SITE_NAME, postsInCategory, type CategoryId } from "@/lib/blog";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, metaDescription, socialTitle } from "@/lib/seo";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
 
+const BLOG_TITLE = "Magic: The Gathering Guides";
+const BLOG_DESCRIPTION =
+  "Free, in-depth Magic: The Gathering guides: how to play, every major format, deck archetypes, Commander deckbuilding, mulligans and sideboarding.";
+
 export const metadata: Metadata = {
-  title: `Magic: The Gathering Guides | ${SITE_NAME}`,
-  description:
-    "Free, in-depth Magic: The Gathering guides: how to play, every major format, deck archetypes, Commander deckbuilding, mulligans and sideboarding.",
+  title: documentTitle(BLOG_TITLE),
+  description: metaDescription(BLOG_DESCRIPTION),
   alternates: { canonical: "/blog", types: { "application/rss+xml": "/blog/rss.xml" } },
+  openGraph: {
+    type: "website",
+    title: socialTitle(BLOG_TITLE),
+    description: metaDescription(BLOG_DESCRIPTION),
+    url: "/blog",
+    siteName: SITE_NAME,
+    images: [DEFAULT_SOCIAL_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: socialTitle(BLOG_TITLE),
+    description: metaDescription(BLOG_DESCRIPTION),
+    images: [DEFAULT_SOCIAL_IMAGE.url],
+  },
 };
 
 export default function BlogIndexPage() {

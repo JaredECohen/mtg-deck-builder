@@ -212,8 +212,9 @@ class DeckAnalysisService:
         top_roles = ", ".join(f"{item.role} ({item.total_cards})" for item in role_summary[:3]) or "flex cards"
         early_game = sum(point.card_count for point in mana_curve if point.mana_value <= 2)
         high_end = sum(point.card_count for point in mana_curve if point.mana_value >= 5)
-        cadence = "gets on board early and snowballs pressure" if early_game >= 14 else "spends its first turns setting up"
-        finisher = "then closes with a higher-end payoff package" if high_end >= 8 else "then tries to convert incremental edges into a win"
+        # Base verbs: the sentence is "It will usually <cadence> ... and <finisher>".
+        cadence = "get on board early and snowball pressure" if early_game >= 14 else "spend its first turns setting up"
+        finisher = "then close with a higher-end payoff package" if high_end >= 8 else "then try to convert incremental edges into a win"
         commander_note = " Commander play patterns matter a lot here because the list is expected to lean on its signature engine." if request.format == "commander" else ""
         return f"It will usually {cadence}, leaning most on {top_roles}, and {finisher}.{commander_note}"
 
