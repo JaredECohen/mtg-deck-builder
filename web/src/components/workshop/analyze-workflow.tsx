@@ -9,7 +9,13 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
-import { prepopulateFromExample, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "@/lib/example-decks";
+import {
+  planExampleResultReveal,
+  prepopulateFromExample,
+  resolveAnalyzeSeed,
+  shouldAutoAnalyzeArrival,
+  type ExampleDeck,
+} from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
@@ -30,6 +36,8 @@ type Props = {
   sharedToken: string | null;
   /** Official list id from ?example=: prefill the editor from the guide catalog. */
   exampleId?: string | null;
+  /** Server-resolved list, so the first HTML already contains the cards. */
+  initialExample?: ExampleDeck | null;
 };
 
 type Snapshot = { format: FormatName | null; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
@@ -43,12 +51,27 @@ function snapshotKey(snapshot: Snapshot): string {
   return [snapshot.format, snapshot.commander, list(snapshot.mainboard), list(snapshot.sideboard)].join("#");
 }
 
-export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId }: Props) {
-  const [format, setFormat] = useState<FormatName | null>(null);
-  const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
-  const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
-  const [manualCommander, setManualCommander] = useState("");
-  const [manualNotes, setManualNotes] = useState(DEFAULT_NOTES);
+export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId, initialExample = null }: Props) {
+  const seeded =
+    initialExample && exampleId
+      ? resolveAnalyzeSeed({
+          example: {
+            format: initialExample.format,
+            mainboard: initialExample.mainboard,
+            sideboard: initialExample.sideboard,
+            commander: initialExample.commander,
+            name: initialExample.name,
+            note: initialExample.note ?? "",
+          },
+          draft: null,
+          defaultNotes: DEFAULT_NOTES,
+        })
+      : null;
+  const [format, setFormat] = useState<FormatName | null>(seeded?.format ?? null);
+  const [manualMainboard, setManualMainboard] = useState<CardRef[]>(seeded?.mainboard ?? []);
+  const [manualSideboard, setManualSideboard] = useState<CardRef[]>(seeded?.sideboard ?? []);
+  const [manualCommander, setManualCommander] = useState(seeded?.commander ?? "");
+  const [manualNotes, setManualNotes] = useState(seeded?.notes ?? DEFAULT_NOTES);
   const [manualImportText, setManualImportText] = useState("");
   const [deepAnalysis, setDeepAnalysis] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -57,11 +80,11 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   // Set only after ?example= actually fills the editor. A failed load leaves this null.
-  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
+  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(seeded && exampleId ? exampleId : null);
   const loadedToken = useRef<string | null>(null);
   // ?example= fills the editor from the catalog. That load must not replace the
   // saved draft, and the draft must not replace the example.
-  const persistDraft = useRef(true);
+  const persistDraft = useRef(!seeded);
   // Claimed when an example auto-analyze actually starts, so a later render
   // (or React strict mode's second effect) cannot fire a second request.
   const autoAnalyzeClaim = useRef<string | null>(null);
@@ -79,6 +102,13 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     // The example list is fetched only when ?example= is present.
     async function hydrate() {
       if (sharedToken) {
+        if (!cancelled) setDraftHydrated(true);
+        return;
+      }
+      // The server already filled the editor. Don't import the catalog again
+      // and don't let a saved draft replace that list.
+      if (seeded) {
+        persistDraft.current = false;
         if (!cancelled) setDraftHydrated(true);
         return;
       }
@@ -274,21 +304,37 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
 
   // After that automatic run, bring off-screen results up on a phone. Skip it
   // when the summary is already in view, and never steal focus from a field
-  // the user is editing while the request is in flight.
+  // the user is editing while the request is in flight. The example id is
+  // recorded only once we actually reveal, so leaving the field can still scroll.
   useEffect(() => {
     if (!loadedExampleId || analyzer.loading) return;
     if (!analysis && !analyzer.error) return;
+
+    const tryReveal = () => {
+      const node = resultsRef.current;
+      const rect = node?.getBoundingClientRect();
+      const inView = Boolean(rect && rect.top >= 0 && rect.top < window.innerHeight * 0.85);
+      const plan = planExampleResultReveal({
+        alreadyRevealed: revealedExampleId.current === loadedExampleId,
+        editing: isEditingFormControl(document.activeElement),
+        hasResultsNode: Boolean(node),
+        inView,
+      });
+      if (plan === "done" || plan === "wait") return;
+      revealedExampleId.current = loadedExampleId;
+      if (plan === "mark" || !node) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      node.focus({ preventScroll: true });
+    };
+
+    tryReveal();
     if (revealedExampleId.current === loadedExampleId) return;
-    revealedExampleId.current = loadedExampleId;
-    if (isEditingFormControl(document.activeElement)) return;
-    const node = resultsRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    const inView = rect.top >= 0 && rect.top < window.innerHeight * 0.85;
-    if (inView) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-    node.focus({ preventScroll: true });
+    const onFocusOut = () => {
+      window.setTimeout(tryReveal, 0);
+    };
+    document.addEventListener("focusout", onFocusOut);
+    return () => document.removeEventListener("focusout", onFocusOut);
   }, [loadedExampleId, analysis, analyzer.loading, analyzer.error]);
 
   const openCard = (name: string) => onOpenCard(name, { format: format ?? undefined });

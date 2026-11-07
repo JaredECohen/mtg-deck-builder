@@ -1,20 +1,36 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EnableAds } from "@/components/enable-ads";
 import { AUTHOR, SITE_NAME } from "@/lib/blog";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, socialTitle } from "@/lib/seo";
+
+const ABOUT_TITLE = "Who makes MTG Deck Lab and where card data comes from";
+const ABOUT_DESCRIPTION =
+  "MTG Deck Lab is a free Magic: The Gathering deck builder that explains every pick. Who makes it, how it works, and where its data comes from.";
 
 export const metadata: Metadata = {
-  title: `About | ${SITE_NAME}`,
-  description:
-    "MTG Deck Lab is a free Magic: The Gathering deck builder that explains every pick. Who makes it, how it works, and where its data comes from.",
+  title: documentTitle(ABOUT_TITLE),
+  description: ABOUT_DESCRIPTION,
   alternates: { canonical: "/about" },
+  openGraph: {
+    type: "website",
+    title: socialTitle(ABOUT_TITLE),
+    description: ABOUT_DESCRIPTION,
+    url: "/about",
+    siteName: SITE_NAME,
+    images: [DEFAULT_SOCIAL_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: socialTitle(ABOUT_TITLE),
+    description: ABOUT_DESCRIPTION,
+    images: [DEFAULT_SOCIAL_IMAGE.url],
+  },
 };
 
 export default function AboutPage() {
   return (
     <main className="shell legal-page">
-      <EnableAds />
       <h1>About MTG Deck Lab</h1>
       <p>
         MTG Deck Lab is a free deck builder for Magic: The Gathering. Tell it a format, colors and a play style, or

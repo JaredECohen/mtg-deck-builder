@@ -24,6 +24,7 @@ import {
   type Post,
 } from "@/lib/blog";
 import { pageAllowsAds } from "@/lib/ads-policy";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, metaDescription, socialTitle } from "@/lib/seo";
 
 // One dynamic segment serves both /blog/<category> hubs and /blog/<article>.
 // Category ids and article slugs never collide (articles carry keywords).
@@ -43,33 +44,53 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   if (isCategory(slug)) {
     const category = CATEGORIES[slug];
+    const title = documentTitle(`${category.label} for Magic: The Gathering`);
+    const description = metaDescription(category.description);
     return {
-      title: `${category.label} for Magic: The Gathering | ${SITE_NAME}`,
-      description: category.description,
+      title,
+      description,
       alternates: { canonical: `/blog/${slug}` },
+      openGraph: {
+        type: "website",
+        title: socialTitle(`${category.label} for Magic: The Gathering`),
+        description,
+        url: `/blog/${slug}`,
+        siteName: SITE_NAME,
+        images: [DEFAULT_SOCIAL_IMAGE],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: socialTitle(`${category.label} for Magic: The Gathering`),
+        description,
+        images: [DEFAULT_SOCIAL_IMAGE.url],
+      },
     };
   }
   const post = getPost(slug);
   if (!post) return {};
   const credit = articleCredit(post);
+  const title = documentTitle(post.title);
+  const description = metaDescription(post.description);
+  const ogTitle = socialTitle(post.title);
   return {
-    title: `${post.title} | ${SITE_NAME}`,
-    description: post.description,
+    title,
+    description,
     keywords: post.keywords,
     authors: [{ name: credit.byline }],
     alternates: { canonical: `/blog/${post.slug}` },
     robots: post.reviewed ? { index: true, follow: true } : { index: false, follow: true },
     openGraph: {
       type: "article",
-      title: post.title,
-      description: post.description,
+      title: ogTitle,
+      description,
       url: `/blog/${post.slug}`,
       siteName: SITE_NAME,
       publishedTime: post.date,
       modifiedTime: post.updated,
       authors: [credit.byline],
+      images: [DEFAULT_SOCIAL_IMAGE],
     },
-    twitter: { card: "summary", title: post.title, description: post.description },
+    twitter: { card: "summary_large_image", title: ogTitle, description, images: [DEFAULT_SOCIAL_IMAGE.url] },
   };
 }
 

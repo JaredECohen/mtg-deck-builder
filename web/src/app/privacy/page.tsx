@@ -1,13 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EnableAds } from "@/components/enable-ads";
 import { ADSENSE_CLIENT } from "@/lib/ads";
+import { SITE_NAME } from "@/lib/blog";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, socialTitle } from "@/lib/seo";
+
+const PRIVACY_TITLE = "What MTG Deck Lab stores and shares";
+const PRIVACY_DESCRIPTION =
+  "What MTG Deck Lab stores, what it shares, how anonymous usage is counted, and the cookies used by advertising.";
 
 export const metadata: Metadata = {
-  title: "Privacy | MTG Deck Lab",
-  description: "What MTG Deck Lab stores, what it shares, how anonymous usage is counted, and the cookies used by advertising.",
+  title: documentTitle(PRIVACY_TITLE),
+  description: PRIVACY_DESCRIPTION,
   alternates: { canonical: "/privacy" },
+  openGraph: {
+    type: "website",
+    title: socialTitle(PRIVACY_TITLE),
+    description: PRIVACY_DESCRIPTION,
+    url: "/privacy",
+    siteName: SITE_NAME,
+    images: [DEFAULT_SOCIAL_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: socialTitle(PRIVACY_TITLE),
+    description: PRIVACY_DESCRIPTION,
+    images: [DEFAULT_SOCIAL_IMAGE.url],
+  },
 };
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
@@ -16,7 +35,6 @@ const UPDATED = "October 27, 2026";
 export default function PrivacyPage() {
   return (
     <main className="shell legal-page">
-      <EnableAds />
       <h1>Privacy</h1>
       <p className="legal-updated">Last updated {UPDATED}</p>
 

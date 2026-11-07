@@ -2,12 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SITE_NAME } from "@/lib/blog";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, socialTitle } from "@/lib/seo";
+
+const METHOD_TITLE = "How the guide numbers are counted";
+const METHOD_DESCRIPTION =
+  "Where MTG Deck Lab guide numbers come from: MTGJSON lists, the Scryfall bulk, Game Changers, and the goldfish.";
 
 export const metadata: Metadata = {
-  title: `Method | ${SITE_NAME}`,
-  description:
-    "Where MTG Deck Lab guide numbers come from: MTGJSON lists, the Scryfall bulk, Game Changers, and the goldfish.",
+  title: documentTitle(METHOD_TITLE),
+  description: METHOD_DESCRIPTION,
   alternates: { canonical: "/method" },
+  openGraph: {
+    type: "website",
+    title: socialTitle(METHOD_TITLE),
+    description: METHOD_DESCRIPTION,
+    url: "/method",
+    siteName: SITE_NAME,
+    images: [DEFAULT_SOCIAL_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: socialTitle(METHOD_TITLE),
+    description: METHOD_DESCRIPTION,
+    images: [DEFAULT_SOCIAL_IMAGE.url],
+  },
 };
 
 export default function MethodPage() {

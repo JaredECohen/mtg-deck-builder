@@ -1,13 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EnableAds } from "@/components/enable-ads";
 import { SITE_NAME } from "@/lib/blog";
+import { DEFAULT_SOCIAL_IMAGE, documentTitle, socialTitle } from "@/lib/seo";
+
+const CONTACT_TITLE = "Contact MTG Deck Lab about a deck or a bug";
+const CONTACT_DESCRIPTION = "Contact MTG Deck Lab with feedback, bug reports, card suggestions or questions about your data.";
 
 export const metadata: Metadata = {
-  title: `Contact | ${SITE_NAME}`,
-  description: "Contact MTG Deck Lab with feedback, bug reports, card suggestions or questions about your data.",
+  title: documentTitle(CONTACT_TITLE),
+  description: CONTACT_DESCRIPTION,
   alternates: { canonical: "/contact" },
+  openGraph: {
+    type: "website",
+    title: socialTitle(CONTACT_TITLE),
+    description: CONTACT_DESCRIPTION,
+    url: "/contact",
+    siteName: SITE_NAME,
+    images: [DEFAULT_SOCIAL_IMAGE],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: socialTitle(CONTACT_TITLE),
+    description: CONTACT_DESCRIPTION,
+    images: [DEFAULT_SOCIAL_IMAGE.url],
+  },
 };
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
@@ -15,7 +32,6 @@ const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
 export default function ContactPage() {
   return (
     <main className="shell legal-page">
-      <EnableAds />
       <h1>Contact</h1>
       <p>
         Questions, bug reports and feedback are all welcome. Feedback on generated decks is especially useful: if a deck

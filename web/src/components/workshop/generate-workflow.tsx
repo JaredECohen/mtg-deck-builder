@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CommanderPicker, type CommanderMode } from "./commander-picker";
@@ -43,26 +42,24 @@ function colorKey(colors: string[]): string {
 type Props = {
   dataStatus: DataStatusResponse | null;
   onOpenCard: (name: string, context?: CardContext) => void;
+  /** Guide links open the builder pre-filled: /?format=commander&brief=... */
+  linkedFormat?: string | null;
+  linkedBrief?: string | null;
 };
 
-export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
-  const [format, setFormat] = useState<FormatName | null>(null);
+function initialFormat(value: string | null | undefined): FormatName | null {
+  if (value && value in FORMAT_LABEL) return value as FormatName;
+  return null;
+}
+
+export function GenerateWorkflow({ dataStatus, onOpenCard, linkedFormat = null, linkedBrief = null }: Props) {
+  const [format, setFormat] = useState<FormatName | null>(initialFormat(linkedFormat));
   // Nothing is preselected: colors, strategies and the brief start empty so
-  // the first deck reflects only what the user chose.
+  // the first deck reflects only what the user chose. A guide link can fill
+  // the format and brief before paint, from the server render.
   const [colors, setColors] = useState<string[]>([]);
   const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
-  const [prompt, setPrompt] = useState("");
-  const searchParams = useSearchParams();
-
-  // Guide links open the builder pre-filled: /?format=commander&brief=...
-  useEffect(() => {
-    const linkedFormat = searchParams.get("format");
-    if (linkedFormat && linkedFormat in FORMAT_LABEL) setFormat(linkedFormat as FormatName);
-    const linkedBrief = searchParams.get("brief");
-    if (linkedBrief) setPrompt(linkedBrief.slice(0, MAX_PROMPT_CHARS));
-    // Only on arrival: later edits belong to the user.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [prompt, setPrompt] = useState((linkedBrief ?? "").slice(0, MAX_PROMPT_CHARS));
   const [refinePrompt, setRefinePrompt] = useState(DEFAULT_REFINE_PROMPT);
   const [refineDraftLoaded, setRefineDraftLoaded] = useState(false);
   const [expertSettings, setExpertSettings] = useState<ExpertSettings>(DEFAULT_EXPERT_SETTINGS);

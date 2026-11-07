@@ -92,6 +92,26 @@ export function exampleBuilderHref(id: string): string {
  * A normal visit, a failed example (draft restored instead), and a shared
  * `?deck=` link (that loader analyzes on its own) stay manual.
  */
+/**
+ * What to do when an example's analysis results are ready.
+ * "wait" means do not record the example id: a field is focused, or the
+ * results node is not mounted yet, so a later focusout can still scroll.
+ * "mark" means the results are already on screen, so record that and leave
+ * focus where it is. "scroll" records the id and brings the results up.
+ */
+export function planExampleResultReveal(options: {
+  alreadyRevealed: boolean;
+  editing: boolean;
+  hasResultsNode: boolean;
+  inView: boolean;
+}): "done" | "wait" | "mark" | "scroll" {
+  if (options.alreadyRevealed) return "done";
+  if (!options.hasResultsNode) return "wait";
+  if (options.inView) return "mark";
+  if (options.editing) return "wait";
+  return "scroll";
+}
+
 export function shouldAutoAnalyzeArrival(options: {
   exampleId: string | null | undefined;
   exampleResolved: boolean;

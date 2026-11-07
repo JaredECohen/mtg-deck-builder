@@ -1,44 +1,38 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
-import { EnableAds } from "@/components/enable-ads";
-import { indexablePosts } from "@/lib/blog";
+import { SITE_URL, indexablePosts } from "@/lib/blog";
+import { getExampleDeck } from "@/lib/example-decks";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
-
-export const metadata: Metadata = {
-  alternates: { canonical: "/" },
-};
 
 const FORMATS = [
   {
     name: "Standard",
     text: "The newest sets only. A rotating, budget-friendlier 60-card format.",
-    guide: "/blog/mtg-formats-explained",
+    guide: "/blog/formats",
   },
   {
     name: "Pioneer",
     text: "Cards from Return to Ravnica forward. A large, non-rotating pool without Modern's oldest staples.",
-    guide: "/blog/mtg-formats-explained",
+    guide: "/blog/formats",
   },
   {
     name: "Modern",
     text: "Cards from Eighth Edition forward. Fast, powerful and deep.",
-    guide: "/blog/mtg-formats-explained",
+    guide: "/blog/formats",
   },
   {
     name: "Legacy",
     text: "Nearly every card ever printed, with a ban list. Brainstorm, Force of Will and decades of history.",
-    guide: "/blog/mtg-formats-explained",
+    guide: "/blog/formats",
   },
   {
     name: "Commander",
     text: "100-card singleton decks led by a legendary commander. Multiplayer, social, and the most popular way to play.",
-    guide: "/blog/what-is-commander-edh",
+    guide: "/blog/formats",
   },
 ];
 
@@ -69,7 +63,26 @@ const FAQ = [
   },
 ];
 
-export default function HomePage() {
+function oneParam(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const text = raw?.trim() ?? "";
+  return text ? text : null;
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Read on the server so the workshop is in the first HTML. A client
+  // useSearchParams() bails the static shell out to an empty Suspense
+  // fallback, and the section below jumps down when the builder hydrates.
+  const params = await searchParams;
+  const exampleId = oneParam(params.example);
+  const sharedToken = oneParam(params.deck);
+  const linkedFormat = oneParam(params.format);
+  const linkedBrief = oneParam(params.brief);
+  const initialExample = exampleId ? await getExampleDeck(exampleId) : null;
   const latest = indexablePosts().slice(0, 6);
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -82,7 +95,8 @@ export default function HomePage() {
   };
   return (
     <main className="shell">
-      <EnableAds />
+      {/* The metadata resolver drops a trailing slash on "/". The sitemap loc keeps it. */}
+      <link rel="canonical" href={`${SITE_URL}/`} />
       <header className="hero hero-compact">
         <div className="hero-copy">
           <div className="eyebrow">Meta-aware deckbuilding</div>
@@ -95,13 +109,15 @@ export default function HomePage() {
           <li><strong>Build or analyze</strong><span>Generate, or import for coaching.</span></li>
         </ul>
       </header>
-      {/* Suspense wrapper required by Next.js 14 when child components use
-          useSearchParams (DeckWorkshop reads ?deck=<id> on mount for share
-          links, and ?format= / ?brief= from guide links). */}
       <div id="builder">
-        <Suspense fallback={null}>
-          <DeckWorkshop />
-        </Suspense>
+        <DeckWorkshop
+          key={`${exampleId ?? ""}|${sharedToken ?? ""}|${linkedFormat ?? ""}|${linkedBrief ?? ""}`}
+          sharedToken={sharedToken}
+          exampleId={exampleId}
+          linkedFormat={linkedFormat}
+          linkedBrief={linkedBrief}
+          initialExample={initialExample}
+        />
       </div>
 
       {/* Server-rendered copy below the tool: the builder itself is client-side,

@@ -11,16 +11,37 @@ import { shouldRenderAdSlot } from "./ads";
 import { pageAllowsAds } from "./ads-policy";
 import { syncFooterAds } from "./footer-ads";
 
-test("unreviewed and noindex routes do not allow ads", () => {
+test("ads stay on reviewed guides and the guides index, and off the builder and thin pages", () => {
   assert.equal(pageAllowsAds("/blog/your-first-game-of-magic"), false);
   assert.equal(pageAllowsAds("/blog/should-you-play-aggro"), true);
+  assert.equal(pageAllowsAds("/blog/precon-lands-ramp-draw"), true);
+  assert.equal(pageAllowsAds("/blog"), true);
+  assert.equal(pageAllowsAds("/blog/"), true);
   assert.equal(pageAllowsAds("/blog/deck-archetypes"), true);
+  assert.equal(pageAllowsAds("/blog/formats"), true);
   assert.equal(pageAllowsAds("/signin"), false);
   assert.equal(pageAllowsAds("/library"), false);
   assert.equal(pageAllowsAds("/auth/verify"), false);
   assert.equal(pageAllowsAds("/method"), false);
   assert.equal(pageAllowsAds("/method/"), false);
-  assert.equal(pageAllowsAds("/"), true);
+  assert.equal(pageAllowsAds("/"), false);
+  assert.equal(pageAllowsAds("/about"), false);
+  assert.equal(pageAllowsAds("/contact"), false);
+  assert.equal(pageAllowsAds("/contact/"), false);
+  assert.equal(pageAllowsAds("/privacy"), false);
+  assert.equal(pageAllowsAds("/d/some-share-token"), false);
+  assert.equal(pageAllowsAds("/d/some-share-token/"), false);
+});
+
+test("the builder, thin pages, and shared decks do not render the AdSense script", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const source = (rel: string) => fs.readFileSync(path.join(root, rel), "utf8");
+  for (const file of ["app/page.tsx", "app/about/page.tsx", "app/contact/page.tsx", "app/privacy/page.tsx", "app/method/page.tsx", "app/d/[token]/page.tsx"]) {
+    assert.doesNotMatch(source(file), /EnableAds/, file);
+  }
+  assert.match(source("app/blog/page.tsx"), /EnableAds/);
+  assert.match(source("app/blog/[slug]/page.tsx"), /pageAllowsAds/);
+  assert.match(source("app/blog/[slug]/page.tsx"), /allowAds \? <EnableAds \/> : null/);
 });
 
 test("a blog slug with no published post does not allow ads", () => {
