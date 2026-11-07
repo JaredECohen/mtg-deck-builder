@@ -87,6 +87,23 @@ export function exampleBuilderHref(id: string): string {
   return `/?example=${encodeURIComponent(id)}#builder`;
 }
 
+/**
+ * Arrival from a guide deep link that already filled the editor with a list.
+ * A normal visit, a failed example (draft restored instead), and a shared
+ * `?deck=` link (that loader analyzes on its own) stay manual.
+ */
+export function shouldAutoAnalyzeArrival(options: {
+  exampleId: string | null | undefined;
+  exampleResolved: boolean;
+  sharedToken?: string | null;
+  formatReady: boolean;
+}): boolean {
+  if (options.sharedToken) return false;
+  if (!options.exampleResolved) return false;
+  if (typeof options.exampleId !== "string" || options.exampleId.length === 0) return false;
+  return options.formatReady;
+}
+
 export type PopulatedExample = {
   format: FormatName;
   mainboard: ExampleCard[];

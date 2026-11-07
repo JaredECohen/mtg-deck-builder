@@ -9,7 +9,7 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
-import { prepopulateFromExample, resolveAnalyzeSeed } from "@/lib/example-decks";
+import { prepopulateFromExample, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
@@ -48,10 +48,17 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const [analyzedKey, setAnalyzedKey] = useState<string | null>(null);
   const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  // Set only after ?example= actually fills the editor. A failed load leaves this null.
+  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
   const loadedToken = useRef<string | null>(null);
   // ?example= fills the editor from the catalog. That load must not replace the
   // saved draft, and the draft must not replace the example.
   const persistDraft = useRef(true);
+  // Claimed when an example auto-analyze actually starts, so a later render
+  // (or React strict mode's second effect) cannot fire a second request.
+  const autoAnalyzeClaim = useRef<string | null>(null);
+  const resultsRef = useRef<HTMLElement | null>(null);
+  const revealedResults = useRef(false);
 
   const analyzer = useDeckAnalyzer();
   const analysis = analyzer.analysis;
@@ -87,6 +94,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       setManualSideboard(seed.sideboard);
       setManualCommander(seed.commander);
       setManualNotes(seed.notes);
+      setLoadedExampleId(example && exampleId ? exampleId : null);
       setDraftHydrated(true);
     }
     void hydrate();
@@ -224,6 +232,51 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     });
   }
 
+  // Same path as the Analyze button, but only after a guide deep link filled
+  // the editor. The timeout is cleared on cleanup so React 19 strict mode's
+  // double-invoked effect starts the request once.
+  const runAnalyze = useRef(handleAnalyze);
+  runAnalyze.current = handleAnalyze;
+  useEffect(() => {
+    const id = loadedExampleId;
+    if (!shouldAutoAnalyzeArrival({
+      exampleId: id,
+      exampleResolved: Boolean(id),
+      sharedToken,
+      formatReady: Boolean(format)
+    })) return;
+    if (!id || autoAnalyzeClaim.current === id) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled || autoAnalyzeClaim.current === id) return;
+      autoAnalyzeClaim.current = id;
+      runAnalyze.current();
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loadedExampleId, sharedToken, format, manualMainboard, manualSideboard, manualCommander, manualNotes, deepAnalysis]);
+
+  // After that automatic run, bring the results up when they are off-screen
+  // (the long list pushes them below the fold on a phone). #builder still
+  // lands the page on the workshop; this only moves if the summary is not in view.
+  useEffect(() => {
+    if (!loadedExampleId || analyzer.loading) return;
+    if (!analysis && !analyzer.error) return;
+    if (revealedResults.current) return;
+    revealedResults.current = true;
+    const node = resultsRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.top < window.innerHeight * 0.85;
+    if (!inView) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    }
+    node.focus({ preventScroll: true });
+  }, [loadedExampleId, analysis, analyzer.loading, analyzer.error]);
+
   const openCard = (name: string) => onOpenCard(name, { format: format ?? undefined });
 
   return (
@@ -278,7 +331,13 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
         ) : null}
       </section>
 
-      <section className="results-grid" aria-label="Deck analysis output" aria-busy={analyzer.loading}>
+      <section
+        ref={resultsRef}
+        className="results-grid analysis-output"
+        aria-label="Deck analysis output"
+        aria-busy={analyzer.loading}
+        tabIndex={-1}
+      >
         <p className="sr-only" role="status">{statusMessage}</p>
         <WorkflowSummary
           title={analysis?.inferred_archetype ?? "Manual deck analysis appears here"}

@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed } from "./example-decks";
+import { exampleBuilderHref, getExampleDeck, listExampleDeckIds, loadCachedPromise, prepopulateFromExample, readExampleDeck, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "./example-decks";
 
 test("?example= prepopulates the official burn list", async () => {
   const deck = await prepopulateFromExample("mono-red-burn");
@@ -140,6 +140,43 @@ test("a failed example-list import can be retried and the saved draft still load
     "utf8",
   );
   assert.match(workflow, /catch \{[\s\S]*example = null;/);
+});
+
+test("a resolved example deep link auto-analyzes once, and a normal visit does not", () => {
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: "lotus-field", exampleResolved: true, sharedToken: null, formatReady: true }),
+    true,
+  );
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: "lotus-field", exampleResolved: false, sharedToken: null, formatReady: true }),
+    false,
+  );
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: null, exampleResolved: false, sharedToken: null, formatReady: true }),
+    false,
+  );
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: "", exampleResolved: true, sharedToken: null, formatReady: true }),
+    false,
+  );
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: "lotus-field", exampleResolved: true, sharedToken: null, formatReady: false }),
+    false,
+  );
+  assert.equal(
+    shouldAutoAnalyzeArrival({ exampleId: "lotus-field", exampleResolved: true, sharedToken: "share-token", formatReady: true }),
+    false,
+  );
+
+  const workflow = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/workshop/analyze-workflow.tsx"),
+    "utf8",
+  );
+  assert.match(workflow, /shouldAutoAnalyzeArrival\(/);
+  assert.match(workflow, /setLoadedExampleId\(example && exampleId \? exampleId : null\)/);
+  assert.match(workflow, /window\.setTimeout\(/);
+  assert.match(workflow, /autoAnalyzeClaim\.current = id/);
+  assert.match(workflow, /runAnalyze\.current\(\)/);
 });
 
 test("the analyze workflow refuses to autosave an example over the draft", () => {

@@ -1110,6 +1110,99 @@ ul.chips {
   flex: 1;
 }
 
+/* The name and the quantity share one row. .builder * { min-width: 0 } lets a
+   long name shrink and paint over the quantity unless the quantity refuses to
+   shrink and the name wraps inside its own box. */
+.builder .card-button.deck-line {
+  width: auto;
+  min-width: 0;
+  align-items: baseline;
+}
+
+.builder .deck-line-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+}
+
+.builder .deck-line-qty {
+  flex: none;
+  margin-left: 12px;
+  white-space: nowrap;
+}
+
+/* Editable mainboard/sideboard rows sit in the narrow form column. The name
+   button was width:100% in the same flex row as the quantity controls, so it
+   collapsed to a sliver and the card text overflowed across the buttons.
+   .builder * is specific enough to zero min-width, so these rules are scoped
+   under .builder too. The name keeps a real line; the controls wrap as a group. */
+.builder .list-edit-row {
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 8px;
+}
+
+.builder .list-edit-name {
+  flex: 1 1 12rem;
+  width: auto;
+  max-width: 100%;
+  min-width: min(100%, 12rem);
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.builder .list-edit-name > span {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+}
+
+.builder .list-edit-meta {
+  font-size: 13px;
+}
+
+.builder .list-edit-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  min-width: min(100%, max-content);
+  margin-left: auto;
+}
+
+.builder .list-edit-actions .chip {
+  flex: none;
+}
+
+.builder .list-edit-actions .list-edit-qty {
+  width: 4.25rem;
+  flex: none;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.builder .analysis-output {
+  /* The form column is much taller than the summary. Stretching this grid
+     item to match it makes scroll/focus land on the bottom of the workshop. */
+  align-self: start;
+  scroll-margin-top: 96px;
+}
+
+.analysis-output:focus {
+  outline: none;
+}
+
+.analysis-output:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 4px;
+}
+
 .why-toggle {
   flex: none;
   margin-right: 6px;
