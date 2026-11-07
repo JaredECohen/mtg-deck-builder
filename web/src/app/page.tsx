@@ -3,7 +3,6 @@ import Link from "next/link";
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
 import { SITE_URL, indexablePosts } from "@/lib/blog";
-import { getExampleDeck } from "@/lib/example-decks";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
@@ -63,26 +62,12 @@ const FAQ = [
   },
 ];
 
-function oneParam(value: string | string[] | undefined): string | null {
-  const raw = Array.isArray(value) ? value[0] : value;
-  const text = raw?.trim() ?? "";
-  return text ? text : null;
-}
-
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // Read on the server so the workshop is in the first HTML. A client
-  // useSearchParams() bails the static shell out to an empty Suspense
-  // fallback, and the section below jumps down when the builder hydrates.
-  const params = await searchParams;
-  const exampleId = oneParam(params.example);
-  const sharedToken = oneParam(params.deck);
-  const linkedFormat = oneParam(params.format);
-  const linkedBrief = oneParam(params.brief);
-  const initialExample = exampleId ? await getExampleDeck(exampleId) : null;
+export default function HomePage() {
+  // Do not read searchParams here. That opts `/` out of the hourly ISR cache
+  // and turns every visit into a function invocation. The workshop is a client
+  // component rendered into this static shell. It reads ?example=, ?deck=,
+  // ?format= and ?brief= after hydration. The search-params hook would bail
+  // the shell out to an empty fallback and shift the page.
   const latest = indexablePosts().slice(0, 6);
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -110,14 +95,7 @@ export default async function HomePage({
         </ul>
       </header>
       <div id="builder">
-        <DeckWorkshop
-          key={`${exampleId ?? ""}|${sharedToken ?? ""}|${linkedFormat ?? ""}|${linkedBrief ?? ""}`}
-          sharedToken={sharedToken}
-          exampleId={exampleId}
-          linkedFormat={linkedFormat}
-          linkedBrief={linkedBrief}
-          initialExample={initialExample}
-        />
+        <DeckWorkshop />
       </div>
 
       {/* Server-rendered copy below the tool: the builder itself is client-side,

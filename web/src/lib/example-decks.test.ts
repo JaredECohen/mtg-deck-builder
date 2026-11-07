@@ -216,6 +216,23 @@ test("the analyze workflow refuses to autosave an example over the draft", () =>
   assert.doesNotMatch(reveal.slice(0, scrollAt), /node\.focus\(/);
 });
 
+test("the homepage stays on the hourly static cache and still reads arrival query params", () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const read = (rel: string) => fs.readFileSync(path.join(root, rel), "utf8");
+  const page = read("app/page.tsx");
+  const workshop = read("components/deck-workshop.tsx");
+  const generate = read("components/workshop/generate-workflow.tsx");
+  const analyze = read("components/workshop/analyze-workflow.tsx");
+  assert.match(page, /export const revalidate = 3600/);
+  assert.doesNotMatch(page, /await searchParams/);
+  assert.doesNotMatch(`${workshop}\n${generate}\n${analyze}`, /useSearchParams\(/);
+  assert.match(workshop, /window\.location\.search/);
+  assert.match(generate, /window\.location\.search/);
+  assert.match(analyze, /window\.location\.search/);
+  assert.match(analyze, /prepopulateFromExample\(exampleId\)/);
+  assert.match(page, /rel="canonical" href=\{`\$\{SITE_URL\}\/`\}/);
+});
+
 test("example results wait to scroll until the user leaves a focused field", () => {
   assert.equal(
     planExampleResultReveal({ alreadyRevealed: false, editing: true, hasResultsNode: true, inView: false }),

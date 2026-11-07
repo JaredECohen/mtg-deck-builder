@@ -9,13 +9,7 @@ import { WorkflowSummary } from "./workflow-summary";
 import type { CardContext } from "@/hooks/use-card-detail";
 import { useDeckAnalyzer } from "@/hooks/use-deck-analyzer";
 import { fetchSharedDeck } from "@/lib/api";
-import {
-  planExampleResultReveal,
-  prepopulateFromExample,
-  resolveAnalyzeSeed,
-  shouldAutoAnalyzeArrival,
-  type ExampleDeck,
-} from "@/lib/example-decks";
+import { planExampleResultReveal, prepopulateFromExample, resolveAnalyzeSeed, shouldAutoAnalyzeArrival } from "@/lib/example-decks";
 import { clearManualDraft, loadManualDraft, saveManualDraft } from "@/lib/manual-draft";
 import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
@@ -32,13 +26,17 @@ export function isEditingFormControl(element: Element | null): boolean {
 type Props = {
   dataStatus: DataStatusResponse | null;
   onOpenCard: (name: string, context?: CardContext) => void;
-  /** Share token from ?deck=: load that saved deck and analyze it. */
-  sharedToken: string | null;
-  /** Official list id from ?example=: prefill the editor from the guide catalog. */
+  /** Share token from ?deck=. When omitted, the URL is read after mount. */
+  sharedToken?: string | null;
+  /** Official list id from ?example=. When omitted, the URL is read after mount. */
   exampleId?: string | null;
-  /** Server-resolved list, so the first HTML already contains the cards. */
-  initialExample?: ExampleDeck | null;
 };
+
+function arrivalValue(name: string, explicit?: string | null): string | null {
+  const fromUrl = typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get(name) ?? "");
+  const value = (explicit || fromUrl).trim();
+  return value || null;
+}
 
 type Snapshot = { format: FormatName | null; mainboard: CardRef[]; sideboard: CardRef[]; commander: string };
 
@@ -51,27 +49,12 @@ function snapshotKey(snapshot: Snapshot): string {
   return [snapshot.format, snapshot.commander, list(snapshot.mainboard), list(snapshot.sideboard)].join("#");
 }
 
-export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId, initialExample = null }: Props) {
-  const seeded =
-    initialExample && exampleId
-      ? resolveAnalyzeSeed({
-          example: {
-            format: initialExample.format,
-            mainboard: initialExample.mainboard,
-            sideboard: initialExample.sideboard,
-            commander: initialExample.commander,
-            name: initialExample.name,
-            note: initialExample.note ?? "",
-          },
-          draft: null,
-          defaultNotes: DEFAULT_NOTES,
-        })
-      : null;
-  const [format, setFormat] = useState<FormatName | null>(seeded?.format ?? null);
-  const [manualMainboard, setManualMainboard] = useState<CardRef[]>(seeded?.mainboard ?? []);
-  const [manualSideboard, setManualSideboard] = useState<CardRef[]>(seeded?.sideboard ?? []);
-  const [manualCommander, setManualCommander] = useState(seeded?.commander ?? "");
-  const [manualNotes, setManualNotes] = useState(seeded?.notes ?? DEFAULT_NOTES);
+export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTokenProp = null, exampleId: exampleIdProp = null }: Props) {
+  const [format, setFormat] = useState<FormatName | null>(null);
+  const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
+  const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
+  const [manualCommander, setManualCommander] = useState("");
+  const [manualNotes, setManualNotes] = useState(DEFAULT_NOTES);
   const [manualImportText, setManualImportText] = useState("");
   const [deepAnalysis, setDeepAnalysis] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -80,11 +63,11 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   const [shared, setShared] = useState<{ status: "loading" | "loaded" | "failed"; name?: string; error?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   // Set only after ?example= actually fills the editor. A failed load leaves this null.
-  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(seeded && exampleId ? exampleId : null);
+  const [loadedExampleId, setLoadedExampleId] = useState<string | null>(null);
   const loadedToken = useRef<string | null>(null);
   // ?example= fills the editor from the catalog. That load must not replace the
   // saved draft, and the draft must not replace the example.
-  const persistDraft = useRef(!seeded);
+  const persistDraft = useRef(true);
   // Claimed when an example auto-analyze actually starts, so a later render
   // (or React strict mode's second effect) cannot fire a second request.
   const autoAnalyzeClaim = useRef<string | null>(null);
@@ -98,17 +81,13 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
 
   useEffect(() => {
     let cancelled = false;
-    // A shared link replaces the local draft instead of merging with it.
-    // The example list is fetched only when ?example= is present.
+    // Read the URL here so the static homepage can render this workflow. A
+    // shared link replaces the local draft instead of merging with it. The
+    // example list is fetched only when ?example= is present.
+    const exampleId = arrivalValue("example", exampleIdProp);
+    const sharedToken = arrivalValue("deck", sharedTokenProp);
     async function hydrate() {
       if (sharedToken) {
-        if (!cancelled) setDraftHydrated(true);
-        return;
-      }
-      // The server already filled the editor. Don't import the catalog again
-      // and don't let a saved draft replace that list.
-      if (seeded) {
-        persistDraft.current = false;
         if (!cancelled) setDraftHydrated(true);
         return;
       }
@@ -157,6 +136,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
 
   // ?deck=<token>: fetch the shared list, load it into the editor and analyze it.
   useEffect(() => {
+    const sharedToken = arrivalValue("deck", sharedTokenProp);
     if (!sharedToken || loadedToken.current === sharedToken) return;
     // Marked loaded only on success: a cancelled run (e.g. React's dev-mode
     // double effect) must not block the retry.
@@ -195,7 +175,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
         setShared({ status: "failed", error: err instanceof Error ? err.message : "Shared deck not found" });
       });
     return () => controller.abort();
-  }, [sharedToken, analyze, resetAnalyzer]);
+  }, [sharedTokenProp, analyze, resetAnalyzer]);
 
   useEffect(() => {
     setStatusMessage(analysis ? `Analysis ready: ${analysis.inferred_archetype}, ${analysis.deck_health}.` : "");
@@ -283,6 +263,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   runAutoAnalyze.current = runAnalysis;
   useEffect(() => {
     const id = loadedExampleId;
+    const sharedToken = arrivalValue("deck", sharedTokenProp);
     if (!shouldAutoAnalyzeArrival({
       exampleId: id,
       exampleResolved: Boolean(id),
@@ -300,7 +281,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loadedExampleId, sharedToken, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
+  }, [loadedExampleId, sharedTokenProp, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
 
   // After that automatic run, bring off-screen results up on a phone. Skip it
   // when the summary is already in view, and never steal focus from a field

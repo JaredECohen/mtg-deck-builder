@@ -42,24 +42,26 @@ function colorKey(colors: string[]): string {
 type Props = {
   dataStatus: DataStatusResponse | null;
   onOpenCard: (name: string, context?: CardContext) => void;
-  /** Guide links open the builder pre-filled: /?format=commander&brief=... */
-  linkedFormat?: string | null;
-  linkedBrief?: string | null;
 };
 
-function initialFormat(value: string | null | undefined): FormatName | null {
-  if (value && value in FORMAT_LABEL) return value as FormatName;
-  return null;
-}
-
-export function GenerateWorkflow({ dataStatus, onOpenCard, linkedFormat = null, linkedBrief = null }: Props) {
-  const [format, setFormat] = useState<FormatName | null>(initialFormat(linkedFormat));
+export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
+  const [format, setFormat] = useState<FormatName | null>(null);
   // Nothing is preselected: colors, strategies and the brief start empty so
-  // the first deck reflects only what the user chose. A guide link can fill
-  // the format and brief before paint, from the server render.
+  // the first deck reflects only what the user chose.
   const [colors, setColors] = useState<string[]>([]);
   const [selectedStrategies, setSelectedStrategies] = useState<StrategyId[]>([]);
-  const [prompt, setPrompt] = useState((linkedBrief ?? "").slice(0, MAX_PROMPT_CHARS));
+  const [prompt, setPrompt] = useState("");
+
+  // Guide links open the builder pre-filled: /?format=commander&brief=...
+  // Read the URL here so the static homepage can include this form. The
+  // search-params hook would bail that shell out to an empty fallback.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkedFormat = params.get("format");
+    if (linkedFormat && linkedFormat in FORMAT_LABEL) setFormat(linkedFormat as FormatName);
+    const linkedBrief = params.get("brief");
+    if (linkedBrief) setPrompt(linkedBrief.slice(0, MAX_PROMPT_CHARS));
+  }, []);
   const [refinePrompt, setRefinePrompt] = useState(DEFAULT_REFINE_PROMPT);
   const [refineDraftLoaded, setRefineDraftLoaded] = useState(false);
   const [expertSettings, setExpertSettings] = useState<ExpertSettings>(DEFAULT_EXPERT_SETTINGS);
