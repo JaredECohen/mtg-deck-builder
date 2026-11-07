@@ -15,6 +15,14 @@ import type { CardRef, DataStatusResponse, FormatName } from "@/lib/types";
 
 const DEFAULT_NOTES = "Tell me how this deck plays, what shell it resembles, and what I should improve.";
 
+/** True when focus is in a field the user is typing in, so a late result must not move it. */
+export function isEditingFormControl(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement)) return false;
+  const tag = element.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  return element.isContentEditable;
+}
+
 type Props = {
   dataStatus: DataStatusResponse | null;
   onOpenCard: (name: string, context?: CardContext) => void;
@@ -58,7 +66,8 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
   // (or React strict mode's second effect) cannot fire a second request.
   const autoAnalyzeClaim = useRef<string | null>(null);
   const resultsRef = useRef<HTMLElement | null>(null);
-  const revealedResults = useRef(false);
+  // Example id whose results we already tried to reveal. A later example can reveal again.
+  const revealedExampleId = useRef<string | null>(null);
 
   const analyzer = useDeckAnalyzer();
   const analysis = analyzer.analysis;
@@ -213,7 +222,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     if (persistDraft.current) clearManualDraft();
   }
 
-  function handleAnalyze() {
+  function runAnalysis(options: { deepAnalysis: boolean }) {
     if (!format) return;
     const snapshot: Snapshot = {
       format,
@@ -228,15 +237,20 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
       mainboard: snapshot.mainboard,
       sideboard: snapshot.sideboard,
       notes: manualNotes,
-      deep_analysis: deepAnalysis
+      deep_analysis: options.deepAnalysis
     });
   }
 
-  // Same path as the Analyze button, but only after a guide deep link filled
-  // the editor. The timeout is cleared on cleanup so React 19 strict mode's
-  // double-invoked effect starts the request once.
-  const runAnalyze = useRef(handleAnalyze);
-  runAnalyze.current = handleAnalyze;
+  function handleAnalyze() {
+    runAnalysis({ deepAnalysis });
+  }
+
+  // Same list as the Analyze button, but the automatic run is always heuristic.
+  // The Deep analysis checkbox can flip while the example list is loading, and
+  // that must not spend a Claude call. The timeout is cleared on cleanup so
+  // React 19 strict mode's double-invoked effect starts the request once.
+  const runAutoAnalyze = useRef(runAnalysis);
+  runAutoAnalyze.current = runAnalysis;
   useEffect(() => {
     const id = loadedExampleId;
     if (!shouldAutoAnalyzeArrival({
@@ -250,30 +264,30 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken, exampleId
     const timer = window.setTimeout(() => {
       if (cancelled || autoAnalyzeClaim.current === id) return;
       autoAnalyzeClaim.current = id;
-      runAnalyze.current();
+      runAutoAnalyze.current({ deepAnalysis: false });
     }, 0);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loadedExampleId, sharedToken, format, manualMainboard, manualSideboard, manualCommander, manualNotes, deepAnalysis]);
+  }, [loadedExampleId, sharedToken, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
 
-  // After that automatic run, bring the results up when they are off-screen
-  // (the long list pushes them below the fold on a phone). #builder still
-  // lands the page on the workshop; this only moves if the summary is not in view.
+  // After that automatic run, bring off-screen results up on a phone. Skip it
+  // when the summary is already in view, and never steal focus from a field
+  // the user is editing while the request is in flight.
   useEffect(() => {
     if (!loadedExampleId || analyzer.loading) return;
     if (!analysis && !analyzer.error) return;
-    if (revealedResults.current) return;
-    revealedResults.current = true;
+    if (revealedExampleId.current === loadedExampleId) return;
+    revealedExampleId.current = loadedExampleId;
+    if (isEditingFormControl(document.activeElement)) return;
     const node = resultsRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
     const inView = rect.top >= 0 && rect.top < window.innerHeight * 0.85;
-    if (!inView) {
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-    }
+    if (inView) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     node.focus({ preventScroll: true });
   }, [loadedExampleId, analysis, analyzer.loading, analyzer.error]);
 

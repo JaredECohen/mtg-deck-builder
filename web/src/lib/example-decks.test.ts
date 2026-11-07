@@ -176,7 +176,23 @@ test("a resolved example deep link auto-analyzes once, and a normal visit does n
   assert.match(workflow, /setLoadedExampleId\(example && exampleId \? exampleId : null\)/);
   assert.match(workflow, /window\.setTimeout\(/);
   assert.match(workflow, /autoAnalyzeClaim\.current = id/);
-  assert.match(workflow, /runAnalyze\.current\(\)/);
+  assert.match(workflow, /runAutoAnalyze\.current\(\{ deepAnalysis: false \}\)/);
+});
+
+test("automatic example analysis sends deep_analysis false and ignores the checkbox", () => {
+  const workflow = fs.readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../components/workshop/analyze-workflow.tsx"),
+    "utf8",
+  );
+  const autoStart = workflow.indexOf("const timer = window.setTimeout");
+  const autoEnd = workflow.indexOf("isEditingFormControl(document.activeElement)");
+  assert.ok(autoStart !== -1 && autoEnd > autoStart);
+  const auto = workflow.slice(autoStart, autoEnd);
+  assert.match(auto, /runAutoAnalyze\.current\(\{ deepAnalysis: false \}\)/);
+  assert.doesNotMatch(auto, /handleAnalyze\(/);
+  assert.doesNotMatch(auto, /deep_analysis: deepAnalysis/);
+  assert.match(workflow, /function handleAnalyze\(\) \{\s*runAnalysis\(\{ deepAnalysis \}\);\s*\}/);
+  assert.match(workflow, /deep_analysis: options\.deepAnalysis/);
 });
 
 test("the analyze workflow refuses to autosave an example over the draft", () => {
@@ -187,4 +203,11 @@ test("the analyze workflow refuses to autosave an example over the draft", () =>
   assert.match(workflow, /persistDraft\.current = seed\.persistDraft/);
   assert.match(workflow, /if \(!draftHydrated \|\| !persistDraft\.current\) return;/);
   assert.match(workflow, /if \(persistDraft\.current\) clearManualDraft\(\)/);
+  assert.match(workflow, /if \(revealedExampleId\.current === loadedExampleId\) return;/);
+  assert.match(workflow, /if \(isEditingFormControl\(document\.activeElement\)\) return;/);
+  const reveal = workflow.slice(workflow.indexOf("revealedExampleId.current = loadedExampleId"));
+  const scrollAt = reveal.indexOf("scrollIntoView");
+  const focusAt = reveal.indexOf("node.focus");
+  assert.ok(scrollAt !== -1 && focusAt > scrollAt);
+  assert.doesNotMatch(reveal.slice(0, scrollAt), /node\.focus\(/);
 });
