@@ -209,8 +209,10 @@ cached so generation stays fast and deterministic.
 | `MTG_COACH_DISABLE` | Force-skip coach prose even with key set | (unset) |
 | `MTG_API_KEY` | Comma-separated API keys; enables `X-API-Key` auth on optimize/prose/evaluate/save/precon-upgrade | (unset → auth off) |
 | `MTG_USE_PGVECTOR` | Use the pgvector NN path for `/similar` when the `card_embeddings` table exists | `false` |
-| `TCGPLAYER_AFFILIATE_URL` | TCGplayer affiliate deep-link prefix from Impact (e.g. `https://tcgplayer.pxf.io/c/123456/789012/21018`); every TCGplayer link served by the API is wrapped for attribution | (unset → untracked links) |
-| `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | Same prefix, inlined into the frontend for client-built "Shop This Deck" and mass-entry links | (unset) |
+| `TCGPLAYER_AFFILIATE_URL` | TCGplayer affiliate deep-link prefix from Impact, path only (e.g. `https://partner.tcgplayer.com/c/123456/789012/21018`). The API wraps links as `{prefix}?subId1=api&u={destination}&partnerpropertyid={id}` | (unset → untracked links) |
+| `TCGPLAYER_PARTNER_PROPERTY_ID` | Impact media property id, sent as `partnerpropertyid` only when set | (unset → param omitted) |
+| `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | Same prefix, inlined into the frontend for client-built "Shop This Deck" and mass-entry links. The browser re-wraps API product URLs with the page's `subId1` | (unset) |
+| `NEXT_PUBLIC_TCGPLAYER_PARTNER_PROPERTY_ID` | Same property id, inlined into the frontend. Changing either `NEXT_PUBLIC_` value requires a rebuild | (unset) |
 
 ### Monetization
 
@@ -231,11 +233,30 @@ actually buy MTG singles). Surfaces:
   different deck is generated. Needs `ANTHROPIC_API_KEY` on the API; without it the
   panel reports that chat is unavailable.
 
-TCGplayer's program runs through [Impact](https://impact.com); once approved you
-get a deep-link prefix — set both variables above to it. Links are wrapped at the
-API read boundary (`app/services/affiliate.py`) and at build time on the
-frontend, so changing the prefix never requires re-ingesting card data. The
-required affiliate disclosure renders alongside every link surface.
+TCGplayer's program runs through [Impact](https://impact.com). A tracked link is
+
+`{prefix}?subId1={page}&u={encoded tcgplayer.com URL}&partnerpropertyid={id}`
+
+with `subId1` and `partnerpropertyid` omitted when those values are empty.
+`u` is the canonical store URL: `pxf.io` and `partner.tcgplayer.com` wrappers
+are unwrapped first, so a link is never double-wrapped and another publisher's
+affiliate URL is never passed through. When the prefix is unset, every surface
+uses a plain tcgplayer.com URL and does not show the affiliate disclosure.
+
+`subId1` is a short page tag (letters, digits, hyphen, underscore, ≤64 characters):
+
+| Tag | Surface |
+| --- | --- |
+| `home` | Homepage builder: Generate a deck, Shop This Deck and per-card singles |
+| `workshop` | Card detail Buy button opened from Generate or Analyze |
+| `workshop-precon` | Precon upgrade cart, and the card modal while that tab is active |
+| `blog-<slug>` | Reviewed guide deck list, e.g. `blog-mill-deck-guide` |
+| `api` | API fallback before the browser re-wraps the link with the page tag |
+
+Unreviewed guides keep a plain store URL. Links are wrapped at the API read
+boundary (`app/services/affiliate.py`) and again in the browser, so changing
+the prefix never requires re-ingesting card data. The affiliate disclosure
+renders only next to links that are actually wrapped.
 
 ## Postgres data pipeline
 

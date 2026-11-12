@@ -9,6 +9,7 @@ import { PreconUpgrade } from "./workshop/precon-upgrade";
 import { panelId, tabId, Tabs } from "./workshop/tabs";
 import { useCardDetail } from "@/hooks/use-card-detail";
 import { useDataStatus } from "@/hooks/use-data-status";
+import { TCG_SUB_ID } from "@/lib/affiliate";
 
 type BuilderMode = "generate" | "analyze" | "precon";
 
@@ -55,7 +56,10 @@ export function DeckWorkshop() {
         <PreconUpgrade onOpenCard={cardDetail.open} />
       </div>
 
-      <CardDetailModal detail={cardDetail} />
+      <CardDetailModal
+        detail={cardDetail}
+        subId={mode === "precon" ? TCG_SUB_ID.workshopPrecon : TCG_SUB_ID.workshop}
+      />
     </section>
   );
 }

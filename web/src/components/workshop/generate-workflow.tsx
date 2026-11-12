@@ -19,6 +19,7 @@ import { useDeckEvaluation } from "@/hooks/use-deck-evaluation";
 import { useDeckGenerator } from "@/hooks/use-deck-generator";
 import { useDeckRationale } from "@/hooks/use-deck-rationale";
 import { useExperienceMode } from "@/hooks/use-experience-mode";
+import { TCG_SUB_ID } from "@/lib/affiliate";
 import { MAX_PROMPT_CHARS, type GenerateDeckInput } from "@/lib/api";
 import { parseCardNameLines } from "@/lib/briefs";
 import { cardCount, diffCardLists } from "@/lib/deck-diff";
@@ -305,6 +306,7 @@ export function GenerateWorkflow({ dataStatus, onOpenCard }: Props) {
               onRestore={generator.restore}
               onApplyOptimized={(next) => generator.applyDeck(next, "Applied sim-optimized version")}
               onBuildAlternative={(alternative) => void handleBuildAlternative(alternative)}
+              subId={TCG_SUB_ID.home}
             />
             <SaveSharePanel deck={deck} evaluation={evaluation.evaluation} />
             <div className="panel results-card">

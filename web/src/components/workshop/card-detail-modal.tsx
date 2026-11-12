@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+// Value import: `tsx --test` compiles JSX to React.createElement.
+import React, { useEffect, useRef, useState } from "react";
 
 import type { CardDetailState } from "@/hooks/use-card-detail";
-import { AFFILIATE_DISCLOSURE, tcgplayerSearchUrl } from "@/lib/affiliate";
+import { AFFILIATE_DISCLOSURE, externalAnchorRel, isAffiliateUrl, tcgplayerBuyUrl } from "@/lib/affiliate";
 
 type Props = {
   detail: CardDetailState;
+  /** Impact subId1 for this page. The builder modal uses `workshop`; precon uses `workshop-precon`. */
+  subId: string;
 };
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -31,7 +34,7 @@ function CardImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function CardDetailModal({ detail }: Props) {
+export function CardDetailModal({ detail, subId }: Props) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const { name, card, loading, error, context, similar, similarLoading, similarError, open, close } = detail;
@@ -63,6 +66,8 @@ export function CardDetailModal({ detail }: Props) {
     }
   }
 
+  const buyUrl = tcgplayerBuyUrl(card?.purchase_links?.tcgplayer, name, { subId });
+  const showDisclosure = isAffiliateUrl(buyUrl);
   const imageSrc = card?.image_uri || card?.faces.find((face) => face.image_uri)?.image_uri || null;
   const filterNote = [
     context.format ? `legal in ${context.format[0].toUpperCase()}${context.format.slice(1)}` : null,
@@ -132,9 +137,9 @@ export function CardDetailModal({ detail }: Props) {
             <div className="export-row" style={{ marginTop: 12 }}>
               <a
                 className="button"
-                href={card?.purchase_links?.tcgplayer || tcgplayerSearchUrl(name)}
+                href={buyUrl}
                 target="_blank"
-                rel="noreferrer sponsored"
+                rel={externalAnchorRel(buyUrl)}
               >
                 Buy on TCGplayer
               </a>
@@ -145,7 +150,9 @@ export function CardDetailModal({ detail }: Props) {
                 <a className="button secondary" href={card.purchase_links.cardmarket} target="_blank" rel="noreferrer">Buy on Cardmarket</a>
               ) : null}
             </div>
-            <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+            {showDisclosure ? (
+              <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+            ) : null}
             {error ? <p className="workflow-error" role="alert">{error}</p> : null}
 
             <section className="similar-cards" aria-labelledby="similar-cards-heading">
