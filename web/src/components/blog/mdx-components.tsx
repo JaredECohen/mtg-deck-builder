@@ -1,9 +1,15 @@
 import Link from "next/link";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import React, { type ComponentPropsWithoutRef, type ReactNode } from "react"; // classic JSX runtime for tsx --test
 
 import { AdSlot } from "@/components/ad-slot";
 import { ADSENSE_IN_ARTICLE_SLOT } from "@/lib/ads";
-import { AFFILIATE_DISCLOSURE, externalAnchorRel, isAffiliateUrl, tcgplayerMassEntryUrl } from "@/lib/affiliate";
+import {
+  AFFILIATE_DISCLOSURE,
+  blogSubId,
+  externalAnchorRel,
+  isAffiliateUrl,
+  tcgplayerMassEntryUrl,
+} from "@/lib/affiliate";
 import { getPost, isCategory, slugify } from "@/lib/blog";
 import { catalogFetchedAt, getCatalogDeck } from "@/lib/example-catalog";
 import { exampleBuilderHref } from "@/lib/example-decks";
@@ -61,17 +67,30 @@ export function HiddenInArticleAd() {
 }
 
 /** Official product list, with a button that opens the builder prefilled via ?example=. */
-export function DeckBlock({ id }: { id: string }) {
+export function DeckBlock({
+  id,
+  subId = "",
+  affiliate = false,
+}: {
+  id: string;
+  /** Page tag for Impact. Reviewed guides pass blog-<slug>. */
+  subId?: string;
+  /** Unreviewed guides stay on a plain tcgplayer.com URL. */
+  affiliate?: boolean;
+}) {
   const deck = getCatalogDeck(id);
   if (!deck) {
     return <p>Example deck “{id}” is not in the priced catalog.</p>;
   }
   const fetchedAt = catalogFetchedAt();
-  const buyUrl = tcgplayerMassEntryUrl([
-    ...deck.mainboard,
-    ...deck.sideboard,
-    ...(deck.commander ? [{ name: deck.commander, quantity: 1 }] : []),
-  ]);
+  const buyUrl = tcgplayerMassEntryUrl(
+    [
+      ...deck.mainboard,
+      ...deck.sideboard,
+      ...(deck.commander ? [{ name: deck.commander, quantity: 1 }] : []),
+    ],
+    { subId, affiliate },
+  );
   const showDisclosure = isAffiliateUrl(buyUrl);
   const kill = deck.analysis.goldfish.avg_kill_turn;
   return (
@@ -121,7 +140,7 @@ export function DeckBlock({ id }: { id: string }) {
         </Link>
       </p>
       <p className="deck-block-sources">
-        <a href={buyUrl} target="_blank" rel="sponsored nofollow noopener noreferrer">
+        <a href={buyUrl} target="_blank" rel={externalAnchorRel(buyUrl)}>
           Price this list on TCGplayer
         </a>
         {deck.source_url ? (
@@ -205,8 +224,12 @@ export const mdxComponents = {
   Callout,
 };
 
-/** Reviewed posts keep the ad break. Every other post renders the tag as nothing. */
-export function mdxComponentsForPost(reviewed: boolean) {
-  if (reviewed) return mdxComponents;
-  return { ...mdxComponents, InArticleAd: HiddenInArticleAd };
+/** Reviewed posts keep the ad break and may affiliate-wrap DeckBlock. Every other post renders the ad tag as nothing and leaves buy links untracked. */
+export function mdxComponentsForPost(reviewed: boolean, slug = "") {
+  function GuideDeckBlock({ id }: { id: string }) {
+    const track = reviewed && slug.length > 0;
+    return <DeckBlock id={id} subId={track ? blogSubId(slug) : ""} affiliate={track} />;
+  }
+  if (reviewed) return { ...mdxComponents, DeckBlock: GuideDeckBlock };
+  return { ...mdxComponents, InArticleAd: HiddenInArticleAd, DeckBlock: GuideDeckBlock };
 }

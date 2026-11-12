@@ -99,7 +99,7 @@ test("affiliate disclosure is required only when an affiliate link is present", 
   const linked = reviewPost({
     file: "linked.mdx",
     data: { reviewed: true, author: "Jared Cohen", updated: "2026-11-01" },
-    body: reviewedBody("\n\nhttps://tcgplayer.pxf.io/c/1/2/3?u=deck\n"),
+    body: reviewedBody("\n\nhttps://partner.tcgplayer.com/c/123456/789012/21018?subId1=blog-example&u=deck\n"),
     exampleIds: IDS,
   });
   assert.ok(linked.some((line) => line.includes("without the disclosure")));
@@ -115,7 +115,7 @@ test("affiliate disclosure is required only when an affiliate link is present", 
   const both = reviewPost({
     file: "both.mdx",
     data: { reviewed: true, author: "Jared Cohen", updated: "2026-11-01" },
-    body: reviewedBody("\n\nhttps://tcgplayer.pxf.io/c/1/2/3 may earn a commission.\n"),
+    body: reviewedBody("\n\nhttps://tcgplayer.pxf.io/c/1/2/3 may earn a commission.\n\nhttps://partner.tcgplayer.com/c/123456/789012/21018?subId1=blog-example&u=deck\n"),
     exampleIds: IDS,
   });
   assert.deepEqual(both, []);

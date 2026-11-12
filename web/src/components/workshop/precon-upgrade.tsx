@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+// Value import: `tsx --test` compiles JSX to React.createElement.
+import React, { useEffect, useState, type FormEvent } from "react";
 
 import { fetchPrecons, upgradePrecon } from "@/lib/api";
-import { AFFILIATE_DISCLOSURE } from "@/lib/affiliate";
+import { AFFILIATE_DISCLOSURE, TCG_SUB_ID, externalAnchorRel, isAffiliateUrl, tcgplayerAffiliate } from "@/lib/affiliate";
 import type { PreconSummary, PreconUpgradeResponse } from "@/lib/types";
 
 type Props = {
@@ -196,7 +197,7 @@ export function PreconUpgrade({ onOpenCard }: Props) {
   );
 }
 
-function PreconResult({
+export function PreconResult({
   result,
   onOpenCard
 }: {
@@ -204,6 +205,10 @@ function PreconResult({
   onOpenCard: (name: string) => void;
 }) {
   const legal = result.legality.is_legal;
+  const cartUrl = result.tcgplayer_cart_url
+    ? tcgplayerAffiliate(result.tcgplayer_cart_url, { subId: TCG_SUB_ID.workshopPrecon })
+    : "";
+  const showDisclosure = isAffiliateUrl(cartUrl);
   return (
     <section className="panel form-card" aria-live="polite">
       <span className="label">{result.name}</span>
@@ -247,14 +252,14 @@ function PreconResult({
         <p>No swap improved this deck inside the budget.</p>
       )}
 
-      {result.tcgplayer_cart_url ? (
+      {cartUrl ? (
         <p>
-          <a className="button" href={result.tcgplayer_cart_url} target="_blank" rel="noreferrer">
+          <a className="button" href={cartUrl} target="_blank" rel={externalAnchorRel(cartUrl)}>
             Buy the adds on TCGplayer
           </a>
         </p>
       ) : null}
-      <p className="muted" style={{ fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+      {showDisclosure ? <p className="muted" style={{ fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p> : null}
     </section>
   );
 }

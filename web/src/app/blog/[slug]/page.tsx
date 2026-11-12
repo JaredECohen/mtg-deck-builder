@@ -204,7 +204,7 @@ function Article({ post }: { post: Post }) {
         <div className="blog-prose">
           <MDXRemote
             source={post.body}
-            components={mdxComponentsForPost(post.reviewed)}
+            components={mdxComponentsForPost(post.reviewed, post.slug)}
             options={{ mdxOptions: { remarkPlugins: [remarkGfm] } }}
           />
         </div>

@@ -56,14 +56,21 @@ fly secrets set --app mtg-deck-lab-api \
   MTG_API_KEY=<that key> \
   ANTHROPIC_API_KEY=<key> \
   OPENAI_API_KEY=<key> \
-  TCGPLAYER_AFFILIATE_URL=<impact deep-link prefix>
+  TCGPLAYER_AFFILIATE_URL=<impact deep-link prefix> \
+  TCGPLAYER_PARTNER_PROPERTY_ID=<impact media property id>
 
 fly deploy
 fly logs --app mtg-deck-lab-api   # watch the bootstrap JSON, then "caches warmed"
 ```
 
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `TCGPLAYER_AFFILIATE_URL` are
-optional. Without the LLM keys, the deterministic fallbacks run.
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `TCGPLAYER_AFFILIATE_URL` and
+`TCGPLAYER_PARTNER_PROPERTY_ID` are optional. Without the LLM keys, the
+deterministic fallbacks run. Without the affiliate prefix, purchase links
+stay plain tcgplayer.com URLs. The prefix is the Impact path only, for
+example `https://partner.tcgplayer.com/c/123456/789012/21018` (no query
+string). The property id is appended as `partnerpropertyid` only when set.
+Leave both unset until you intend to track; setting the Fly secrets restarts
+the API.
 
 Optional sign-in uses the same machine. Set `RESEND_API_KEY`,
 `AUTH_FROM_EMAIL` and `MTG_PUBLIC_SITE_URL` with `fly secrets set` when you
@@ -117,7 +124,13 @@ rate-limit bucket by setting `X-Forwarded-For` on the request.
    | --- | --- |
    | `API_BASE` | `https://mtg-deck-lab-api.fly.dev` |
    | `MTG_API_KEY` | the same key as the Fly secret. Do **not** prefix it with `NEXT_PUBLIC_` |
-   | `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | same as `TCGPLAYER_AFFILIATE_URL` (optional) |
+   | `NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL` | same as `TCGPLAYER_AFFILIATE_URL` (optional). Path only, e.g. `https://partner.tcgplayer.com/c/123456/789012/21018` |
+   | `NEXT_PUBLIC_TCGPLAYER_PARTNER_PROPERTY_ID` | same as `TCGPLAYER_PARTNER_PROPERTY_ID` (optional) |
+
+   `NEXT_PUBLIC_` values are inlined at build time. After changing either
+   affiliate variable, redeploy the web app or the new value is not in the
+   client bundle. Until both the Fly prefix and these Vercel variables are
+   set, preview and production keep untracked tcgplayer.com links.
 
    Optional sign-in (personal deck library). The site works without these.
    Set them on the **API** (Fly), not as `NEXT_PUBLIC_`:

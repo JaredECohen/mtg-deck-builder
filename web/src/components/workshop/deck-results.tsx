@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Value import: `tsx --test` compiles JSX to React.createElement.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AlternativesPanel } from "./alternatives-panel";
 import { ColorSourceChart } from "./color-source-chart";
@@ -15,7 +16,13 @@ import { RevisionHistory } from "./revision-history";
 import { useDeckChat } from "@/hooks/use-deck-chat";
 import type { DeckRevision } from "@/hooks/use-deck-generator";
 import { trackTcgplayerCartClicked } from "@/lib/analytics";
-import { AFFILIATE_DISCLOSURE, externalAnchorRel, tcgplayerMassEntryUrl, tcgplayerSearchUrl } from "@/lib/affiliate";
+import {
+  AFFILIATE_DISCLOSURE,
+  externalAnchorRel,
+  isAffiliateUrl,
+  tcgplayerMassEntryUrl,
+  tcgplayerSearchUrl,
+} from "@/lib/affiliate";
 import { MAX_PROMPT_CHARS } from "@/lib/api";
 import { cardCount } from "@/lib/deck-diff";
 import type {
@@ -34,7 +41,7 @@ export { GroupedDeckList } from "./deck-list";
 
 const BASIC_LAND_NAMES = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"]);
 
-function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
+export function ShopDeckPanel({ deck, subId }: { deck: DeckResponse; subId: string }) {
   // Unique non-basic cards across mainboard, sideboard, and commander —
   // basics aren't worth a marketplace click.
   const seen = new Set<string>();
@@ -47,7 +54,9 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
   }
   if (!shoppable.length) return null;
   // The whole deck — including basics — goes into the one-click cart.
-  const massEntryUrl = tcgplayerMassEntryUrl([...commanderRefs, ...deck.mainboard, ...deck.sideboard]);
+  const shopOptions = { subId };
+  const massEntryUrl = tcgplayerMassEntryUrl([...commanderRefs, ...deck.mainboard, ...deck.sideboard], shopOptions);
+  const showDisclosure = isAffiliateUrl(massEntryUrl);
   return (
     <section className="panel results-card" aria-labelledby="shop-heading">
       <h3 id="shop-heading" className="label">Shop This Deck</h3>
@@ -68,7 +77,7 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
         <summary style={{ cursor: "pointer" }}>{shoppable.length} cards to shop individually</summary>
         <ul className="card-list" style={{ marginTop: 8 }}>
           {shoppable.map((card) => {
-            const href = tcgplayerSearchUrl(card.name);
+            const href = tcgplayerSearchUrl(card.name, shopOptions);
             return (
               <li key={`shop-${card.name}`} className="card-row">
                 <span>
@@ -88,7 +97,9 @@ function ShopDeckPanel({ deck }: { deck: DeckResponse }) {
           })}
         </ul>
       </details>
-      <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+      {showDisclosure ? (
+        <p className="muted" style={{ marginTop: 8, fontSize: "0.75rem" }}>{AFFILIATE_DISCLOSURE}</p>
+      ) : null}
     </section>
   );
 }
@@ -133,6 +144,8 @@ type Props = {
   onRestore: (id: number) => void;
   onApplyOptimized: (next: DeckResponse) => void;
   onBuildAlternative: (alternative: DeckAlternative) => void;
+  /** Impact subId1 for Shop This Deck. The homepage builder passes `home`. */
+  subId: string;
 };
 
 export function DeckResults({
@@ -152,7 +165,8 @@ export function DeckResults({
   onUndo,
   onRestore,
   onApplyOptimized,
-  onBuildAlternative
+  onBuildAlternative,
+  subId,
 }: Props) {
   // "Ask About This Deck". The chat API is stateless — the server gets the
   // current deck plus the transcript on every turn — so the conversation should
@@ -377,7 +391,7 @@ export function DeckResults({
         onClear={resetChat}
       />
 
-      <ShopDeckPanel deck={deck} />
+      <ShopDeckPanel deck={deck} subId={subId} />
 
       <ExportPanel deck={deck} />
 
