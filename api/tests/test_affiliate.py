@@ -156,15 +156,16 @@ def test_mass_entry_url(monkeypatch):
     url = affiliate.tcgplayer_mass_entry_url([("Lightning Bolt", 4), ("Island", 8)])
     assert url.startswith("https://www.tcgplayer.com/massentry")
     # Lines joined with || and quantity-prefixed, URL-encoded.
-    assert "4+Lightning+Bolt" in url
+    assert "4%20Lightning%20Bolt" in url
     assert "%7C%7C" in url  # encoded ||
-    assert "8+Island" in url
+    assert "8%20Island" in url
+    assert "+" not in url
 
 
 def test_mass_entry_skips_zero_qty(monkeypatch):
     monkeypatch.setattr(affiliate, "TCGPLAYER_AFFILIATE_URL", "")
     url = affiliate.tcgplayer_mass_entry_url([("Real Card", 2), ("Ghost", 0)])
-    assert "Real+Card" in url
+    assert "Real%20Card" in url
     assert "Ghost" not in url
 
 
@@ -200,6 +201,42 @@ def test_lookalike_host_is_not_treated_as_a_redirector(monkeypatch):
     monkeypatch.setattr(affiliate, "TCGPLAYER_AFFILIATE_URL", "")
     spoof = "https://evilpxf.io.example.com/?u=" + quote(_PRODUCT, safe="")
     assert affiliate.tcgplayer_affiliate(spoof) is None
+
+
+@pytest.mark.parametrize(
+    "spoof",
+    [
+        "https://evil.com\\@www.tcgplayer.com/x",
+        "https://evil.com@www.tcgplayer.com/x",
+        "https://user:pass@www.tcgplayer.com/x",
+    ],
+)
+def test_userinfo_and_backslash_hosts_are_not_tcgplayer(monkeypatch, spoof):
+    assert affiliate.is_tcgplayer_url(spoof) is False
+    monkeypatch.setattr(affiliate, "TCGPLAYER_AFFILIATE_URL", PREFIX)
+    monkeypatch.setattr(affiliate, "TCGPLAYER_PARTNER_PROPERTY_ID", "")
+    assert affiliate.tcgplayer_affiliate(spoof) is None
+    wrapped = "https://tcgplayer.pxf.io/c/1/2/3?u=" + quote(spoof, safe="")
+    assert affiliate.tcgplayer_affiliate(wrapped) is None
+
+
+def test_configured_prefix_host_is_unwrapped(monkeypatch):
+    # A future Impact domain set as our prefix must still unwrap, not nest.
+    prefix = "https://tcgplayer.impact-new.example/c/1/2/3"
+    monkeypatch.setattr(affiliate, "TCGPLAYER_AFFILIATE_URL", prefix)
+    monkeypatch.setattr(affiliate, "TCGPLAYER_PARTNER_PROPERTY_ID", "")
+    once = affiliate.tcgplayer_affiliate(_PRODUCT, sub_id="api")
+    assert once.startswith(f"{prefix}?subId1=api&u=")
+    page = affiliate.tcgplayer_affiliate(once, sub_id="workshop")
+    assert page.startswith(f"{prefix}?subId1=workshop&u=")
+    assert _u(page) == _PRODUCT
+    assert page.count("u=") == 1
+
+
+def test_search_url_encodes_spaces_as_percent_20(monkeypatch):
+    monkeypatch.setattr(affiliate, "TCGPLAYER_AFFILIATE_URL", "")
+    url = affiliate.tcgplayer_search_url("Lightning Bolt")
+    assert url == "https://www.tcgplayer.com/search/magic/product?q=Lightning%20Bolt&productLineName=magic"
 
 
 def test_non_tcgplayer_destinations_are_never_wrapped(monkeypatch):

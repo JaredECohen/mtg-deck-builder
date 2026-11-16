@@ -1,11 +1,32 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
-import { SITE_URL, indexablePosts } from "@/lib/blog";
+import { SITE_NAME, SITE_URL, indexablePosts } from "@/lib/blog";
+import { HOME_DESCRIPTION, HOME_TITLE } from "@/lib/seo";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
+
+// Home-only social fields. The card image comes from app/opengraph-image.tsx,
+// so it is not repeated here (a config image would replace that file's tags).
+export const metadata: Metadata = {
+  title: HOME_TITLE,
+  description: HOME_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: `${SITE_URL}/`,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
+};
 
 const FORMATS = [
   {

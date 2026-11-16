@@ -13,9 +13,9 @@
 //   workshop          card modal opened from Generate or Analyze
 //   workshop-precon   precon upgrade cart, and the card modal on that tab
 //   blog-<slug>       a reviewed guide, e.g. blog-mill-deck-guide
-//   <path-slug>       any other page with a buy link (subIdFromPath)
-// The API's own wrap uses "api". This module unwraps that (and any pxf.io
-// or partner.tcgplayer.com wrapper) and re-wraps with the page tag.
+// The API's own wrap uses "api". This module unwraps that (and any pxf.io,
+// partner.tcgplayer.com, or configured-prefix wrapper) and re-wraps with the
+// page tag.
 // Unreviewed guides pass affiliate: false and stay untracked.
 
 const AFFILIATE_HOSTS = ["pxf.io", "partner.tcgplayer.com"] as const;
@@ -68,17 +68,6 @@ export function blogSubId(slug: string): string {
   return sanitizeSubId(`blog-${slug}`);
 }
 
-/**
- * Short slug of a pathname for a page that is not one of the named surfaces.
- * "/" is home. "/blog/mill-deck-guide" is blog-mill-deck-guide.
- */
-export function subIdFromPath(pathname: string): string {
-  const path = pathname.trim().split("?")[0]?.split("#")[0] ?? "";
-  if (!path || path === "/") return TCG_SUB_ID.home;
-  const slug = path.split("/").filter(Boolean).slice(0, 4).join("-");
-  return sanitizeSubId(slug);
-}
-
 function hostname(url: string): string {
   try {
     return new URL(url).hostname.toLowerCase();
@@ -93,13 +82,20 @@ function hostIs(host: string, domain: string): boolean {
 
 function isRedirector(url: string): boolean {
   const host = hostname(url);
-  return AFFILIATE_HOSTS.some((domain) => hostIs(host, domain));
+  if (AFFILIATE_HOSTS.some((domain) => hostIs(host, domain))) return true;
+  // Our own configured prefix host is a redirector too, so a future Impact
+  // domain still unwraps. Store hosts (tcgplayer.com) are never redirectors.
+  const prefixHost = hostname(affiliatePrefix());
+  return Boolean(prefixHost) && !hostIs(prefixHost, "tcgplayer.com") && host === prefixHost;
 }
 
 function isTcgplayerUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    // Same rule as the API: refuse userinfo ("evil.com@..."). A backslash is
+    // already read as "/" here, so "evil.com\@www.tcgplayer.com" is evil.com.
+    if (parsed.username || parsed.password) return false;
     return hostIs(parsed.hostname.toLowerCase(), "tcgplayer.com");
   } catch {
     return false;

@@ -16,7 +16,6 @@ import {
   externalAnchorRel,
   isAffiliateUrl,
   sanitizeSubId,
-  subIdFromPath,
   tcgplayerAffiliate,
   tcgplayerBuyUrl,
   tcgplayerMassEntryUrl,
@@ -109,9 +108,6 @@ test("subId1 is sanitized and capped", () => {
     const long = sanitizeSubId(`blog-${"a".repeat(80)}`);
     assert.ok(long.length <= 64);
     assert.equal(blogSubId("mill-deck-guide"), "blog-mill-deck-guide");
-    assert.equal(subIdFromPath("/"), "home");
-    assert.equal(subIdFromPath("/blog/mill-deck-guide"), "blog-mill-deck-guide");
-    assert.equal(subIdFromPath("/method"), "method");
   });
 });
 
@@ -160,6 +156,43 @@ test("non-tcgplayer destinations are refused", () => {
     assert.equal(fallback.startsWith(`${PREFIX}?subId1=workshop&u=`), true);
     assert.equal(new URL(fallback).searchParams.get("u")?.includes("tcgplayer.com/search"), true);
     assert.equal(fallback.includes("evil.example.com"), false);
+  });
+});
+
+test("backslash and userinfo hosts are not treated as TCGplayer", () => {
+  withAffiliateEnv({ NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL: PREFIX }, () => {
+    for (const spoof of ["https://evil.com\\@www.tcgplayer.com/x", "https://evil.com@www.tcgplayer.com/x"]) {
+      assert.equal(tcgplayerAffiliate(spoof), "");
+      assert.equal(tcgplayerAffiliate(`https://tcgplayer.pxf.io/c/1/2/3?u=${encodeURIComponent(spoof)}`), "");
+    }
+  });
+});
+
+test("the configured prefix host is unwrapped even when it is a new Impact domain", () => {
+  const prefix = "https://tcgplayer.impact-new.example/c/1/2/3";
+  withAffiliateEnv({ NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL: prefix }, () => {
+    const once = tcgplayerAffiliate(PRODUCT, { subId: "api" });
+    assert.equal(once.startsWith(`${prefix}?subId1=api&u=`), true);
+    const page = tcgplayerAffiliate(once, { subId: "workshop" });
+    assert.equal(page.startsWith(`${prefix}?subId1=workshop&u=`), true);
+    assert.equal(new URL(page).searchParams.get("u"), PRODUCT);
+    assert.equal(page.split("u=").length, 2);
+  });
+});
+
+test("a Python-style plus-encoded Mass Entry URL round-trips through the re-wrap", () => {
+  // Older API responses encoded the decklist with quote_plus ("+" for spaces).
+  const dest = "https://www.tcgplayer.com/massentry?productline=Magic&c=4+Lightning+Bolt%7C%7C8+Island";
+  const apiLink = `${PREFIX}?subId1=api&u=${encodeURIComponent(dest)}`;
+  withAffiliateEnv({ NEXT_PUBLIC_TCGPLAYER_AFFILIATE_URL: PREFIX }, () => {
+    const url = tcgplayerAffiliate(apiLink, { subId: TCG_SUB_ID.workshopPrecon });
+    assert.equal(new URL(url).searchParams.get("subId1"), "workshop-precon");
+    const inner = new URL(url).searchParams.get("u") ?? "";
+    assert.equal(inner, dest);
+    assert.equal(new URL(inner).searchParams.get("c"), "4 Lightning Bolt||8 Island");
+  });
+  withAffiliateEnv({}, () => {
+    assert.equal(tcgplayerAffiliate(apiLink), dest);
   });
 });
 

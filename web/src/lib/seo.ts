@@ -4,6 +4,11 @@ import { SITE_NAME } from "@/lib/blog";
 export const TITLE_MAX = 60;
 export const DESCRIPTION_MAX = 160;
 
+/** Homepage title and description. The root layout also uses them as the default. */
+export const HOME_TITLE = "MTG Deck Lab: Free Magic: The Gathering Deck Builder";
+export const HOME_DESCRIPTION =
+  "Build legal Magic: The Gathering decks for Standard, Pioneer, Modern, Legacy and Commander, with a reason for every card, a mana curve and a price.";
+
 /** Site-wide social card. Deck pages replace this with their own image. */
 export const DEFAULT_SOCIAL_IMAGE = {
   url: "/opengraph-image",
