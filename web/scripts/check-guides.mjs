@@ -37,6 +37,14 @@ const posts = files.map((file) => {
 const knownSlugs = new Set(posts.map((post) => post.slug));
 const live = posts.filter((post) => post.data.draft !== true && post.data.archived !== true);
 const dateOf = new Map(live.map((post) => [post.slug, post.date]));
+const reviewedSlugs = new Set(live.filter((post) => post.data.reviewed === true).map((post) => post.slug));
+const reviewedInCategory = new Map();
+for (const post of live) {
+  if (post.data.reviewed !== true) continue;
+  const category = String(post.data.category);
+  reviewedInCategory.set(category, (reviewedInCategory.get(category) ?? 0) + 1);
+}
+const indexableHubs = new Set([...CATEGORIES].filter((category) => (reviewedInCategory.get(category) ?? 0) >= 3));
 const firstDate = live.reduce((min, post) => (post.date < min ? post.date : min), "9999-12-31");
 
 const problems = [];
@@ -62,13 +70,16 @@ for (const post of live) {
 
   for (const [, slug] of body.matchAll(/\]\(\/blog\/([a-z0-9-]+)(?:#[^)]*)?\)/g)) {
     if (!CATEGORIES.has(slug) && !knownSlugs.has(slug)) fail(`broken link /blog/${slug}`);
+    else if (CATEGORIES.has(slug) && !indexableHubs.has(slug)) fail(`link to thin hub /blog/${slug}`);
+    else if (!CATEGORIES.has(slug) && !reviewedSlugs.has(slug)) fail(`link to non-reviewed guide /blog/${slug}`);
   }
   for (const slug of Array.isArray(data.related) ? data.related : []) {
     if (!knownSlugs.has(slug)) fail(`related slug "${slug}" doesn't exist`);
+    else if (!reviewedSlugs.has(slug)) fail(`related slug "${slug}" is not a reviewed guide`);
   }
   // Every guide needs at least one link that works on its publish day.
   const liveLinks = [...body.matchAll(/\]\(\/blog\/([a-z0-9-]+)/g)].filter(
-    ([, slug]) => CATEGORIES.has(slug) || (dateOf.get(slug) ?? "9999") <= date,
+    ([, slug]) => indexableHubs.has(slug) || (reviewedSlugs.has(slug) && (dateOf.get(slug) ?? "9999") <= date),
   );
   if (!liveLinks.length) fail("no /blog link that is live on its publish day");
 

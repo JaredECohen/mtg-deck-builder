@@ -5,12 +5,11 @@
 
 export const SIMILARITY_THRESHOLD = 0.15;
 /**
- * Outline gate for the old templated set guides (The story, Mechanics, Key
- * cards, Limited, The meta, Cards from {set} worth owning). It is a blocklist
- * of those headings: renaming them defeats the gate. The reviewed guides share
- * their own outline (Short answer, Common mistakes, FAQ, How this was made, and
- * the other entries in RUBRIC_HEADINGS). Those headings are removed before the
- * comparison, so that shared anatomy is not what this gate measures.
+ * Outline gate. Shared headings stay in the comparison, so two guides with the
+ * same skeleton (Short answer, Common mistakes, FAQ, How this was made, and the
+ * old set-guide headings) score as look-alikes. Set-specific "The meta ..." and
+ * "Cards from {set} worth owning" are folded to one heading so renaming the set
+ * does not dodge the gate.
  */
 export const OUTLINE_THRESHOLD = 0.5;
 
@@ -582,25 +581,7 @@ export function maskComparable(text, names = []) {
   );
 }
 
-// Reviewed-guide headings removed before the outline comparison. The 17
-// reviewed guides share this anatomy; hiding it is why their outline Jaccard
-// is 0. The gate then only sees the old set-guide outline.
-const RUBRIC_HEADINGS = new Set([
-  "short answer",
-  "common mistakes",
-  "faq",
-  "how this was made",
-  "when to choose this",
-  "example decks",
-  "lists to open",
-  "lists worth opening",
-  "what to copy",
-  "how to use the floor",
-  "the names that show up",
-  "curve, overlap, and what each deck is doing",
-]);
-
-/** Section outline after the shared reviewed-guide headings are removed. */
+/** Section outline. Shared headings are kept so look-alike skeletons match. */
 export function outlineSet(text) {
   const heads = [...String(text).matchAll(/^## (.+)$/gm)].map((match) =>
     match[1]
@@ -609,7 +590,7 @@ export function outlineSet(text) {
       .replace(/the meta.*/, "the meta")
       .trim(),
   );
-  return new Set(heads.filter((heading) => heading && !RUBRIC_HEADINGS.has(heading)));
+  return new Set(heads.filter(Boolean));
 }
 
 export function similarityProblems(posts, threshold = SIMILARITY_THRESHOLD, names = []) {

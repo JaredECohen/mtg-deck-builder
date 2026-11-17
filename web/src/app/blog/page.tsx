@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { PostCard } from "@/components/blog/post-card";
 import { EnableAds } from "@/components/enable-ads";
-import { CATEGORIES, SITE_NAME, postsInCategory, type CategoryId } from "@/lib/blog";
+import { CATEGORIES, SITE_NAME, isIndexableHub, postsInCategory, type CategoryId } from "@/lib/blog";
 import { DEFAULT_SOCIAL_IMAGE, documentTitle, metaDescription, socialTitle } from "@/lib/seo";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
@@ -46,7 +46,7 @@ export default function BlogIndexPage() {
           win more games. Every guide links straight into the deck builder so you can try the idea yourself.
         </p>
         <nav className="blog-category-nav" aria-label="Guide categories">
-          {categories.map((id) => (
+          {categories.filter(isIndexableHub).map((id) => (
             <Link key={id} className="chip" href={`/blog/${id}`}>
               {CATEGORIES[id].label}
             </Link>
@@ -59,9 +59,11 @@ export default function BlogIndexPage() {
           <section key={id} className="blog-section" aria-labelledby={`cat-${id}`}>
             <div className="blog-section-head">
               <h2 id={`cat-${id}`}>{CATEGORIES[id].label}</h2>
-              <Link href={`/blog/${id}`} className="muted">
-                All {CATEGORIES[id].label.toLowerCase()} guides →
-              </Link>
+              {isIndexableHub(id) ? (
+                <Link href={`/blog/${id}`} className="muted">
+                  All {CATEGORIES[id].label.toLowerCase()} guides →
+                </Link>
+              ) : null}
             </div>
             <p className="muted">{CATEGORIES[id].description}</p>
             <div className="blog-grid">

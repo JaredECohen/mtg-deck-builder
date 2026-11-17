@@ -5,6 +5,7 @@ import { MDXRemote } from "next-mdx-remote/rsc";
 import remarkGfm from "remark-gfm";
 
 import { AdsProvider } from "@/components/ads-provider";
+import { Breadcrumbs } from "@/components/blog/breadcrumbs";
 import { PostCard } from "@/components/blog/post-card";
 import { mdxComponentsForPost } from "@/components/blog/mdx-components";
 import { EnableAds } from "@/components/enable-ads";
@@ -18,6 +19,7 @@ import {
   formatDate,
   getPost,
   isCategory,
+  isIndexableHub,
   postsInCategory,
   relatedPosts,
   type CategoryId,
@@ -37,18 +39,21 @@ export const dynamicParams = true;
 export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS
 
 export function generateStaticParams() {
-  return [...Object.keys(CATEGORIES), ...allPosts().map((post) => post.slug)].map((slug) => ({ slug }));
+  const hubs = (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => postsInCategory(id).length > 0);
+  return [...hubs, ...allPosts().map((post) => post.slug)].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   if (isCategory(slug)) {
     const category = CATEGORIES[slug];
+    const indexable = isIndexableHub(slug);
     const title = documentTitle(`${category.label} for Magic: The Gathering`);
     const description = metaDescription(category.description);
     return {
       title,
       description,
+      robots: indexable ? { index: true, follow: true } : { index: false, follow: true },
       alternates: { canonical: `/blog/${slug}` },
       openGraph: {
         type: "website",
@@ -97,11 +102,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function BlogSlugPage({ params }: Params) {
   const { slug } = await params;
   if (isCategory(slug)) {
-    // A category with no published guide yet (e.g. before its first scheduled date) isn't a page.
+    // A category with no reviewed guide isn't a page. Fewer than three reviewed
+    // guides stays reachable but noindex, and it is not linked from the site.
     if (!postsInCategory(slug).length) notFound();
+    const indexable = isIndexableHub(slug);
     return (
-      <AdsProvider allow>
-        <EnableAds />
+      <AdsProvider allow={indexable}>
+        {indexable ? <EnableAds /> : null}
         <CategoryHub category={slug} />
       </AdsProvider>
     );
@@ -124,9 +131,13 @@ function CategoryHub({ category }: { category: CategoryId }) {
   const posts = postsInCategory(category);
   return (
     <main className="shell blog-shell">
-      <nav className="blog-breadcrumbs" aria-label="Breadcrumb">
-        <Link href="/blog">Guides</Link> <span aria-hidden="true">/</span> <span>{meta.label}</span>
-      </nav>
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Guides", href: "/blog" },
+          { label: meta.label, href: `/blog/${category}` },
+        ]}
+      />
       <header className="blog-header">
         <h1 className="headline">{meta.label}</h1>
         <p className="subhead">{meta.description}</p>
@@ -164,10 +175,16 @@ function Article({ post }: { post: Post }) {
     <main className="shell blog-shell">
       <GuideView slug={post.slug} category={post.category} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <nav className="blog-breadcrumbs" aria-label="Breadcrumb">
-        <Link href="/blog">Guides</Link> <span aria-hidden="true">/</span>{" "}
-        <Link href={`/blog/${post.category}`}>{category.label}</Link>
-      </nav>
+      <Breadcrumbs
+        items={[
+          { label: "Home", href: "/" },
+          { label: "Guides", href: "/blog" },
+          isIndexableHub(post.category)
+            ? { label: category.label, href: `/blog/${post.category}` }
+            : { label: category.label },
+          { label: post.title, href: `/blog/${post.slug}` },
+        ]}
+      />
       <article className="blog-article">
         <header className="blog-header">
           <h1 className="headline">{post.title}</h1>

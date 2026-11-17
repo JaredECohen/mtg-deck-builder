@@ -27,11 +27,11 @@ Status is set when the file exists: `written` (scheduled) or `planned`. Keep thi
 | 2026-10-24 | `how-to-evaluate-cards-limited` | strategy | How to Evaluate Cards | written |
 | 2026-10-25 | `commander-threat-assessment` | strategy | Commander Threat Assessment | written |
 | 2026-10-26 | `mtg-card-types-explained` | learn-to-play | MTG Card Types Explained | written |
-| 2026-10-27 | `reality-fracture-mtg-set-guide` | sets | Reality Fracture Set Guide | written |
+| 2026-10-27 | `reality-fracture-mtg-set-guide` | sets | Reality Fracture Set Guide | paused |
 | 2026-10-28 | `mtg-burn-deck-guide` | deck-archetypes | How to Build and Play a Burn Deck | written |
-| 2026-10-29 | `the-hobbit-mtg-set-guide` | sets | The Hobbit Set Guide | written |
+| 2026-10-29 | `the-hobbit-mtg-set-guide` | sets | The Hobbit Set Guide | paused |
 | 2026-10-30 | `card-advantage-explained` | strategy | Card Advantage Explained | written |
-| 2026-10-31 | `marvel-super-heroes-mtg-set-guide` | sets | Marvel Super Heroes Set Guide | written |
+| 2026-10-31 | `marvel-super-heroes-mtg-set-guide` | sets | Marvel Super Heroes Set Guide | paused |
 | 2026-11-01 | `mtg-standard-format-guide` | formats | Standard Format Guide | written |
 | 2026-11-02 | `secrets-of-strixhaven-mtg-set-guide` | sets | Secrets of Strixhaven Set Guide | paused |
 | 2026-11-03 | `how-the-stack-works-mtg` | learn-to-play | How the Stack Works in MTG | paused |

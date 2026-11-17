@@ -179,6 +179,27 @@ export function postsInCategory(category: CategoryId): Post[] {
   return indexablePosts().filter((post) => post.category === category);
 }
 
+/** A category hub is indexable only when it has enough reviewed guides to be a real section. */
+export const MIN_INDEXABLE_HUB = 3;
+
+export function isIndexableHub(category: CategoryId): boolean {
+  return postsInCategory(category).length >= MIN_INDEXABLE_HUB;
+}
+
+/**
+ * A `/blog/...` href is emitted only for a reviewed guide or an indexable hub.
+ * Anything else (unreviewed, archived, thin hub, unknown slug) is not a link.
+ */
+export function indexableBlogPath(href: string): string | null {
+  const match = href.match(/^\/blog\/([a-z0-9-]+)(#[a-z0-9-]*)?$/);
+  if (!match) return null;
+  const [, slug, hash = ""] = match;
+  if (isCategory(slug)) return isIndexableHub(slug) ? `/blog/${slug}${hash}` : null;
+  const post = getPost(slug);
+  if (!post?.reviewed) return null;
+  return `/blog/${slug}${hash}`;
+}
+
 /** Frontmatter `related` first, then other posts in the same category. */
 export function relatedPosts(post: Post, limit = 3): Post[] {
   const picked: Post[] = [];

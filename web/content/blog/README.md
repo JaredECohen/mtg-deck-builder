@@ -45,13 +45,14 @@ works on its own publish day.
 
 Run `npm run check:guides` and `npm run check:guide-rubric` (CI does too) before committing.
 
-The rubric's outline check is a blocklist for the old templated set-guide
-outline (The story, Mechanics, Key cards, Limited, The meta, Cards from the
-set worth owning). Renaming those headings defeats it. The reviewed guides
-share a different outline — Short answer, Common mistakes, FAQ, How this was
-made, and the other headings listed as `RUBRIC_HEADINGS` in
-`web/scripts/guide-claims.mjs`. Those headings are removed before the
-comparison, so that shared anatomy is not what the gate measures.
+The outline check keeps every `##` heading, including the ones reviewed guides
+share (Short answer, Common mistakes, FAQ, How this was made). Two guides with
+the same skeleton fail the gate. "The meta ..." and "Cards from {set} worth
+owning" are still folded to one heading, so inserting the set name does not
+dodge it. A guide can be `reviewed: true` only when `web/scripts/review-gates.mjs`
+also passes: Scryfall card names and legality, Comprehensive Rules citations,
+no unsourced ban, price, or best-deck claim, one table built from the data
+file, and at least 1,000 words.
 
 ## Body
 

@@ -384,20 +384,23 @@ test("an aggregate sentence does not inherit a different fact's metric", () => {
   assert.ok(!problems.some((line) => line.includes("38") && line.includes("not bound")));
 });
 
-test("templated set guides share an outline and reviewed guides do not", () => {
+test("outline similarity keeps shared headings, so look-alike skeletons fail", () => {
   const read = (name) => fs.readFileSync(path.join(root, "content/blog", name), "utf8").split("---").slice(2).join("---");
-  const problems = similarityProblems([
+  const templated = similarityProblems([
     { file: "adventures-in-the-forgotten-realms-mtg-set-guide.mdx", body: read("adventures-in-the-forgotten-realms-mtg-set-guide.mdx") },
     { file: "alara-reborn-mtg-set-guide.mdx", body: read("alara-reborn-mtg-set-guide.mdx") },
   ]);
-  assert.ok(problems.some((line) => line.includes("outline")));
-  const reviewed = ["precon-lands-ramp-draw.mdx", "pioneer-challenger-decks.mdx", "should-you-play-aggro.mdx", "mtg-ramp-deck-guide.mdx"].map(
-    (file) => ({ file, body: read(file) }),
-  );
-  assert.deepEqual(
-    similarityProblems(reviewed).filter((line) => line.includes("outline")),
-    [],
-  );
+  assert.ok(templated.some((line) => line.includes("outline")));
+
+  const skeleton = (file, prose) => ({
+    file,
+    body: `## Short answer\n\n${prose}\n\n## When to choose this\n\n## Example decks\n\n## Common mistakes\n\n## FAQ\n\n## How this was made\n`,
+  });
+  const sameShape = similarityProblems([
+    skeleton("aggro.mdx", "Aggro spends the early turns dealing damage and then runs out of cards."),
+    skeleton("control.mdx", "Control spends the early turns answering threats and then pulls ahead."),
+  ]);
+  assert.ok(sameShape.some((line) => line.includes("outline")));
 });
 
 test("an unsourced legacy price fails against the example catalog", () => {
