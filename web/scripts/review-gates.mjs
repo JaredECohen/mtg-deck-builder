@@ -458,6 +458,86 @@ function tablesOf(body) {
   return tables;
 }
 
+function tableRows(table) {
+  return String(table)
+    .split("\n")
+    .filter((line) => /^\s*\|/.test(line))
+    .map((line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()));
+}
+
+function parsedFaceMana(cost) {
+  const symbols = [...String(cost || "").matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  if (!symbols.length) return null;
+  let total = 0;
+  for (const symbol of symbols) {
+    if (/^\d+$/.test(symbol)) total += Number(symbol);
+    else if (symbol !== "X") total += 1;
+  }
+  return total;
+}
+
+function manaEntries(cardFacts) {
+  const entries = [];
+  for (const [name, info] of Object.entries(cardFacts?.cards ?? {})) {
+    if (info?.cmc != null) entries.push({ name, mv: Number(info.cmc) });
+    for (const face of info?.faces ?? []) {
+      const mv = parsedFaceMana(face.mana_cost);
+      if (face?.name && mv != null) entries.push({ name: face.name, mv });
+    }
+  }
+  entries.sort((left, right) => right.name.length - left.name.length);
+  return entries;
+}
+
+function namedManaIn(text, entries) {
+  const found = [];
+  let haystack = String(text);
+  const lower = () => haystack.toLowerCase();
+  for (const entry of entries) {
+    const needle = entry.name.toLowerCase();
+    let from = 0;
+    const source = lower();
+    while (from < source.length) {
+      const index = source.indexOf(needle, from);
+      if (index < 0) break;
+      const end = index + needle.length;
+      const before = index === 0 || !/[a-z0-9]/i.test(haystack[index - 1]);
+      const after = end >= haystack.length || !/[a-z0-9]/i.test(haystack[end]);
+      if (before && after) {
+        found.push(entry);
+        haystack = `${haystack.slice(0, index)}${" ".repeat(entry.name.length)}${haystack.slice(end)}`;
+        break;
+      }
+      from = index + 1;
+    }
+  }
+  return found;
+}
+
+/** A mana-value cell has to be that row's card, not some other integer on the deck. */
+export function manaValueTableProblems({ file, body, cardFacts }) {
+  if (!cardFacts?.cards) return [];
+  const entries = manaEntries(cardFacts);
+  const problems = [];
+  for (const table of tablesOf(body)) {
+    const rows = tableRows(table);
+    if (rows.length < 2) continue;
+    const manaColumn = rows[0].findIndex((cell) => /mana value/i.test(cell));
+    if (manaColumn < 0) continue;
+    for (const row of rows.slice(1)) {
+      if (row.every((cell) => /^:?-+:?$/.test(cell))) continue;
+      const cell = row[manaColumn] ?? "";
+      if (!/^\d+$/.test(cell)) continue;
+      for (const entry of namedManaIn(row.join(" "), entries)) {
+        if (String(entry.mv) !== cell) {
+          problems.push(`${file}: ${entry.name} mana value is ${entry.mv}, table says ${cell}`);
+        }
+      }
+    }
+  }
+  return problems;
+}
+
 function meaningfulTableHits(table, sourced) {
   const hits = new Set();
   for (const match of table.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
@@ -500,7 +580,7 @@ export function sourcedClaimProblems({ file, body, claims }) {
   return problems;
 }
 
-export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNames, claims }) {
+export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNames, claims, cardFacts }) {
   const problems = [];
   const words = wordCount(body);
   if (words < MIN_REVIEWED_WORDS) problems.push(`${file}: ${words} words (reviewed guides need at least ${MIN_REVIEWED_WORDS})`);
@@ -511,6 +591,7 @@ export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNam
   problems.push(...rulesProblems({ file, body, rules }));
   problems.push(...sourcedClaimProblems({ file, body, claims }));
   problems.push(...dataTableProblems({ file, body, claims, catalog }));
+  problems.push(...manaValueTableProblems({ file, body, cardFacts }));
   return problems;
 }
 

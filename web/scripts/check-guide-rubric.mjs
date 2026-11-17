@@ -22,6 +22,8 @@ const rulesPath = path.join(root, "content", "rules", "MagicCompRules-20261106.t
 const officialPath = path.join(root, "..", "api", "app", "data", "official_decks.json");
 const exampleIds = loadExampleIds(catalogPath);
 const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+const cardFactsPath = path.join(root, "src", "data", "example-card-oracle.json");
+const cardFacts = fs.existsSync(cardFactsPath) ? JSON.parse(fs.readFileSync(cardFactsPath, "utf8")) : null;
 const facts = fs.existsSync(factsPath) ? JSON.parse(fs.readFileSync(factsPath, "utf8")) : null;
 const oracle = fs.existsSync(oraclePath) ? loadOracle(oraclePath) : null;
 const rules = fs.existsSync(rulesPath) ? loadRules(rulesPath) : null;
@@ -60,7 +62,7 @@ export function reviewFailures() {
       const problems = reviewPost({ ...post, exampleIds, claims, facts, catalog: claims ? null : catalog, deckCards });
       if (problems.length) failures.push(...problems);
       else passed.push(post.slug);
-      const gate = reviewGateProblems({ file: post.file, body: post.body, oracle, rules, catalog, deckNames, claims });
+      const gate = reviewGateProblems({ file: post.file, body: post.body, oracle, rules, catalog, deckNames, claims, cardFacts });
       if (gate.length) gateBySlug.set(post.slug, gate);
       continue;
     }
@@ -107,7 +109,7 @@ export function assertFixtureGuide(file) {
   const problems = [];
   if (data.reviewed === true) {
     problems.push(...reviewPost({ ...post, exampleIds, catalog, deckCards }));
-    problems.push(...reviewGateProblems({ file: post.file, body: content, oracle, rules, catalog, deckNames, claims: null }));
+    problems.push(...reviewGateProblems({ file: post.file, body: content, oracle, rules, catalog, deckNames, claims: null, cardFacts }));
   } else {
     problems.push(`${post.file}: fixture is not reviewed: true`);
   }

@@ -62,8 +62,30 @@ function youCreateCreatureToken(text) {
   });
 }
 
-function isAnthem(text) {
-  return /(creatures you control|creature tokens you control|other creatures you control|creatures you control of the chosen type) get \+/i.test(stripReminder(text));
+function teamBonus(sentence) {
+  const match = sentence.match(/\b(?:creatures you control|creature tokens you control|other creatures you control|creatures you control of the chosen type) get \+(\d+)\/\+(\d+)/i);
+  if (!match) return null;
+  return { power: Number(match[1]), toughness: Number(match[2]), sentence };
+}
+
+/** Permanent bonus to both power and toughness. Until-end-of-turn and commander-Lieutenant bonuses are not anthems. */
+export function isStaticAnthem(text) {
+  return stripReminder(text).split(/[.\n]/).some((sentence) => {
+    const bonus = teamBonus(sentence);
+    if (!bonus || bonus.toughness === 0) return false;
+    if (/until end of turn/i.test(sentence)) return false;
+    if (/as long as you control your commander/i.test(sentence)) return false;
+    return true;
+  });
+}
+
+/** A team power-and-toughness bonus that lasts only until end of turn. */
+export function isOneShotPump(text) {
+  return stripReminder(text).split(/[.\n]/).some((sentence) => {
+    const bonus = teamBonus(sentence);
+    if (!bonus || bonus.toughness === 0) return false;
+    return /until end of turn/i.test(sentence);
+  });
 }
 
 function isSpell(typeLine) {
@@ -75,11 +97,34 @@ function hasX(text) {
   return /\bX\b/.test(stripReminder(text));
 }
 
-function grantsProtection(text, keywords) {
-  const body = stripReminder(text).toLowerCase();
-  const keys = (keywords ?? []).map((word) => word.toLowerCase());
-  const blob = `${body} ${keys.join(" ")}`;
-  return ["hexproof", "shroud", "indestructible", "protection from"].some((needle) => blob.includes(needle));
+/**
+ * True when the text can give hexproof, shroud, indestructible, or protection
+ * to a different creature. A keyword on this card itself does not count.
+ */
+export function protectsAnotherCreature(text) {
+  return stripReminder(text).split(/[.\n]/).some((sentence) => {
+    if (!/hexproof|shroud|indestructible|protection from/i.test(sentence)) return false;
+    return /\b(?:another (?:target )?creature|other creatures|enchanted creature|target creature)\b/i.test(sentence);
+  });
+}
+
+function parsedManaValue(cost) {
+  const symbols = [...String(cost || "").matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  if (!symbols.length) return null;
+  let total = 0;
+  for (const symbol of symbols) {
+    if (/^\d+$/.test(symbol)) total += Number(symbol);
+    else if (symbol !== "X") total += 1;
+  }
+  return total;
+}
+
+/** Ramp on an adventure is the adventure face's cost, not the creature face. */
+function rampManaValue(info) {
+  const adventure = (info.faces ?? []).find((face) => /Adventure/i.test(face.type_line || ""));
+  const adventureCost = adventure ? parsedManaValue(adventure.mana_cost) : null;
+  if (adventureCost != null) return adventureCost;
+  return Number(info.cmc);
 }
 
 function countersOrExilesSpell(text) {
@@ -154,7 +199,7 @@ function rampRole(deck, oracle, preconFacts) {
   let max = 0;
   for (const card of facts.ramp_cards ?? []) {
     const info = infoOf(oracle, card.name);
-    const mv = Number(info.cmc);
+    const mv = rampManaValue(info);
     buckets[mv] = (buckets[mv] ?? 0) + card.quantity;
     if (mv > max) max = mv;
   }
@@ -214,28 +259,32 @@ const BUILDERS = {
   },
   "token-triumph"(deck, oracle) {
     const makers = countWhere(deck, oracle, (info) => !isLand(info.type_line) && youCreateCreatureToken(info.oracle_text));
-    const anthems = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isAnthem(info.oracle_text));
+    const staticAnthems = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isStaticAnthem(info.oracle_text));
+    const oneShots = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isOneShotPump(info.oracle_text));
     const landMakers = countWhere(deck, oracle, (info) => isLand(info.type_line) && youCreateCreatureToken(info.oracle_text));
     return {
       token_makers: makers.copies,
-      anthems: anthems.copies,
+      static_anthems: staticAnthems.copies,
+      one_shot_pumps: oneShots.copies,
       land_token_makers: landMakers.copies,
-      _names: { makers: makers.names, anthems: anthems.names, lands: landMakers.names },
+      _names: { makers: makers.names, staticAnthems: staticAnthems.names, oneShots: oneShots.names, lands: landMakers.names },
     };
   },
   "rebellion-rising"(deck, oracle) {
     const makers = countWhere(deck, oracle, (info) => !isLand(info.type_line) && youCreateCreatureToken(info.oracle_text));
-    const anthems = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isAnthem(info.oracle_text));
+    const staticAnthems = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isStaticAnthem(info.oracle_text));
+    const oneShots = countWhere(deck, oracle, (info) => !isLand(info.type_line) && isOneShotPump(info.oracle_text));
     return {
       token_makers: makers.copies,
-      anthems: anthems.copies,
-      _names: { makers: makers.names, anthems: anthems.names },
+      static_anthems: staticAnthems.copies,
+      one_shot_pumps: oneShots.copies,
+      _names: { makers: makers.names, staticAnthems: staticAnthems.names, oneShots: oneShots.names },
     };
   },
   "orzhov-auras"(deck, oracle) {
     const auras = countWhere(deck, oracle, (info) => String(info.type_line).includes("Aura"));
     const equipment = countWhere(deck, oracle, (info) => String(info.type_line).includes("Equipment"));
-    const shields = countWhere(deck, oracle, (info) => grantsProtection(info.oracle_text, info.keywords));
+    const shields = countWhere(deck, oracle, (info) => protectsAnotherCreature(info.oracle_text));
     return {
       aura_count: auras.copies,
       equipment_count: equipment.copies,
@@ -248,7 +297,7 @@ const BUILDERS = {
     const creatureAuras = countWhere(deck, oracle, (info) => isCreatureAura(info.oracle_text, info.type_line));
     const landAuras = countWhere(deck, oracle, (info) => String(info.type_line).includes("Aura") && /enchant (?:forest|land)\b/i.test(stripReminder(info.oracle_text)));
     const equipment = countWhere(deck, oracle, (info) => String(info.type_line).includes("Equipment"));
-    const shields = countWhere(deck, oracle, (info) => grantsProtection(info.oracle_text, info.keywords));
+    const shields = countWhere(deck, oracle, (info) => protectsAnotherCreature(info.oracle_text));
     return {
       aura_count: auras.copies,
       creature_aura_count: creatureAuras.copies,
@@ -320,6 +369,7 @@ const BUILDERS = {
       peer_copies: peer.copies,
       peer_mv: manaValue(oracle, "Peer into the Abyss"),
       dig_copies: dig.copies,
+      dig_mv: manaValue(oracle, "Dig Through Time"),
       _names: { big: big.names },
     };
   },

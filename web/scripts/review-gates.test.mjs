@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dataTableProblems, legalityProblems, reviewGateProblems, rulesProblems, sourcedClaimProblems, unresolvedCardNames } from "./review-gates.mjs";
+import { dataTableProblems, legalityProblems, manaValueTableProblems, reviewGateProblems, rulesProblems, sourcedClaimProblems, unresolvedCardNames } from "./review-gates.mjs";
 
 const oracle = {
   fetched_at: "2026-11-01",
@@ -137,6 +137,27 @@ test("a reviewed guide needs a table whose numbers come from the data file", () 
     catalog,
   });
   assert.deepEqual(declared, []);
+});
+
+test("a mana value cell has to match the named card, so Dig Through Time at 7 fails", () => {
+  const cardFacts = { cards: { "Dig Through Time": { cmc: 8 }, "Peer into the Abyss": { cmc: 7 } } };
+  const wrong = "| Card | Copies | Mana value |\n| --- | --- | --- |\n| Dig Through Time | 2 | 7 |\n| Peer into the Abyss | 2 | 7 |\n";
+  const problems = manaValueTableProblems({ file: "combo.mdx", body: wrong, cardFacts });
+  assert.ok(problems.some((line) => line.includes("Dig Through Time") && line.includes("8") && line.includes("7")));
+  assert.equal(problems.some((line) => line.includes("Peer into the Abyss")), false);
+  const fixed = wrong.replace("| Dig Through Time | 2 | 7 |", "| Dig Through Time | 2 | 8 |");
+  assert.deepEqual(manaValueTableProblems({ file: "combo.mdx", body: fixed, cardFacts }), []);
+  const gated = reviewGateProblems({
+    file: "combo.mdx",
+    body: wrong,
+    oracle,
+    rules,
+    catalog,
+    deckNames: [],
+    claims: null,
+    cardFacts,
+  });
+  assert.ok(gated.some((line) => line.includes("Dig Through Time mana value is 8")));
 });
 
 test("a reviewed guide needs 1,000 words and the other gates", () => {
