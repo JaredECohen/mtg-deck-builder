@@ -20,14 +20,20 @@ If your group is four players with 40 life and 99-card libraries, one Mindcrank 
 
 <InArticleAd />
 
-## When mill is not the combat clock
+## Library size after the opening hand
 
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| The mill happens even when you do not attack | Mindcrank is the expensive engine on the N'ghathrod list | Do not describe the turn-10 combat clock as the mill clock |
-| The mill happens because you attacked with rogues | Anowon, and the combat goldfish is closer to the real plan | A pure mill deck that folds when it cannot attack |
-| You need a number for the library | Count mill per turn by hand. The sim will not | 120 games of attacking will not empty a library |
-| Basics are a large line cost | Anowon's product prices the lands in the box | A cheap Swamp is not the number in this total |
+Mind Flayarrrs's mainboard is 99 cards. The commander is not in that 99, so the library an opponent can mill, on a deck built the same way, is 99 cards before the opening hand and 92 cards after it. The 7 cards in the opening hand have already left the library. Fixed mill on the printed list has to be read against 92, not against a feeling that one artifact will end the table.
+
+| Card | Fixed mill in the 2026-11-01 oracle text |
+| --- | --- |
+| Fractured Sanity | 14 from each opponent |
+| Nemesis of Reason | 10 when it attacks |
+| Mindcrank, if 40 life is lost | 40 |
+| Soaring Thought-Thief | 2 when Rogues attack |
+
+## One Fractured Sanity does not finish the job
+
+Fractured Sanity is the largest fixed mill spell on Mind Flayarrrs, and the list has one copy. 14 cards out of 92 is that spell's whole contribution. Nemesis of Reason adds 10 only on a turn it attacks. Mindcrank does not print a number. It mills one card per life an opponent loses, and the goldfish opponent starts at 40 life, so losing all of that life mills 40 and leaves 52 cards in the library. Sneak Attack does not have Fractured Sanity. Soaring Thought-Thief mills 2 when Rogues attack, and Anowon, the Ruin Thief mills one card per damage, which is the same attack the goldfish already scores as combat. Neither list empties a 92-card library with the fixed mill on the sheet.
 
 ## The Mind Flayarrrs and Sneak Attack lists
 
@@ -97,7 +103,7 @@ Only if you mill the card they needed before they draw it, or you empty the libr
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. The 92-card library is the 99-card mainboard minus an opening hand of 7, and each mill amount is the first fixed "mills N" on that card's oracle text.
 
 <FanContentNotice />
 

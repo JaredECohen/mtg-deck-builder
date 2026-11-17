@@ -7,6 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import matter from "gray-matter";
+
 import { factNames, similarityProblems } from "./guide-claims.mjs";
 import { loadOracle, loadRules, outlineGateProblems, reviewGateProblems } from "./review-gates.mjs";
 import { loadExampleIds, loadPosts, reviewPost } from "./guide-rubric.mjs";
@@ -97,7 +99,37 @@ export function reviewFailures() {
   return { failures, passed, excluded, reviewed: reviewed.map((post) => post.slug), gateSlugs: [...gateBySlug.keys()] };
 }
 
+/** Run the same checks as a reviewed guide, and throw when any gate fails. */
+export function assertFixtureGuide(file) {
+  const raw = fs.readFileSync(file, "utf8");
+  const { data, content } = matter(raw);
+  const post = { file: path.basename(file), data, body: content };
+  const problems = [];
+  if (data.reviewed === true) {
+    problems.push(...reviewPost({ ...post, exampleIds, catalog, deckCards }));
+    problems.push(...reviewGateProblems({ file: post.file, body: content, oracle, rules, catalog, deckNames, claims: null }));
+  } else {
+    problems.push(`${post.file}: fixture is not reviewed: true`);
+  }
+  if (problems.length) {
+    const error = new Error(problems.join("\n"));
+    error.problems = problems;
+    throw error;
+  }
+}
+
 function report() {
+  const fixture = process.argv[2] === "--fixture" ? process.argv[3] : "";
+  if (fixture) {
+    try {
+      assertFixtureGuide(fixture);
+    } catch (error) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    console.log("Fixture guide passed.");
+    return;
+  }
   const { failures, passed, excluded, gateSlugs, reviewed } = reviewFailures();
   console.log(`Reviewed guides passing: ${passed.length}`);
   for (const slug of [...passed].sort()) console.log(`  PASS ${slug}`);

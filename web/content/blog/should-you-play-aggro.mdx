@@ -20,15 +20,6 @@ Aggro fails in a specific way. It runs out of cards. Every burn spell pointed at
 
 <InArticleAd />
 
-## When the race should end early
-
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| You want the game over by turn six or seven | The burn product's goldfish clock is the measurement below | A ramp or control list that has not cast its payoff yet |
-| Your budget is the deck block total for a 75 | The 2021 Challenger burn list is priced on its own printings in the deck block | A deck whose lands are the expensive cards |
-| You hate losing to one sweeper | Spell damage does not die to the sweeper | A creature deck, which the midrange page measures |
-| You want to play the long game on purpose | This is the wrong plan | Control, which is trying not to race |
-
 ## The Mono-Red Burn product
 
 <DeckBlock id="mono-red-burn" />
@@ -53,7 +44,15 @@ Every card in Mono-Red Burn is legal in pioneer today per the Scryfall bulk of 2
 | --- | --- | --- | --- | --- |
 | Mono-Red Burn | 20 | 40 | 120 | $31.38 |
 
-Mono-Red Burn's deck block records 20 lands and 40 nonlands. Mana value 1 holds 20 cards, and mana value 3 holds 12. The AllPricesToday total for those printings is $31.38. The goldfish played 120 games from seed 1729 and won 120 of them. The land count and the nonland count are the race this page is deciding on.
+## Face damage against 20 life
+
+The main deck has 12 copies of instants that deal damage to any target: 4 Wild Slash, 4 Lightning Strike, and 4 Wizard's Lightning. Printed damage is 2, 3, and 3. Across those 12 copies the sheet is 32 damage. The goldfish opponent starts at 20 life, and 32 is 12 more than 20. The face burn covers that life total with 12 damage left over if some of it has to kill a creature. That leftover 12 is not a match win rate. It is why this solitaire list can end on turn 5.96 without a five-drop. A red deck whose any-target burn does not add past 20 life is a different yes-or-no.
+
+| Spell | Copies | Damage each | Damage across copies |
+| --- | --- | --- | --- |
+| Wild Slash | 4 | 2 | 8 |
+| Lightning Strike | 4 | 3 | 12 |
+| Wizard's Lightning | 4 | 3 | 12 |
 
 <InArticleAd />
 
@@ -85,7 +84,7 @@ This is the 2021 Challenger product, not a tuned Modern list with Lightning Bolt
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. Face damage sums the "deals N damage" line on main-deck instants and sorceries that can target a player or any target.
 
 <FanContentNotice />
 

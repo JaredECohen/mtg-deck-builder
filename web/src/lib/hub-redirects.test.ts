@@ -33,5 +33,8 @@ test("thin format and strategy hubs 301 to /blog and leave the nav and sitemap",
   assert.equal(paths.includes("/blog/learn-to-play"), false);
   assert.equal(paths.includes("/blog/sets"), false);
   assert.equal(paths.includes("/terms"), true);
-  assert.equal(paths.length, 25);
+  assert.deepEqual(
+    thinHubRedirects.map((rule) => rule.source).filter((source) => paths.includes(source)),
+    [],
+  );
 });

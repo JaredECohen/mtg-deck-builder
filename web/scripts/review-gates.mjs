@@ -439,6 +439,7 @@ function sourcedNumbers({ claims, catalog, body }) {
     const goldfish = analysis.goldfish ?? {};
     addInt(goldfish.games);
     addInt(goldfish.seed);
+    for (const value of Object.values(analysis.role ?? {})) addInt(value);
   }
   return { prices, ints };
 }

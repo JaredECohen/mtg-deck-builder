@@ -20,15 +20,6 @@ The goldfish wins by attacking with the creatures the mana eventually casts. It 
 
 <InArticleAd />
 
-## When the payoff costs six or more
-
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| Your payoff costs six or more | Pantlaza's curve still has cards at 7 or more | An aggro deck, whose curve ends at three |
-| You want to attack on turn two | The early turns are mana, not damage | Burn or Spirits |
-| One instant is a large share of the budget | Akroma's Will leads the nonbasic receipt | A deck whose money is the lands, which is the other guide |
-| You are about to cut lands to add more dinosaurs | The printed land count is the floor | A short-land list that cannot cast the top end |
-
 ## The Veloci-Ramp-Tor product
 
 <DeckBlock id="veloci-ramp-tor" />
@@ -53,7 +44,20 @@ Every card in Veloci-Ramp-Tor is legal in commander today per the Scryfall bulk 
 | --- | --- | --- | --- | --- |
 | Veloci-Ramp-Tor | 39 | 60 | 120 | $135.24 |
 
-Veloci-Ramp-Tor's deck block records 39 lands and 60 nonlands. Mana value 3 holds 17 cards, and the 7+ bucket holds 7. The AllPricesToday total for those printings is $135.24. The goldfish played 120 games from seed 1729 and won 98 of them. The land count is the floor under the dinosaur curve. Changing 39 to sleeve another creature changes the plan this page measured.
+## Accelerants capped at 4
+
+Veloci-Ramp-Tor has 14 ramp cards: nonlands that add mana, put a land onto the battlefield, or create a treasure you get. Every one of them costs 4 or less. 2 cost 1, 5 cost 2, 6 cost 3, and 1 costs 4. The most expensive accelerant costs 4. The list has 11 creatures at mana value 6 or more, and 2 of those cost 9 or more: Apex Altisaur and Zacama, Primal Calamity. The ramp never costs as much as the creatures it is there to cast early.
+
+The goldfish record stores an average winning turn of 11.1, 98 wins in 120 games, and a starting life of 40. It does not store the turn the deck first had 6 mana. The decision is 14 accelerants capped at mana value 4, under 11 creatures that cost 6 or more, plus a combat clock of 11.1. It is not a recorded turn-6.
+
+| Ramp mana value | Cards |
+| --- | --- |
+| 1 | 2 |
+| 2 | 5 |
+| 3 | 6 |
+| 4 | 1 |
+| Creatures at 6 or more | 11 |
+| Creatures at 9 or more | 2 |
 
 <InArticleAd />
 
@@ -85,7 +89,7 @@ It means the average winning solitaire game against one 40-life opponent ended t
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. The 14 ramp cards are this file's precon census, with mana values from the same day's oracle text. The goldfish object has no turn-to-6 field.
 
 <FanContentNotice />
 
