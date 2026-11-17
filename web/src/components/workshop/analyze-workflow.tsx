@@ -26,15 +26,12 @@ export function isEditingFormControl(element: Element | null): boolean {
 type Props = {
   dataStatus: DataStatusResponse | null;
   onOpenCard: (name: string, context?: CardContext) => void;
-  /** Share token from ?deck=. When omitted, the URL is read after mount. */
-  sharedToken?: string | null;
-  /** Official list id from ?example=. When omitted, the URL is read after mount. */
-  exampleId?: string | null;
 };
 
-function arrivalValue(name: string, explicit?: string | null): string | null {
-  const fromUrl = typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get(name) ?? "");
-  const value = (explicit || fromUrl).trim();
+/** ?deck= or ?example= from the URL, read after mount. */
+function arrivalValue(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  const value = (new URLSearchParams(window.location.search).get(name) ?? "").trim();
   return value || null;
 }
 
@@ -49,7 +46,7 @@ function snapshotKey(snapshot: Snapshot): string {
   return [snapshot.format, snapshot.commander, list(snapshot.mainboard), list(snapshot.sideboard)].join("#");
 }
 
-export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTokenProp = null, exampleId: exampleIdProp = null }: Props) {
+export function AnalyzeWorkflow({ dataStatus, onOpenCard }: Props) {
   const [format, setFormat] = useState<FormatName | null>(null);
   const [manualMainboard, setManualMainboard] = useState<CardRef[]>([]);
   const [manualSideboard, setManualSideboard] = useState<CardRef[]>([]);
@@ -84,8 +81,8 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
     // Read the URL here so the static homepage can render this workflow. A
     // shared link replaces the local draft instead of merging with it. The
     // example list is fetched only when ?example= is present.
-    const exampleId = arrivalValue("example", exampleIdProp);
-    const sharedToken = arrivalValue("deck", sharedTokenProp);
+    const exampleId = arrivalValue("example");
+    const sharedToken = arrivalValue("deck");
     async function hydrate() {
       if (sharedToken) {
         if (!cancelled) setDraftHydrated(true);
@@ -119,8 +116,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
     return () => {
       cancelled = true;
     };
-    // Only on mount: later token changes are handled by the effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only on mount: the arrival URL is read once.
   }, []);
 
   useEffect(() => {
@@ -136,7 +132,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
 
   // ?deck=<token>: fetch the shared list, load it into the editor and analyze it.
   useEffect(() => {
-    const sharedToken = arrivalValue("deck", sharedTokenProp);
+    const sharedToken = arrivalValue("deck");
     if (!sharedToken || loadedToken.current === sharedToken) return;
     // Marked loaded only on success: a cancelled run (e.g. React's dev-mode
     // double effect) must not block the retry.
@@ -175,7 +171,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
         setShared({ status: "failed", error: err instanceof Error ? err.message : "Shared deck not found" });
       });
     return () => controller.abort();
-  }, [sharedTokenProp, analyze, resetAnalyzer]);
+  }, [analyze, resetAnalyzer]);
 
   useEffect(() => {
     setStatusMessage(analysis ? `Analysis ready: ${analysis.inferred_archetype}, ${analysis.deck_health}.` : "");
@@ -263,7 +259,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
   runAutoAnalyze.current = runAnalysis;
   useEffect(() => {
     const id = loadedExampleId;
-    const sharedToken = arrivalValue("deck", sharedTokenProp);
+    const sharedToken = arrivalValue("deck");
     if (!shouldAutoAnalyzeArrival({
       exampleId: id,
       exampleResolved: Boolean(id),
@@ -281,7 +277,7 @@ export function AnalyzeWorkflow({ dataStatus, onOpenCard, sharedToken: sharedTok
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [loadedExampleId, sharedTokenProp, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
+  }, [loadedExampleId, format, manualMainboard, manualSideboard, manualCommander, manualNotes]);
 
   // After that automatic run, bring off-screen results up on a phone. Skip it
   // when the summary is already in view, and never steal focus from a field

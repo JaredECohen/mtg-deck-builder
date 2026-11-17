@@ -88,11 +88,6 @@ export function exampleBuilderHref(id: string): string {
 }
 
 /**
- * Arrival from a guide deep link that already filled the editor with a list.
- * A normal visit, a failed example (draft restored instead), and a shared
- * `?deck=` link (that loader analyzes on its own) stay manual.
- */
-/**
  * What to do when an example's analysis results are ready.
  * "wait" means do not record the example id: a field is focused, or the
  * results node is not mounted yet, so a later focusout can still scroll.
@@ -112,6 +107,11 @@ export function planExampleResultReveal(options: {
   return "scroll";
 }
 
+/**
+ * Arrival from a guide deep link that already filled the editor with a list.
+ * A normal visit, a failed example (draft restored instead), and a shared
+ * `?deck=` link (that loader analyzes on its own) stay manual.
+ */
 export function shouldAutoAnalyzeArrival(options: {
   exampleId: string | null | undefined;
   exampleResolved: boolean;

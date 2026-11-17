@@ -9,12 +9,12 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ADSENSE_CLIENT } from "@/lib/ads";
 import { SITE_NAME, SITE_URL } from "@/lib/blog";
-import { DEFAULT_SOCIAL_IMAGE } from "@/lib/seo";
+import { DEFAULT_SOCIAL_IMAGE, HOME_DESCRIPTION, HOME_TITLE } from "@/lib/seo";
 
-const HOME_TITLE = "MTG Deck Lab: Free Magic: The Gathering Deck Builder";
-const HOME_DESCRIPTION =
-  "Build legal Magic: The Gathering decks for Standard, Pioneer, Modern, Legacy and Commander, with a reason for every card, a mana curve and a price.";
-
+// Site-wide defaults only. A page's openGraph replaces this object, so the
+// homepage sets its own url, title, and description (app/page.tsx) and other
+// pages do not inherit them. Icons come from app/icon.tsx, app/apple-icon.png,
+// and app/favicon.ico.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: HOME_TITLE,
@@ -22,20 +22,11 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
-    url: `${SITE_URL}/`,
     images: [DEFAULT_SOCIAL_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
-    title: HOME_TITLE,
-    description: HOME_DESCRIPTION,
     images: [DEFAULT_SOCIAL_IMAGE.url],
-  },
-  icons: {
-    icon: [{ url: "/icon", type: "image/png", sizes: "32x32" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   // AdSense site verification reads this tag. The ads script itself is not here.
   ...(ADSENSE_CLIENT ? { other: { "google-adsense-account": ADSENSE_CLIENT } } : {}),

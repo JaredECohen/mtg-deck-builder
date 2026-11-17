@@ -129,8 +129,12 @@ rate-limit bucket by setting `X-Forwarded-For` on the request.
 
    `NEXT_PUBLIC_` values are inlined at build time. After changing either
    affiliate variable, redeploy the web app or the new value is not in the
-   client bundle. Until both the Fly prefix and these Vercel variables are
-   set, preview and production keep untracked tcgplayer.com links.
+   client bundle. These Vercel variables alone control tracking on the
+   site: the web UI unwraps every TCGplayer link the API returns and
+   re-wraps it with the `NEXT_PUBLIC_` prefix and its own page tag, or
+   shows the plain tcgplayer.com URL when that prefix is unset. The Fly
+   `TCGPLAYER_AFFILIATE_URL` only affects clients that use the API's URLs
+   directly.
 
    Optional sign-in (personal deck library). The site works without these.
    Set them on the **API** (Fly), not as `NEXT_PUBLIC_`:

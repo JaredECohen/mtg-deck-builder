@@ -48,5 +48,10 @@ def test_early_and_high_end_cadences_agree() -> None:
 
 def test_commander_note_still_follows_the_cadence() -> None:
     text = _summary(curve=[(1, 4)], fmt="commander")
+    assert text.startswith(
+        "It will usually spend its first turns setting up, leaning most on threat (8), "
+        "and then try to convert incremental edges into a win."
+    )
     assert text.endswith("signature engine.")
-    assert "spends" not in text
+    for verb in BAD_VERBS:
+        assert verb not in text.split()

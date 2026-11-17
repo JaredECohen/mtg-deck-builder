@@ -20,10 +20,12 @@ const MODE_TABS = [
 ];
 
 export function DeckWorkshop() {
-  // The static homepage always paints the generate tab. A shared deck or an
-  // official example switches to Analyze before the browser paints. Reading
-  // the URL here keeps the shell static; the search-params hook would bail it
-  // out to an empty fallback.
+  // The static homepage HTML always renders the generate tab, so on a first
+  // load that tab paints before hydration. A shared deck or an official
+  // example then switches to Analyze in a layout effect once React hydrates
+  // (on a client-side navigation, before the first paint). Reading the URL
+  // here keeps the shell static; the search-params hook would bail it out to
+  // an empty fallback.
   const [mode, setMode] = useState<BuilderMode>("generate");
 
   // Shared by both workflows, so the data-status request and the card modal

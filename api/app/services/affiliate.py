@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from urllib.parse import parse_qs, quote, quote_plus, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, urlparse, urlunparse
 
 from app.config import TCGPLAYER_AFFILIATE_URL, TCGPLAYER_PARTNER_PROPERTY_ID
 
@@ -75,11 +75,22 @@ def _host_is(host: str, domain: str) -> bool:
 
 
 def _is_redirector(url: str) -> bool:
-    return any(_host_is(_host(url), domain) for domain in _AFFILIATE_HOSTS)
+    host = _host(url)
+    if any(_host_is(host, domain) for domain in _AFFILIATE_HOSTS):
+        return True
+    # Our own configured prefix host is a redirector too, so a future Impact
+    # domain still unwraps. Store hosts (tcgplayer.com) are never redirectors.
+    prefix_host = _host(_affiliate_prefix())
+    return bool(prefix_host) and not _host_is(prefix_host, "tcgplayer.com") and host == prefix_host
 
 
 def is_tcgplayer_url(url: str) -> bool:
-    return urlparse(url).scheme in {"http", "https"} and _host_is(_host(url), "tcgplayer.com")
+    parsed = urlparse(url)
+    # Browsers read a backslash as "/" and "user@" as credentials, so
+    # https://evil.com\@www.tcgplayer.com would open evil.com.
+    if "\\" in parsed.netloc or "@" in parsed.netloc or parsed.username:
+        return False
+    return parsed.scheme in {"http", "https"} and _host_is(_host(url), "tcgplayer.com")
 
 
 def _affiliate_prefix() -> str:
@@ -120,8 +131,8 @@ def _tracked_url(canonical: str, sub_id: str | None) -> str:
     property_id = _sanitize_property_id(TCGPLAYER_PARTNER_PROPERTY_ID)
     if property_id:
         params.append(f"partnerpropertyid={quote(property_id, safe='')}")
-    separator = "&" if "?" in prefix else "?"
-    return f"{prefix}{separator}{'&'.join(params)}"
+    # The prefix never carries a query (_affiliate_prefix strips it).
+    return f"{prefix}?{'&'.join(params)}"
 
 
 def tcgplayer_affiliate(destination_url: str | None, sub_id: str | None = API_SUB_ID) -> str | None:
@@ -149,8 +160,8 @@ def tcgplayer_affiliate(destination_url: str | None, sub_id: str | None = API_SU
 
 def tcgplayer_search_url(card_name: str, sub_id: str | None = API_SUB_ID) -> str:
     """Affiliate-tracked TCGplayer search URL for a single card."""
-    dest = f"{_SEARCH_BASE}?q={quote_plus(card_name)}&productLineName=magic"
-    return tcgplayer_affiliate(dest, sub_id=sub_id) or dest
+    dest = f"{_SEARCH_BASE}?q={quote(card_name, safe='')}&productLineName=magic"
+    return tcgplayer_affiliate(dest, sub_id=sub_id)
 
 
 def ensure_tcgplayer_link(url: str | None, card_name: str, sub_id: str | None = API_SUB_ID) -> str:
@@ -177,5 +188,5 @@ def tcgplayer_mass_entry_url(
     deck builder.
     """
     lines = "||".join(f"{qty} {name}" for name, qty in entries if name and qty > 0)
-    dest = f"{_MASS_ENTRY_BASE}?productline=Magic&c={quote_plus(lines)}"
-    return tcgplayer_affiliate(dest, sub_id=sub_id) or dest
+    dest = f"{_MASS_ENTRY_BASE}?productline=Magic&c={quote(lines, safe='')}"
+    return tcgplayer_affiliate(dest, sub_id=sub_id)
