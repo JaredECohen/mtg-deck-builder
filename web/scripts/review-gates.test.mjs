@@ -36,6 +36,23 @@ test("a title-case card name must resolve in the Scryfall index", () => {
   assert.deepEqual(unresolvedCardNames("Lightning Bolt is the one-mana spell.", oracle, []), []);
 });
 
+test("a standalone one-word card name is checked, and a common word is not", () => {
+  const flagged = unresolvedCardNames("Thoughtseize is banned in Modern. The list runs 4 Solitude. Play starts on turn one.", oracle, []);
+  assert.ok(flagged.includes("Thoughtseize"));
+  assert.ok(flagged.includes("Solitude"));
+  assert.equal(flagged.includes("Play"), false);
+  assert.equal(flagged.includes("Modern"), false);
+  const header = unresolvedCardNames("| Lands | Price |\n| --- | --- |\n| Burn | $31.38 |", oracle, []);
+  assert.equal(header.includes("Lands"), false);
+
+  const withCounterspell = {
+    ...oracle,
+    byLower: new Map([...oracle.byLower, ["counterspell", { name: "Counterspell", packed: "LL" }]]),
+  };
+  const known = unresolvedCardNames("Counterspell is the two-mana answer.", withCounterspell, []);
+  assert.equal(known.includes("Counterspell"), false);
+});
+
 test("a set name and a deck name are not unresolved cards", () => {
   const problems = unresolvedCardNames("Blood Rites is from Lost Caverns of Ixalan. Mono-Red Burn is the product.", oracle, ["Mono-Red Burn", "Blood Rites"]);
   assert.deepEqual(problems, []);
@@ -96,6 +113,30 @@ test("a reviewed guide needs a table whose numbers come from the data file", () 
     catalog,
   });
   assert.deepEqual(priced, []);
+
+  const copiesOnly = dataTableProblems({
+    file: "copies.mdx",
+    body: '<DeckBlock id="burn" />\n\n| Card | Copies |\n| --- | --- |\n| Lightning Bolt | 4 |',
+    claims: null,
+    catalog,
+  });
+  assert.ok(copiesOnly.some((line) => line.includes("table")));
+
+  const oneNumber = dataTableProblems({
+    file: "one.mdx",
+    body: '<DeckBlock id="burn" />\n\n| Deck | Lands |\n| --- | --- |\n| Mono-Red Burn | 20 |',
+    claims: null,
+    catalog,
+  });
+  assert.ok(oneNumber.some((line) => line.includes("table")));
+
+  const declared = dataTableProblems({
+    file: "declared.mdx",
+    body: "| Deck | Lands |\n| --- | --- |\n| Mono-Red Burn | 20 |",
+    claims: [{ text: "20", path: "summary.lands", as: "int" }],
+    catalog,
+  });
+  assert.deepEqual(declared, []);
 });
 
 test("a reviewed guide needs 1,000 words and the other gates", () => {

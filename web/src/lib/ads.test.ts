@@ -4,7 +4,7 @@ import test from "node:test";
 import { GET } from "../app/ads.txt/route";
 import { adsTxt, publisherId } from "./ads";
 
-const LINE = "google.com, pub-9525035178702963, DIRECT, f08c47fec0942fa0";
+const LINE = "google.com, pub-9525035178702963, DIRECT, f08c47fec0942fa0\n";
 
 test("ads.txt is the publisher line for NEXT_PUBLIC_ADSENSE_CLIENT", () => {
   assert.equal(publisherId("ca-pub-9525035178702963"), "ca-pub-9525035178702963");

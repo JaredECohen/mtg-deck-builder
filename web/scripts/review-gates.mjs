@@ -13,6 +13,22 @@ export const MIN_REVIEWED_WORDS = 1000;
 
 const STOP = new Set(["of", "the", "and", "a", "an", "to", "in", "into", "for", "from", "with", "on", "at", "or", "vs", "versus"]);
 const LEAD = new Set(["cast", "casting", "play", "playing", "paying", "calling", "treating", "buying", "open", "opening", "if", "using", "add", "adding", "running", "copy", "copying", "registering", "cut"]);
+// Ordinary words that show up capitalized. A one-word token is a card reference only when it is not one of these.
+const COMMON_WORD = new Set([
+  "about", "after", "again", "against", "already", "also", "another", "around", "because", "before", "being",
+  "below", "between", "both", "build", "building", "cannot", "could", "does", "doing", "during", "each", "early",
+  "enough", "even", "every", "first", "from", "game", "games", "hand", "hands", "have", "here", "into", "just",
+  "keep", "later", "like", "list", "lists", "long", "made", "make", "many", "more", "most", "much", "need",
+  "never", "only", "open", "other", "over", "plan", "play", "playing", "read", "same", "should", "some", "still",
+  "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through", "turn", "turns",
+  "under", "until", "using", "very", "want", "what", "when", "where", "which", "while", "with", "without", "would",
+  "your", "above", "across", "almost", "always", "among", "anything", "away", "back", "better", "come", "comes",
+  "different", "down", "else", "ever", "full", "give", "going", "good", "high", "inside", "instead", "last",
+  "leave", "left", "less", "little", "look", "looking", "means", "might", "must", "next", "nothing", "once",
+  "order", "part", "point", "rather", "real", "right", "second", "seen", "since", "something", "start", "such",
+  "take", "thing", "things", "three", "today", "together", "toward", "true", "used", "usually", "well", "whole",
+  "worth", "wrong", "above", "tempo", "aggro", "voltron", "spellslinger",
+]);
 const GENERIC = new Set([
   "magic", "deck", "decks", "lab", "editorial", "pioneer", "modern", "standard", "legacy", "vintage",
   "commander", "pauper", "brawl", "alchemy", "historic", "timeless", "oathbreaker", "challenger",
@@ -217,6 +233,28 @@ export function unresolvedCardNames(body, oracle, deckNames = []) {
   for (const match of prose.matchAll(SPAN)) {
     for (const label of coverRun(tokensOf(match[1]), oracle, decks)) push(label);
   }
+  const single = /\b([A-Z][\p{L}'’]{4,})\b/gu;
+  const nameWords = new Set();
+  for (const name of [...decks, ...oracle.byLower.keys(), ...(oracle.sets ?? [])]) {
+    for (const part of name.split(/[\s-]+/)) if (part.length >= 4) nameWords.add(part);
+  }
+  for (const match of prose.matchAll(single)) {
+    const word = match[1];
+    const lower = normalizeName(word);
+    if (lower.endsWith("ing")) continue;
+    if (GENERIC.has(lower) || STOP.has(lower) || LEAD.has(lower) || COMMON_WORD.has(lower)) continue;
+    if (findKnown(word, oracle, decks) || nameWords.has(lower)) continue;
+    const before = prose.slice(Math.max(0, match.index - 16), match.index);
+    const after = prose.slice(match.index + word.length, match.index + word.length + 48);
+    // Part of a longer title-case name, not a standalone card.
+    if (/[A-Z][\p{L}'’]*\s+$/u.test(before) || /^\s+[A-Z]/u.test(after)) continue;
+    const sentence = `${before} ${word} ${after}`.toLowerCase();
+    const cued = /\d+\s+$/.test(before)
+      || /\b(?:cast|casts|play|plays|played)\s+$/.test(before.toLowerCase())
+      || /\b(?:banned|legal)\b/.test(sentence);
+    if (!cued) continue;
+    push(word);
+  }
   const quantity = new RegExp(`\\b\\d+\\s+([A-Z][\\p{L}\\p{N}'’\\-]*(?:\\s*(?:,|\\/\\/)?\\s+(?:[A-Z][\\p{L}\\p{N}'’\\-]*|${SMALL})){0,8})`, "gu");
   for (const match of prose.matchAll(quantity)) {
     if (match.index > 0 && /[-/\d]/.test(prose[match.index - 1])) continue;
@@ -245,6 +283,16 @@ function cardsIn(text, oracle, deckNames) {
           found.push(hit.card);
         }
       }
+    }
+  }
+  for (const match of prose.matchAll(/\b([A-Z][\p{L}'’]{4,})\b/gu)) {
+    const before = prose.slice(Math.max(0, match.index - 16), match.index);
+    const after = prose.slice(match.index + match[1].length, match.index + match[1].length + 16);
+    if (/[A-Z][\p{L}'’]*\s+$/u.test(before) || /^\s+[A-Z]/u.test(after)) continue;
+    const hit = findKnown(match[1], oracle, decks);
+    if (hit?.kind === "card" && !seen.has(hit.card.name)) {
+      seen.add(hit.card.name);
+      found.push(hit.card);
     }
   }
   return found;
@@ -409,19 +457,31 @@ function tablesOf(body) {
   return tables;
 }
 
+function meaningfulTableHits(table, sourced) {
+  const hits = new Set();
+  for (const match of table.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
+    const formatted = Number(match[1]).toFixed(2);
+    if (sourced.prices.has(formatted)) hits.add(`$${formatted}`);
+  }
+  for (const match of table.matchAll(/\b(\d+)\b/g)) {
+    const value = Number(match[1]);
+    // Copy counts of 1–4 show up in almost any list and do not make a table sourced.
+    if (value >= 1 && value <= 4) continue;
+    if (sourced.ints.has(match[1])) hits.add(match[1]);
+  }
+  return hits;
+}
+
 export function dataTableProblems({ file, body, claims, catalog }) {
   const tables = tablesOf(body);
   const sourced = sourcedNumbers({ claims, catalog, body });
-  const backed = tables.filter((table) => {
-    for (const match of table.matchAll(/\$(\d+(?:\.\d+)?)/g)) {
-      if (sourced.prices.has(Number(match[1]).toFixed(2))) return true;
-    }
-    for (const match of table.matchAll(/\b(\d+)\b/g)) {
-      if (sourced.ints.has(match[1])) return true;
-    }
-    return false;
+  const declared = Array.isArray(claims) && claims.length > 0;
+  const backed = tables.some((table) => {
+    const hits = meaningfulTableHits(table, sourced);
+    if (hits.size >= 2) return true;
+    return declared && hits.size >= 1;
   });
-  if (!backed.length) return [`${file}: no table built from a sourced data file`];
+  if (!backed) return [`${file}: no table built from a sourced data file`];
   return [];
 }
 

@@ -39,5 +39,5 @@ export function shouldRenderAdSlot(options: { allowed: boolean; client?: string;
 export function adsTxt(client: string | null | undefined = process.env.NEXT_PUBLIC_ADSENSE_CLIENT): string | null {
   const id = publisherId(client);
   if (!id) return null;
-  return `google.com, ${id.replace(/^ca-/, "")}, DIRECT, f08c47fec0942fa0`;
+  return `google.com, ${id.replace(/^ca-/, "")}, DIRECT, f08c47fec0942fa0\n`;
 }

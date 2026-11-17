@@ -20,6 +20,7 @@ import {
   getPost,
   isCategory,
   isIndexableHub,
+  MIN_INDEXABLE_HUB,
   postsInCategory,
   relatedPosts,
   type CategoryId,
@@ -39,21 +40,22 @@ export const dynamicParams = true;
 export const revalidate = 3600; // BLOG_REVALIDATE_SECONDS
 
 export function generateStaticParams() {
-  const hubs = (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => postsInCategory(id).length > 0);
+  const hubs = (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => postsInCategory(id).length >= MIN_INDEXABLE_HUB);
   return [...hubs, ...allPosts().map((post) => post.slug)].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   if (isCategory(slug)) {
+    // Empty and thin hubs 404. Don't emit a category title for that response.
+    if (postsInCategory(slug).length < MIN_INDEXABLE_HUB) notFound();
     const category = CATEGORIES[slug];
-    const indexable = isIndexableHub(slug);
     const title = documentTitle(`${category.label} for Magic: The Gathering`);
     const description = metaDescription(category.description);
     return {
       title,
       description,
-      robots: indexable ? { index: true, follow: true } : { index: false, follow: true },
+      robots: { index: true, follow: true },
       alternates: { canonical: `/blog/${slug}` },
       openGraph: {
         type: "website",
@@ -102,13 +104,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function BlogSlugPage({ params }: Params) {
   const { slug } = await params;
   if (isCategory(slug)) {
-    // A category with no reviewed guide isn't a page. Fewer than three reviewed
-    // guides stays reachable but noindex, and it is not linked from the site.
-    if (!postsInCategory(slug).length) notFound();
-    const indexable = isIndexableHub(slug);
+    // Empty and thin hubs are not pages. Their guides stay at their own URLs.
+    if (postsInCategory(slug).length < MIN_INDEXABLE_HUB) notFound();
     return (
-      <AdsProvider allow={indexable}>
-        {indexable ? <EnableAds /> : null}
+      <AdsProvider allow>
+        <EnableAds />
         <CategoryHub category={slug} />
       </AdsProvider>
     );

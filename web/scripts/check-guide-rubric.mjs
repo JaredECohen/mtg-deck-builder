@@ -15,7 +15,6 @@ import { loadExampleIds, loadPosts, reviewPost } from "./guide-rubric.mjs";
 // and the flag is left in place. A reviewed guide that is not in this set must pass.
 const GATE_REPORT_ONLY = new Set([
   "aristocrats-sacrifice-deck-guide",
-  "commander-precon-game-changers",
   "mill-deck-guide",
   "mtg-combo-decks-explained",
   "mtg-control-deck-guide",
@@ -23,8 +22,6 @@ const GATE_REPORT_ONLY = new Set([
   "mtg-ramp-deck-guide",
   "mtg-tempo-decks-explained",
   "mtg-tokens-deck-guide",
-  "pioneer-challenger-decks",
-  "precon-lands-ramp-draw",
   "reanimator-deck-guide",
   "should-you-play-aggro",
   "should-you-play-control",
