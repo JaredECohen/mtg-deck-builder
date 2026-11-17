@@ -58,7 +58,7 @@ jobs:
         run: npm test
       - name: Check guides
         run: npm run check:guides
-      - name: Guide rubric
+      - name: Guide rubric and review gates
         run: npm run check:guide-rubric
       - name: Build
         run: npx next build

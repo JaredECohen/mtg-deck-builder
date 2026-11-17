@@ -11,25 +11,6 @@ import { factNames, similarityProblems } from "./guide-claims.mjs";
 import { loadOracle, loadRules, outlineGateProblems, reviewGateProblems } from "./review-gates.mjs";
 import { loadExampleIds, loadPosts, reviewPost } from "./guide-rubric.mjs";
 
-// Guides already marked reviewed when these gates landed. Failures are printed
-// and the flag is left in place. A reviewed guide that is not in this set must pass.
-const GATE_REPORT_ONLY = new Set([
-  "aristocrats-sacrifice-deck-guide",
-  "mill-deck-guide",
-  "mtg-combo-decks-explained",
-  "mtg-control-deck-guide",
-  "mtg-midrange-deck-guide",
-  "mtg-ramp-deck-guide",
-  "mtg-tempo-decks-explained",
-  "mtg-tokens-deck-guide",
-  "reanimator-deck-guide",
-  "should-you-play-aggro",
-  "should-you-play-control",
-  "should-you-play-ramp",
-  "spellslinger-deck-guide",
-  "voltron-commander-guide",
-]);
-
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const blogDir = path.join(root, "content", "blog");
 const catalogPath = path.join(root, "src", "data", "example-decks.json");
@@ -63,70 +44,79 @@ const deckCards = fs.existsSync(officialPath)
   : [];
 const posts = loadPosts(blogDir);
 
-const failures = [];
-const passed = [];
-const excluded = [];
-const gateBySlug = new Map();
+/** Rubric and review-gate failures for every reviewed guide. No exemptions. */
+export function reviewFailures() {
+  const failures = [];
+  const passed = [];
+  const excluded = [];
+  const gateBySlug = new Map();
 
-for (const post of posts) {
-  if (post.data.reviewed === true) {
-    const claimsPath = path.join(blogDir, `${post.slug}.claims.json`);
-    const claims = fs.existsSync(claimsPath) ? JSON.parse(fs.readFileSync(claimsPath, "utf8")) : null;
-    const problems = reviewPost({ ...post, exampleIds, claims, facts, catalog: claims ? null : catalog, deckCards });
-    if (problems.length) failures.push(...problems);
-    else passed.push(post.slug);
-    const gate = reviewGateProblems({ file: post.file, body: post.body, oracle, rules, catalog, deckNames, claims });
-    if (gate.length) gateBySlug.set(post.slug, gate);
-    continue;
-  }
-  if (post.data.archived === true) excluded.push(`${post.slug}: archived (not published)`);
-  else excluded.push(`${post.slug}: not reviewed (noindex, omitted from sitemap)`);
-}
-
-console.log(`Reviewed guides passing: ${passed.length}`);
-for (const slug of passed.sort()) console.log(`  PASS ${slug}`);
-console.log(`Excluded from publishing/sitemap: ${excluded.length}`);
-if (process.env.RUBRIC_VERBOSE === "1") {
-  for (const line of excluded) console.log(`  ${line}`);
-}
-const reviewed = posts.filter((post) => post.data.reviewed === true);
-const duplicates = similarityProblems(reviewed, undefined, factNames(facts, catalog));
-for (const problem of duplicates) {
-  if (problem.includes("section outline")) continue;
-  failures.push(problem);
-}
-const outlineWith = new Map();
-for (const problem of outlineGateProblems(reviewed)) {
-  const slugs = [...problem.matchAll(/([a-z0-9-]+)\.mdx/g)].map((match) => match[1]);
-  const score = problem.match(/Jaccard ([0-9.]+)/)?.[1] ?? "";
-  for (const slug of slugs) {
-    const others = outlineWith.get(slug) ?? [];
-    for (const other of slugs) {
-      if (other !== slug) others.push(`${other} (${score})`);
+  for (const post of posts) {
+    if (post.data.reviewed === true) {
+      const claimsPath = path.join(blogDir, `${post.slug}.claims.json`);
+      const claims = fs.existsSync(claimsPath) ? JSON.parse(fs.readFileSync(claimsPath, "utf8")) : null;
+      const problems = reviewPost({ ...post, exampleIds, claims, facts, catalog: claims ? null : catalog, deckCards });
+      if (problems.length) failures.push(...problems);
+      else passed.push(post.slug);
+      const gate = reviewGateProblems({ file: post.file, body: post.body, oracle, rules, catalog, deckNames, claims });
+      if (gate.length) gateBySlug.set(post.slug, gate);
+      continue;
     }
-    outlineWith.set(slug, others);
+    if (post.data.archived === true) excluded.push(`${post.slug}: archived (not published)`);
+    else excluded.push(`${post.slug}: not reviewed (noindex, omitted from sitemap)`);
   }
-}
-for (const [slug, others] of outlineWith) {
-  const list = gateBySlug.get(slug) ?? [];
-  list.push(`${slug}.mdx: section outline matches ${[...new Set(others)].sort().join(", ")}`);
-  gateBySlug.set(slug, list);
+
+  const reviewed = posts.filter((post) => post.data.reviewed === true);
+  const duplicates = similarityProblems(reviewed, undefined, factNames(facts, catalog));
+  for (const problem of duplicates) {
+    if (problem.includes("section outline")) continue;
+    failures.push(problem);
+  }
+  const outlineWith = new Map();
+  for (const problem of outlineGateProblems(reviewed)) {
+    const slugs = [...problem.matchAll(/([a-z0-9-]+)\.mdx/g)].map((match) => match[1]);
+    const score = problem.match(/Jaccard ([0-9.]+)/)?.[1] ?? "";
+    for (const slug of slugs) {
+      const others = outlineWith.get(slug) ?? [];
+      for (const other of slugs) {
+        if (other !== slug) others.push(`${other} (${score})`);
+      }
+      outlineWith.set(slug, others);
+    }
+  }
+  for (const [slug, others] of outlineWith) {
+    const list = gateBySlug.get(slug) ?? [];
+    list.push(`${slug}.mdx: section outline matches ${[...new Set(others)].sort().join(", ")}`);
+    gateBySlug.set(slug, list);
+  }
+  for (const slug of [...gateBySlug.keys()].sort()) {
+    const unique = [...new Set(gateBySlug.get(slug))];
+    failures.push(...unique.map((line) => (line.startsWith(slug) ? line : `${slug}: ${line}`)));
+  }
+
+  return { failures, passed, excluded, reviewed: reviewed.map((post) => post.slug), gateSlugs: [...gateBySlug.keys()] };
 }
 
-console.log(`Review gates (required for reviewed: true; current failures stay reviewed):`);
-const gateSlugs = [...gateBySlug.keys()].sort();
-if (!gateSlugs.length) console.log("  all reviewed guides pass");
-for (const slug of gateSlugs) {
-  const unique = [...new Set(gateBySlug.get(slug))];
-  console.log(`  FAIL ${slug}`);
-  for (const line of unique) console.log(`    ${line}`);
-  if (!GATE_REPORT_ONLY.has(slug)) failures.push(...unique.map((line) => (line.startsWith(slug) ? line : `${slug}: ${line}`)));
+function report() {
+  const { failures, passed, excluded, gateSlugs, reviewed } = reviewFailures();
+  console.log(`Reviewed guides passing: ${passed.length}`);
+  for (const slug of [...passed].sort()) console.log(`  PASS ${slug}`);
+  console.log(`Excluded from publishing/sitemap: ${excluded.length}`);
+  if (process.env.RUBRIC_VERBOSE === "1") {
+    for (const line of excluded) console.log(`  ${line}`);
+  }
+  console.log(`Review gates (required for reviewed: true):`);
+  if (!gateSlugs.length) console.log("  all reviewed guides pass");
+  const gatePass = reviewed.filter((slug) => !gateSlugs.includes(slug)).sort();
+  for (const slug of [...gateSlugs].sort()) console.log(`  FAIL ${slug}`);
+  for (const slug of gatePass) console.log(`  PASS ${slug}`);
+  if (failures.length) {
+    console.error(`${failures.length} rubric failure(s):\n  ${failures.join("\n  ")}`);
+    process.exit(1);
+  }
+  console.log("Guide rubric OK.");
 }
-const gatePass = reviewed.map((post) => post.slug).filter((slug) => !gateBySlug.has(slug)).sort();
-for (const slug of gatePass) console.log(`  PASS ${slug}`);
 
-if (failures.length) {
-  console.error(`${failures.length} rubric failure(s):\n  ${failures.join("\n  ")}`);
-  process.exit(1);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  report();
 }
-console.log("Guide rubric OK.");
