@@ -10,7 +10,7 @@ import {
   isAffiliateUrl,
   tcgplayerMassEntryUrl,
 } from "@/lib/affiliate";
-import { getPost, isCategory, slugify } from "@/lib/blog";
+import { indexableBlogPath, slugify } from "@/lib/blog";
 import { catalogFetchedAt, getCatalogDeck } from "@/lib/example-catalog";
 import { exampleBuilderHref } from "@/lib/example-decks";
 import type { FormatName } from "@/lib/types";
@@ -196,10 +196,13 @@ function Heading3(props: ComponentPropsWithoutRef<"h3">) {
 }
 
 function Anchor({ href = "", ...props }: ComponentPropsWithoutRef<"a">) {
-  // A link to a guide that hasn't published yet (scheduled for a later day)
-  // renders as plain text, and becomes a link once that guide is live.
-  const guide = href.match(/^\/blog\/([a-z0-9-]+)/)?.[1];
-  if (guide && !isCategory(guide) && !getPost(guide)) return <span>{props.children}</span>;
+  // Only reviewed guides and indexable hubs stay links. Unreviewed, archived,
+  // scheduled, and thin-hub targets render as plain text.
+  if (href.startsWith("/blog/")) {
+    const path = indexableBlogPath(href);
+    if (!path) return <span>{props.children}</span>;
+    return <Link href={path} {...props} />;
+  }
   if (href.startsWith("/")) return <Link href={href} {...props} />;
   return <a {...props} href={href} target="_blank" rel={externalAnchorRel(href)} />;
 }

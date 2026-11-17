@@ -4,9 +4,17 @@
 // dashboard, e.g. ca-pub-1234567890123456. A malformed value is ignored
 // rather than injected into the script URL.
 
+/** Publisher id from the AdSense dashboard, `ca-pub-` plus 10 to 20 digits. */
+export const PUBLISHER_ID_PATTERN = /^ca-pub-\d{10,20}$/;
+
+export function publisherId(value: string | null | undefined): string {
+  const raw = value ?? "";
+  return PUBLISHER_ID_PATTERN.test(raw) ? raw : "";
+}
+
 const RAW_CLIENT = process.env.NEXT_PUBLIC_ADSENSE_CLIENT ?? "";
 
-export const ADSENSE_CLIENT = /^ca-pub-\d{10,20}$/.test(RAW_CLIENT) ? RAW_CLIENT : "";
+export const ADSENSE_CLIENT = publisherId(RAW_CLIENT);
 
 // Optional manual ad unit for the page footer. Without it, ads appear only
 // where Auto ads (configured in the AdSense dashboard) places them.
@@ -26,8 +34,10 @@ export function shouldRenderAdSlot(options: { allowed: boolean; client?: string;
 
 // ads.txt line authorizing Google to sell this site's inventory. The
 // certification authority ID f08c47fec0942fa0 is Google's, the same for
-// every publisher.
-export function adsTxt(): string | null {
-  if (!ADSENSE_CLIENT) return null;
-  return `google.com, ${ADSENSE_CLIENT.replace(/^ca-/, "")}, DIRECT, f08c47fec0942fa0\n`;
+// every publisher. Pass the client id; a missing or malformed id returns null
+// so the route can 404 instead of publishing a placeholder file.
+export function adsTxt(client: string | null | undefined = process.env.NEXT_PUBLIC_ADSENSE_CLIENT): string | null {
+  const id = publisherId(client);
+  if (!id) return null;
+  return `google.com, ${id.replace(/^ca-/, "")}, DIRECT, f08c47fec0942fa0\n`;
 }

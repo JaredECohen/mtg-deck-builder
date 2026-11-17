@@ -84,10 +84,59 @@ export default function AboutPage() {
 
       <h2>Guides</h2>
       <p>
-        The <Link href="/blog">guides section</Link> covers the game from the ground up: how to play, how every major
-        format works, the classic deck archetypes, and strategy topics like mulligans and sideboarding. Each guide links
-        into the builder so you can try the idea right away.
+        The <Link href="/blog">guides section</Link> covers deck archetypes and the censuses counted from official
+        product lists. Each reviewed guide links into the builder so you can open the list it measured.
       </p>
+
+      <h2>Editorial method</h2>
+      <p>
+        These gates apply to newly reviewed guides. Guides that were already reviewed are being upgraded to meet
+        them. A guide is signed Deck Lab Editorial, and offered to search engines, only after it is marked reviewed.
+        The review is a checklist against files in this repository. It does not ask a language model to invent or grade
+        the article.
+      </p>
+      <ul>
+        <li>Every card name has to match the Scryfall oracle-cards bulk dated 2026-11-01.</li>
+        <li>A sentence that calls a card legal, not legal, or banned has to match that same bulk.</li>
+        <li>
+          A Comprehensive Rules number has to appear in the rules file effective November 6, 2026.
+        </li>
+        <li>A price, a ban, or a &ldquo;best deck&rdquo; claim has to come from a checked-in data file.</li>
+        <li>The guide needs at least 1,000 words and a table whose numbers are in that data file.</li>
+        <li>Guides that share the same section outline are treated as one template, not as separate articles.</li>
+      </ul>
+      <p>
+        The count and price definitions are on the <Link href="/method">method page</Link>. A guide that has not passed
+        review can stay on the site for readers. It is left out of the sitemap and marked noindex.
+      </p>
+
+      <h2>Data sources</h2>
+      <ul>
+        <li>
+          <a href="https://scryfall.com/docs/api" rel="noopener noreferrer" target="_blank">
+            Scryfall
+          </a>{" "}
+          oracle-cards bulk, snapshot 2026-11-01, for card names, rules text, and format legality. Deck Lab refreshes
+          the builder&apos;s card database from Scryfall every week. Guide numbers stay on the snapshot named on the
+          method page.
+        </li>
+        <li>
+          <a href="https://mtgjson.com" rel="noopener noreferrer" target="_blank">
+            MTGJSON
+          </a>{" "}
+          official deck lists and AllPricesToday, for the product lists and the printing prices shown on a deck block.
+        </li>
+        <li>
+          <a href="https://magic.wizards.com/en/rules" rel="noopener noreferrer" target="_blank">
+            Magic Comprehensive Rules
+          </a>
+          , effective November 6, 2026, for any rule number a guide cites.
+        </li>
+        <li>
+          The precon census and the Game Changer counts in the checked-in facts file, described on the{" "}
+          <Link href="/method">method page</Link>.
+        </li>
+      </ul>
 
       <h2>Fan content</h2>
       <p>

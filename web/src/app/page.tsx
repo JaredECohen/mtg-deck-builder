@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { PostCard } from "@/components/blog/post-card";
 import { DeckWorkshop } from "@/components/deck-workshop";
-import { SITE_NAME, SITE_URL, indexablePosts } from "@/lib/blog";
+import { SITE_NAME, SITE_URL, indexablePosts, isIndexableHub } from "@/lib/blog";
 import { HOME_DESCRIPTION, HOME_TITLE } from "@/lib/seo";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
@@ -32,29 +32,36 @@ const FORMATS = [
   {
     name: "Standard",
     text: "The newest sets only. A rotating, budget-friendlier 60-card format.",
-    guide: "/blog/formats",
+    guide: "/blog/deck-archetypes",
+    guideLabel: "See the archetype guides",
   },
   {
     name: "Pioneer",
     text: "Cards from Return to Ravnica forward. A large, non-rotating pool without Modern's oldest staples.",
-    guide: "/blog/formats",
+    guide: "/blog/pioneer-challenger-decks",
+    guideLabel: "See the Challenger deck census",
   },
   {
     name: "Modern",
     text: "Cards from Eighth Edition forward. Fast, powerful and deep.",
-    guide: "/blog/formats",
+    guide: "/blog/deck-archetypes",
+    guideLabel: "See the archetype guides",
   },
   {
     name: "Legacy",
     text: "Nearly every card ever printed, with a ban list. Brainstorm, Force of Will and decades of history.",
-    guide: "/blog/formats",
+    guide: "/blog/deck-archetypes",
+    guideLabel: "See the archetype guides",
   },
   {
     name: "Commander",
     text: "100-card singleton decks led by a legendary commander. Multiplayer, social, and the most popular way to play.",
-    guide: "/blog/formats",
+    guide: "/blog/precon-lands-ramp-draw",
+    guideLabel: "See the precon census",
   },
 ];
+
+const DATA_SLUGS = ["precon-lands-ramp-draw", "commander-precon-game-changers", "pioneer-challenger-decks"];
 
 const FAQ = [
   {
@@ -89,7 +96,9 @@ export default function HomePage() {
   // component rendered into this static shell. It reads ?example=, ?deck=,
   // ?format= and ?brief= after hydration. The search-params hook would bail
   // the shell out to an empty fallback and shift the page.
-  const latest = indexablePosts().slice(0, 6);
+  const reviewed = indexablePosts();
+  const dataPosts = DATA_SLUGS.map((slug) => reviewed.find((post) => post.slug === slug)).filter((post) => post != null);
+  const latest = reviewed.filter((post) => !DATA_SLUGS.includes(post.slug)).slice(0, 6);
   const faqJsonLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -152,11 +161,33 @@ export default function HomePage() {
             <article key={format.name} className="panel home-format">
               <h3>{format.name}</h3>
               <p className="muted">{format.text}</p>
-              <Link href={format.guide}>Learn the format →</Link>
+              <Link href={format.guide}>{format.guideLabel} →</Link>
             </article>
           ))}
         </div>
       </section>
+
+      {dataPosts.length ? (
+        <section className="home-section" aria-labelledby="data-heading">
+          <div className="blog-section-head">
+            <h2 id="data-heading">Counts from the deck files</h2>
+            {isIndexableHub("deck-archetypes") ? (
+              <Link href="/blog/deck-archetypes" className="muted">
+                Deck archetype guides →
+              </Link>
+            ) : null}
+          </div>
+          <p className="muted">
+            These guides are counted from the checked-in Scryfall bulk and the MTGJSON product lists. The method page
+            says how each number is produced.
+          </p>
+          <div className="blog-grid">
+            {dataPosts.map((post) => (
+              <PostCard key={post.slug} post={post} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="home-section" aria-labelledby="faq-heading">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />

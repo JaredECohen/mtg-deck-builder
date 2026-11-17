@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { CATEGORIES, SITE_URL, indexablePosts } from "@/lib/blog";
+import { CATEGORIES, SITE_URL, indexablePosts, isIndexableHub, type CategoryId } from "@/lib/blog";
 import { fetchPublicDeckIndex } from "@/lib/public-deck";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
@@ -13,7 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/blog`, lastModified: newest, changeFrequency: "weekly", priority: 0.9 },
     ...Object.keys(CATEGORIES)
-      .filter((id) => posts.some((post) => post.category === id))
+      .filter((id): id is CategoryId => isIndexableHub(id as CategoryId))
       .map((id) => ({
         url: `${SITE_URL}/blog/${id}`,
         lastModified: newest,
@@ -30,6 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/about`, changeFrequency: "yearly", priority: 0.4 },
     { url: `${SITE_URL}/contact`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.2 },
   ];
   // Public decks only. Unlisted (noindex) decks are omitted by the API.
   const shared = await fetchPublicDeckIndex();

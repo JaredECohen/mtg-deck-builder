@@ -18,7 +18,10 @@ test("ads stay on reviewed guides and the guides index, and off the builder and 
   assert.equal(pageAllowsAds("/blog"), true);
   assert.equal(pageAllowsAds("/blog/"), true);
   assert.equal(pageAllowsAds("/blog/deck-archetypes"), true);
-  assert.equal(pageAllowsAds("/blog/formats"), true);
+  assert.equal(pageAllowsAds("/blog/formats"), false);
+  assert.equal(pageAllowsAds("/blog/strategy"), false);
+  assert.equal(pageAllowsAds("/blog/learn-to-play"), false);
+  assert.equal(pageAllowsAds("/blog/sets"), false);
   assert.equal(pageAllowsAds("/signin"), false);
   assert.equal(pageAllowsAds("/library"), false);
   assert.equal(pageAllowsAds("/auth/verify"), false);
@@ -29,6 +32,7 @@ test("ads stay on reviewed guides and the guides index, and off the builder and 
   assert.equal(pageAllowsAds("/contact"), false);
   assert.equal(pageAllowsAds("/contact/"), false);
   assert.equal(pageAllowsAds("/privacy"), false);
+  assert.equal(pageAllowsAds("/terms"), false);
   assert.equal(pageAllowsAds("/d/some-share-token"), false);
   assert.equal(pageAllowsAds("/d/some-share-token/"), false);
 });
@@ -36,7 +40,7 @@ test("ads stay on reviewed guides and the guides index, and off the builder and 
 test("the builder, thin pages, and shared decks do not render the AdSense script", () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   const source = (rel: string) => fs.readFileSync(path.join(root, rel), "utf8");
-  for (const file of ["app/page.tsx", "app/about/page.tsx", "app/contact/page.tsx", "app/privacy/page.tsx", "app/method/page.tsx", "app/d/[token]/page.tsx"]) {
+  for (const file of ["app/page.tsx", "app/about/page.tsx", "app/contact/page.tsx", "app/privacy/page.tsx", "app/terms/page.tsx", "app/method/page.tsx", "app/d/[token]/page.tsx"]) {
     assert.doesNotMatch(source(file), /EnableAds/, file);
   }
   assert.match(source("app/blog/page.tsx"), /EnableAds/);
