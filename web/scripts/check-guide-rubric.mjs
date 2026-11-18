@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 
 import { factNames, similarityProblems } from "./guide-claims.mjs";
-import { loadOracle, loadRules, outlineGateProblems, reviewGateProblems } from "./review-gates.mjs";
+import { loadCardFacts, loadOracle, loadRules, outlineGateProblems, reviewGateProblems } from "./review-gates.mjs";
 import { loadExampleIds, loadPosts, reviewPost } from "./guide-rubric.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,7 +23,7 @@ const officialPath = path.join(root, "..", "api", "app", "data", "official_decks
 const exampleIds = loadExampleIds(catalogPath);
 const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
 const cardFactsPath = path.join(root, "src", "data", "example-card-oracle.json");
-const cardFacts = fs.existsSync(cardFactsPath) ? JSON.parse(fs.readFileSync(cardFactsPath, "utf8")) : null;
+const cardFacts = loadCardFacts(cardFactsPath);
 const facts = fs.existsSync(factsPath) ? JSON.parse(fs.readFileSync(factsPath, "utf8")) : null;
 const oracle = fs.existsSync(oraclePath) ? loadOracle(oraclePath) : null;
 const rules = fs.existsSync(rulesPath) ? loadRules(rulesPath) : null;

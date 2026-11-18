@@ -88,6 +88,18 @@ export function loadRules(file) {
   return { effective, numbers, source: file };
 }
 
+/** Pinned Scryfall subset used to check printed mana values. A missing file is a failed gate. */
+export function loadCardFacts(file) {
+  if (!fs.existsSync(file)) {
+    throw new Error(`missing example-card-oracle.json (${file})`);
+  }
+  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!data?.cards || typeof data.cards !== "object") {
+    throw new Error(`example-card-oracle.json has no cards (${file})`);
+  }
+  return data;
+}
+
 function deckNamesFrom(catalog, facts) {
   const names = [];
   for (const deck of Object.values(catalog?.decks ?? {})) if (deck?.name) names.push(deck.name);
@@ -514,16 +526,65 @@ function namedManaIn(text, entries) {
   return found;
 }
 
+function dataRows(rows) {
+  return rows.slice(1).filter((row) => !row.every((cell) => /^:?-+:?$/.test(cell)));
+}
+
+function columnIsIntegers(rows, index) {
+  return rows.length > 0 && rows.every((row) => /^\d+$/.test(row[index] ?? ""));
+}
+
+/**
+ * Exact "Mana value" wins. Otherwise the column whose body cells are all
+ * integers. A header that only mentions mana value ("At mana value 2 or less")
+ * is that column when its own cells are all integers, which keeps count tables
+ * on the column they already use. null means the table is not a mana-value
+ * table. -1 means it is one and no column could be resolved.
+ */
+function manaColumnIndex(rows) {
+  const header = rows[0];
+  const exact = header.findIndex((cell) => /^\s*mana value\s*$/i.test(cell));
+  if (exact >= 0) return exact;
+
+  const mentions = [];
+  header.forEach((cell, index) => {
+    if (/mana value/i.test(cell)) mentions.push(index);
+  });
+  if (!mentions.length) return null;
+
+  const body = dataRows(rows);
+  const width = Math.max(header.length, ...body.map((row) => row.length), 0);
+  const integerColumns = [];
+  for (let index = 0; index < width; index += 1) {
+    if (columnIsIntegers(body, index)) integerColumns.push(index);
+  }
+  const mentionedIntegers = integerColumns.filter((index) => mentions.includes(index));
+  if (mentionedIntegers.length === 1) return mentionedIntegers[0];
+  if (integerColumns.length === 1) return integerColumns[0];
+  return -1;
+}
+
 /** A mana-value cell has to be that row's card, not some other integer on the deck. */
 export function manaValueTableProblems({ file, body, cardFacts }) {
-  if (!cardFacts?.cards) return [];
-  const entries = manaEntries(cardFacts);
+  const entries = cardFacts?.cards ? manaEntries(cardFacts) : null;
   const problems = [];
+  let reportedMissingFacts = false;
   for (const table of tablesOf(body)) {
     const rows = tableRows(table);
     if (rows.length < 2) continue;
-    const manaColumn = rows[0].findIndex((cell) => /mana value/i.test(cell));
-    if (manaColumn < 0) continue;
+    const manaColumn = manaColumnIndex(rows);
+    if (manaColumn === null) continue;
+    if (!entries) {
+      if (!reportedMissingFacts) {
+        problems.push(`${file}: example-card-oracle.json is missing, so mana values cannot be checked`);
+        reportedMissingFacts = true;
+      }
+      continue;
+    }
+    if (manaColumn < 0) {
+      problems.push(`${file}: mana value table has no Mana value column`);
+      continue;
+    }
     for (const row of rows.slice(1)) {
       if (row.every((cell) => /^:?-+:?$/.test(cell))) continue;
       const cell = row[manaColumn] ?? "";
