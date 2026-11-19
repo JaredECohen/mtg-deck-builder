@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
-import { dataTableProblems, legalityProblems, reviewGateProblems, rulesProblems, sourcedClaimProblems, unresolvedCardNames } from "./review-gates.mjs";
+import { dataTableProblems, legalityProblems, loadCardFacts, manaValueTableProblems, reviewGateProblems, rulesProblems, sourcedClaimProblems, unresolvedCardNames } from "./review-gates.mjs";
 
 const oracle = {
   fetched_at: "2026-11-01",
@@ -137,6 +138,65 @@ test("a reviewed guide needs a table whose numbers come from the data file", () 
     catalog,
   });
   assert.deepEqual(declared, []);
+});
+
+test("a mana value cell has to match the named card, so Dig Through Time at 7 fails", () => {
+  const cardFacts = { cards: { "Dig Through Time": { cmc: 8 }, "Peer into the Abyss": { cmc: 7 } } };
+  const wrong = "| Card | Copies | Mana value |\n| --- | --- | --- |\n| Dig Through Time | 2 | 7 |\n| Peer into the Abyss | 2 | 7 |\n";
+  const problems = manaValueTableProblems({ file: "combo.mdx", body: wrong, cardFacts });
+  assert.ok(problems.some((line) => line.includes("Dig Through Time") && line.includes("8") && line.includes("7")));
+  assert.equal(problems.some((line) => line.includes("Peer into the Abyss")), false);
+  const fixed = wrong.replace("| Dig Through Time | 2 | 7 |", "| Dig Through Time | 2 | 8 |");
+  assert.deepEqual(manaValueTableProblems({ file: "combo.mdx", body: fixed, cardFacts }), []);
+  const gated = reviewGateProblems({
+    file: "combo.mdx",
+    body: wrong,
+    oracle,
+    rules,
+    catalog,
+    deckNames: [],
+    claims: null,
+    cardFacts,
+  });
+  assert.ok(gated.some((line) => line.includes("Dig Through Time mana value is 8")));
+});
+
+test("a mana-value table with no resolvable column fails instead of skipping", () => {
+  const cardFacts = { cards: { "Dig Through Time": { cmc: 8 } } };
+  const notes = "| Main-deck card at mana value 7 or more | Notes |\n| --- | --- |\n| Dig Through Time | costs eight |\n";
+  const skipped = manaValueTableProblems({ file: "combo.mdx", body: notes, cardFacts });
+  assert.ok(skipped.some((line) => line.includes("no Mana value column")));
+  const ambiguous = "| Main-deck card at mana value 7 or more | Copies | Cost |\n| --- | --- | --- |\n| Dig Through Time | 2 | 7 |\n";
+  assert.ok(manaValueTableProblems({ file: "combo.mdx", body: ambiguous, cardFacts }).some((line) => line.includes("no Mana value column")));
+  const fallback = "| Main-deck card at mana value 7 or more | Cost |\n| --- | --- |\n| Dig Through Time | 7 |\n";
+  const problems = manaValueTableProblems({ file: "combo.mdx", body: fallback, cardFacts });
+  assert.ok(problems.some((line) => line.includes("Dig Through Time") && line.includes("table says 7")));
+});
+
+test("a missing example-card-oracle.json fails the mana-value gate", () => {
+  assert.throws(
+    () => loadCardFacts("/tmp/does-not-exist/example-card-oracle.json"),
+    /missing example-card-oracle\.json/,
+  );
+  const body = "| Main-deck card at mana value 7 or more | Copies | Mana value |\n| --- | --- | --- |\n| Dig Through Time | 2 | 8 |\n";
+  const problems = manaValueTableProblems({ file: "combo.mdx", body, cardFacts: null });
+  assert.ok(problems.some((line) => line.includes("example-card-oracle.json is missing")));
+  assert.deepEqual(manaValueTableProblems({ file: "ok.mdx", body: "No table here.", cardFacts: null }), []);
+});
+
+test("the combo guide table flags Dig Through Time at 7 and accepts 8", () => {
+  const guide = fs.readFileSync(new URL("../content/blog/mtg-combo-decks-explained.mdx", import.meta.url), "utf8");
+  const start = guide.indexOf("| Main-deck card at mana value 7 or more | Copies | Mana value |");
+  assert.ok(start >= 0);
+  const table = guide.slice(start, start + guide.slice(start).indexOf("\n\n"));
+  assert.match(table, /\| Main-deck card at mana value 7 or more \| Copies \| Mana value \|/);
+  assert.match(table, /\| Dig Through Time \| 2 \| 8 \|/);
+  const cardFacts = { cards: { "Dig Through Time": { cmc: 8 }, "Peer into the Abyss": { cmc: 7 } } };
+  assert.deepEqual(manaValueTableProblems({ file: "mtg-combo-decks-explained.mdx", body: table, cardFacts }), []);
+  const wrong = table.replace("| Dig Through Time | 2 | 8 |", "| Dig Through Time | 2 | 7 |");
+  const problems = manaValueTableProblems({ file: "mtg-combo-decks-explained.mdx", body: wrong, cardFacts });
+  assert.ok(problems.some((line) => line.includes("Dig Through Time") && line.includes("8") && line.includes("7")));
+  assert.equal(problems.some((line) => line.includes("Peer into the Abyss")), false);
 });
 
 test("a reviewed guide needs 1,000 words and the other gates", () => {

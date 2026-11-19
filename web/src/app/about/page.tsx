@@ -90,8 +90,8 @@ export default function AboutPage() {
 
       <h2>Editorial method</h2>
       <p>
-        These gates apply to newly reviewed guides. Guides that were already reviewed are being upgraded to meet
-        them. A guide is signed Deck Lab Editorial, and offered to search engines, only after it is marked reviewed.
+        These gates apply to every guide marked reviewed. A guide is signed Deck Lab Editorial, and offered to
+        search engines, only after it clears them.
         The review is a checklist against files in this repository. It does not ask a language model to invent or grade
         the article.
       </p>

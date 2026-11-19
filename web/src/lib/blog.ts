@@ -186,6 +186,29 @@ export function isIndexableHub(category: CategoryId): boolean {
   return postsInCategory(category).length >= MIN_INDEXABLE_HUB;
 }
 
+/** Category chips in the guides nav. Thin hubs are omitted; their URLs redirect. */
+export function categoryNavIds(): CategoryId[] {
+  return (Object.keys(CATEGORIES) as CategoryId[]).filter((id) => isIndexableHub(id));
+}
+
+/**
+ * Paths in the sitemap before shared-deck URLs. Hub paths are included only
+ * when the hub itself is indexable.
+ */
+export function indexableStaticPaths(): string[] {
+  return [
+    "/",
+    "/blog",
+    ...categoryNavIds().map((id) => `/blog/${id}`),
+    ...indexablePosts().map((post) => `/blog/${post.slug}`),
+    "/method",
+    "/about",
+    "/contact",
+    "/privacy",
+    "/terms",
+  ];
+}
+
 /**
  * A `/blog/...` href is emitted only for a reviewed guide or an indexable hub.
  * Anything else (unreviewed, archived, thin hub, unknown slug) is not a link.
