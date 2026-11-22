@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { POST } from "../app/api/usage/route";
-import { resetUsageClientLimit, usageClientBuckets, usageClientBudget } from "./usage-client-limit";
+import { allowUsageClient, resetUsageClientLimit, usageClientBuckets, usageClientBudget } from "./usage-client-limit";
 import {
   clientUsagePayload,
   documentViewPayload,
@@ -132,11 +132,34 @@ test("document views skip assets, health, and the usage endpoint", () => {
   assert.equal(shouldRecordDocumentView("GET", "/api/backend/v1/usage", html), false);
   assert.equal(shouldRecordDocumentView("POST", "/", html), false);
   assert.equal(shouldRecordDocumentView("GET", "/", new Headers({ accept: "application/json" })), false);
-  assert.equal(shouldRecordDocumentView("GET", "/library", new Headers({ rsc: "1" })), true);
+  assert.equal(shouldRecordDocumentView("GET", "/", new Headers()), false);
+  assert.equal(shouldRecordDocumentView("GET", "/library", new Headers({ rsc: "1" })), false);
   assert.equal(
     shouldRecordDocumentView("GET", "/library", new Headers({ accept: "text/html", "next-router-prefetch": "1" })),
     false,
   );
+});
+
+test("an RSC flight is not recorded and a text/html document is", () => {
+  const recorded: string[] = [];
+  const visit = (headers: Headers) => {
+    let scheduled = false;
+    scheduleDocumentView(
+      { method: "GET", pathname: "/library", search: "", headers },
+      () => {
+        scheduled = true;
+      },
+      async (payload) => {
+        recorded.push(payload.path);
+      },
+    );
+    return scheduled;
+  };
+  assert.equal(visit(new Headers({ rsc: "1", accept: "text/x-component" })), false);
+  assert.equal(visit(new Headers({ rsc: "1", accept: "text/html" })), false);
+  assert.equal(visit(new Headers({ accept: "text/html", "next-router-state-tree": "%5B%5D" })), false);
+  assert.equal(visit(new Headers({ accept: "text/html,*/*" })), true);
+  assert.deepEqual(recorded, ["/library"]);
 });
 
 test("a document view is scheduled without waiting for the write", async () => {
@@ -298,6 +321,32 @@ test("the usage route limits one client in memory without keeping the address", 
     else process.env.API_BASE = previousBase;
     if (previousVercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = previousVercel;
+  }
+});
+
+test("idle usage buckets are swept and a full map evicts the oldest", () => {
+  resetUsageClientLimit();
+  const previous = { ...usageClientBudget };
+  usageClientBudget.limit = 5;
+  usageClientBudget.windowMs = 1000;
+  usageClientBudget.maxBuckets = 2;
+  try {
+    assert.equal(allowUsageClient("a", 0), true);
+    assert.equal(allowUsageClient("b", 0), true);
+    assert.equal(allowUsageClient("c", 1001), true);
+    assert.deepEqual(usageClientBuckets(), ["c"]);
+
+    resetUsageClientLimit();
+    assert.equal(allowUsageClient("a", 5000), true);
+    assert.equal(allowUsageClient("b", 5000), true);
+    assert.equal(allowUsageClient("c", 5000), true);
+    assert.deepEqual(usageClientBuckets(), ["b", "c"]);
+    assert.equal(usageClientBuckets().includes("a"), false);
+  } finally {
+    resetUsageClientLimit();
+    usageClientBudget.limit = previous.limit;
+    usageClientBudget.windowMs = previous.windowMs;
+    usageClientBudget.maxBuckets = previous.maxBuckets;
   }
 });
 

@@ -71,16 +71,22 @@ export function isSkippedUsagePath(pathname: string): boolean {
   return STATIC_EXT.test(pathname);
 }
 
-/** Document loads and App Router navigations. Prefetch, assets, and /api are skipped. */
+/** RSC flights and Next router refreshes. `router.refresh()` sends these and is not a page view. */
+function isRouterFlight(headers: HeaderSource): boolean {
+  if (headers.get("rsc")) return true;
+  if (headers.get("next-router-state-tree") || headers.get("next-router-prefetch")) return true;
+  if (headers.get("next-url")) return true;
+  return false;
+}
+
+/** Real document loads only. Prefetch, assets, /api, and RSC flights are skipped. */
 export function shouldRecordDocumentView(method: string, pathname: string, headers: HeaderSource): boolean {
   if (method !== "GET") return false;
   if (isSkippedUsagePath(pathname)) return false;
-  if (headers.get("next-router-prefetch") === "1") return false;
   const purpose = (headers.get("purpose") ?? headers.get("sec-purpose") ?? "").toLowerCase();
   if (purpose === "prefetch") return false;
-  if (headers.get("rsc") === "1") return true;
-  const accept = (headers.get("accept") ?? "").toLowerCase();
-  return accept.length === 0 || accept.includes("text/html") || accept.includes("*/*");
+  if (isRouterFlight(headers)) return false;
+  return (headers.get("accept") ?? "").toLowerCase().includes("text/html");
 }
 
 export function documentViewPayload(pathname: string, search: string, headers: HeaderSource): UsagePayload | null {
