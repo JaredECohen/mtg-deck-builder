@@ -47,7 +47,7 @@ from app.rate_limiter import (
     prose_rate_limiter,
     public_rate_limiter,
 )
-from app.services.usage_events import router as usage_router, start_retention_schedule
+from app.services.usage_events import router as usage_router, start_retention_schedule, stop_retention_schedule
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
 from app.services.deck_analysis import DeckAnalysisService
@@ -226,6 +226,10 @@ async def _lifespan(app: FastAPI):
         yield
     finally:
         card_refresh_service.stop()
+        try:
+            stop_retention_schedule()
+        except Exception:
+            logger.warning("usage retention schedule failed to stop", exc_info=True)
 
 
 app = FastAPI(title="MTG Deck Builder API", version="0.1.0", lifespan=_lifespan)

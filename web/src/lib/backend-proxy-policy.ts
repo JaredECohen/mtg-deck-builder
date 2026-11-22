@@ -19,7 +19,9 @@ export function isAuthPath(decoded: string): boolean {
 
 /** Usage ingest is server-to-server. The browser proxy must not forward it. */
 export function isUsageIngestPath(decoded: string): boolean {
-  const path = decoded.toLowerCase();
+  // "//" is still one path. Collapse it before the prefix check so /v1//usage
+  // cannot skip this block and reach Fly.
+  const path = decoded.toLowerCase().replace(/\/{2,}/g, "/");
   return path === "/v1/usage" || path.startsWith("/v1/usage/");
 }
 

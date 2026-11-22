@@ -20,11 +20,13 @@ test("listing and editing a library need a session", () => {
 });
 
 test("the usage ingest path is blocked, including percent-encoding", () => {
-  for (const raw of ["/v1/usage", "/v1/usage/events", "/v1/USAGE", "/v1/%75sage", "/v1/usage%2Fextra"]) {
+  for (const raw of ["/v1/usage", "/v1/usage/events", "/v1/USAGE", "/v1/%75sage", "/v1/usage%2Fextra", "/v1//usage", "/v1///usage", "/v1/%2Fusage"]) {
     const decoded = decodedApiPath(raw);
     assert.ok(decoded !== null && isUsageIngestPath(decoded), raw);
   }
+  assert.equal(isUsageIngestPath("/v1//usage"), true);
   assert.equal(isUsageIngestPath("/v1/users"), false);
+  assert.equal(isUsageIngestPath("/v1//usage-stats"), false);
   assert.equal(isUsageIngestPath("/v1/decks/generate"), false);
 });
 
@@ -39,6 +41,7 @@ test("the browser proxy does not forward the usage ingest endpoint", async () =>
     for (const target of [
       "https://mtgdecklab.app/api/backend/v1/usage",
       "https://mtgdecklab.app/api/backend/v1/%75sage",
+      "https://mtgdecklab.app/api/backend/v1//usage",
     ]) {
       called = false;
       const init = {

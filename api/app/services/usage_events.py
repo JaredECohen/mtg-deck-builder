@@ -60,6 +60,7 @@ _COUNTRY = re.compile(r"^[A-Za-z]{2}$")
 _schema_ready: set[str] = set()
 _scheduler_started = False
 _stop = threading.Event()
+_retention_thread: threading.Thread | None = None
 
 router = APIRouter()
 
@@ -231,22 +232,32 @@ def run_retention_loop(interval_seconds: float, stop=None, purge=None) -> None:
 
 def start_retention_schedule(interval_seconds: float = _PURGE_INTERVAL_SECONDS) -> None:
     """Purge once immediately, then on a timer unless the schedule is disabled."""
-    global _scheduler_started
+    global _scheduler_started, _retention_thread
     try:
         purge_expired()
     except Exception:
         logger.warning("usage retention purge on boot failed", exc_info=True)
     if os.getenv("MTG_USAGE_PURGE_SCHEDULE", "1").strip().lower() in {"0", "false", "no"}:
         return
-    if _scheduler_started:
+    if _scheduler_started and _retention_thread is not None and _retention_thread.is_alive():
         return
+    _stop.clear()
     _scheduler_started = True
-    threading.Thread(
+    _retention_thread = threading.Thread(
         target=run_retention_loop,
         args=(interval_seconds,),
         name="usage-retention",
         daemon=True,
-    ).start()
+    )
+    _retention_thread.start()
+
+
+def stop_retention_schedule(timeout: float = 2.0) -> None:
+    """Wake the purge thread on lifespan shutdown and wait for it to exit."""
+    _stop.set()
+    thread = _retention_thread
+    if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+        thread.join(timeout)
 
 
 def _payload(raw: bytes) -> tuple[str, str, str | None, str | None, str | None]:

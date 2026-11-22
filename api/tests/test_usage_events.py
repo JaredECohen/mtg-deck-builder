@@ -321,3 +321,21 @@ def test_retention_loop_purges_on_a_timer_without_writes():
     waits = iter([False, False, True])
     usage.run_retention_loop(3600, stop=lambda _interval: next(waits), purge=lambda: calls.append(1))
     assert calls == [1, 1]
+
+
+def test_retention_thread_stops_on_shutdown(monkeypatch):
+    monkeypatch.setenv("MTG_USAGE_PURGE_SCHEDULE", "1")
+    calls: list[int] = []
+    monkeypatch.setattr(usage, "purge_expired", lambda: calls.append(1))
+    usage._scheduler_started = False
+    usage._stop.clear()
+    usage.start_retention_schedule(interval_seconds=30)
+    try:
+        thread = usage._retention_thread
+        assert thread is not None and thread.is_alive()
+        assert calls == [1]
+        usage.stop_retention_schedule()
+        assert thread.is_alive() is False
+        assert calls == [1]
+    finally:
+        usage.stop_retention_schedule()
