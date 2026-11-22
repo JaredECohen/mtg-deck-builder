@@ -17,6 +17,12 @@ export function isAuthPath(decoded: string): boolean {
   return decoded === "/v1/auth" || decoded.startsWith("/v1/auth/");
 }
 
+/** Usage ingest is server-to-server. The browser proxy must not forward it. */
+export function isUsageIngestPath(decoded: string): boolean {
+  const path = decoded.toLowerCase();
+  return path === "/v1/usage" || path.startsWith("/v1/usage/");
+}
+
 /**
  * Listing a library, renaming a deck, or publishing it needs a signed-in
  * session. The cookie check here is only a shape check: a made-up value still

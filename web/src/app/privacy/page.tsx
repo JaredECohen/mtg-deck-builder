@@ -30,7 +30,11 @@ export const metadata: Metadata = {
 };
 
 const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
-const UPDATED = "October 27, 2026";
+const COARSE_LOCATION =
+  "We record the approximate location (country, region, city) derived from your connection when you use the app. We do not store your IP address or precise location.";
+const RATE_LIMIT_RETENTION =
+  "To prevent abuse, we briefly keep a scrambled form of your connection address for rate limiting, deleted within 2 days.";
+const UPDATED = "November 22, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -80,6 +84,9 @@ export default function PrivacyPage() {
         Those events include only a format, an export target, or a guide&apos;s public address and category. They do
         not include the text you type, deck names, card lists, email addresses, or share links. The page address
         stored with a visit has the brief and share-token parameters removed.
+      </p>
+      <p>
+        {COARSE_LOCATION} {RATE_LIMIT_RETENTION}
       </p>
 
       <h2>What we share</h2>

@@ -36,6 +36,11 @@ def _use_test_database() -> None:
     # Runs at conftest import, before any test module imports ``app``:
     # app.config reads DATABASE_URL once at import time.
     os.environ.setdefault("MTG_WARM_CACHES", "0")
+    # Usage retention runs on a timer in production. Tests call purge directly.
+    os.environ.setdefault("MTG_USAGE_PURGE_SCHEDULE", "0")
+    # Sign-in buckets store HMAC-SHA256(key, coarsened IP). A fixed test key
+    # keeps that path deterministic. Tests that cover a missing key delete it.
+    os.environ.setdefault("RATE_LIMIT_HMAC_KEY", "test-rate-limit-key")
     # app.config loads the repo-root .env without overriding set variables, so
     # blanking the provider keys here keeps a developer's real keys out of the
     # suite: no billed calls, and the deterministic fallbacks CI exercises.

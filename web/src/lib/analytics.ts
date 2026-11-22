@@ -109,6 +109,32 @@ function send(name: AnalyticsEventName, props: Record<string, unknown>) {
   } catch {
     // Analytics must never break the builder.
   }
+  reportUsage(event.name);
+}
+
+/** Body posted to /api/usage. Event name and redacted path only — never geo or an IP. */
+export function usageBeaconBody(name: string, href: string): { event: string; path: string } | null {
+  if (!(name in ANALYTICS_EVENT_PROPS)) return null;
+  const path = redactUsagePath(href);
+  if (!path) return null;
+  return { event: name, path };
+}
+
+function reportUsage(name: AnalyticsEventName) {
+  if (typeof window === "undefined") return;
+  const href = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const body = usageBeaconBody(name, href);
+  if (!body) return;
+  try {
+    void fetch("/api/usage", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    // Usage recording must never break the builder.
+  }
 }
 
 export function trackDeckGenerated(format: string, source: "new" | "alternative") {
@@ -166,6 +192,23 @@ export function redactAnalyticsUrl(raw: string): string | null {
   const absolute = /^https?:\/\//i.test(raw);
   if (!absolute) return `${url.pathname}${url.search}${url.hash}`;
   return url.toString();
+}
+
+/** Path stored with a usage event.
+
+Share-token rules match {@link redactAnalyticsUrl}. The query string and the
+fragment are always removed, including campaign tags analytics would keep.
+*/
+export function redactUsagePath(raw: string): string | null {
+  const redacted = redactAnalyticsUrl(raw);
+  if (redacted === null) return null;
+  try {
+    const url = new URL(redacted, "https://mtgdecklab.app");
+    const path = url.pathname || "/";
+    return path.length > 200 ? path.slice(0, 200) : path;
+  } catch {
+    return null;
+  }
 }
 
 /** `beforeSend` filter: strip sensitive query params from the page URL. */

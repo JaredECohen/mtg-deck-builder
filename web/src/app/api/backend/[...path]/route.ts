@@ -12,7 +12,7 @@
 
 import { NextResponse } from "next/server";
 
-import { decodedApiPath, isAuthPath, requiresSession } from "@/lib/backend-proxy-policy";
+import { decodedApiPath, isAuthPath, isUsageIngestPath, requiresSession } from "@/lib/backend-proxy-policy";
 import { socketAddressOf, trustedClientAddress } from "@/lib/client-address";
 import { SESSION_COOKIE, sessionCookie } from "@/lib/session-cookie";
 
@@ -59,7 +59,9 @@ async function forward(request: Request): Promise<Response> {
   if (decoded === null) return errorResponse(400, "Invalid API path.");
   // Auth responses can carry a session token or a debug sign-in link. Those
   // routes are served by /api/auth/*, which keeps the token in an httpOnly cookie.
-  if (isAuthPath(decoded)) {
+  // Usage ingest accepts only the server-side shared secret. A browser that
+  // reached it through this proxy could forge rows, so it is not forwarded.
+  if (isAuthPath(decoded) || isUsageIngestPath(decoded)) {
     return errorResponse(404, "Not found.");
   }
   const session = sessionToken(request);

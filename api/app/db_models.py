@@ -169,6 +169,20 @@ class AuthRateBucket(Base):
     count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class UsageEvent(Base):
+    """Coarse usage. Country, region, and city only — never an IP or a precise point."""
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[str] = mapped_column(String(40), index=True)
+    event: Mapped[str] = mapped_column(String(64))
+    path: Mapped[str] = mapped_column(String(200))
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
 class CardEmbedding(Base):
     """Dense card embedding for semantic retrieval.
 
