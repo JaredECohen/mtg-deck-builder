@@ -25,11 +25,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import sessionmaker
 
 from app.db import get_engine
 from app.db_models import Base, UsageEvent
-from app.rate_limiter import usage_write_limiter
+from app.rate_limiter import usage_funnel_limiter, usage_page_view_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -109,18 +110,25 @@ def _plain(value: object) -> str | None:
     return text_value
 
 
+# Vercel uses XX for an unknown country and T1 for Tor. Neither is a place.
+_NON_COUNTRY = frozenset({"XX", "T1"})
+
+
 def clean_country(value: object) -> str | None:
     text_value = _plain(value)
     if text_value is None or _COUNTRY.fullmatch(text_value) is None:
         return None
-    return text_value.upper()
+    code = text_value.upper()
+    if code in _NON_COUNTRY:
+        return None
+    return code
 
 
 def clean_region(value: object) -> str | None:
     text_value = _plain(value)
-    if text_value is None or len(text_value) > REGION_MAX:
+    if text_value is None:
         return None
-    return text_value
+    return text_value[:REGION_MAX]
 
 
 def clean_city(value: object) -> str | None:
@@ -292,11 +300,23 @@ async def post_usage(request: Request) -> Response:
     raw = await request.body()
     if len(raw) > BODY_MAX:
         raise HTTPException(status_code=413, detail="Payload is too large.")
-    if not usage_write_limiter.is_allowed("usage"):
-        raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
     event, path, country, region, city = _payload(raw)
+    # Separate in-memory windows. The key is a constant, not a client address.
+    window = usage_page_view_limiter if event == "page_view" else usage_funnel_limiter
+    bucket = "page_view" if event == "page_view" else "funnel"
+    if not window.is_allowed(bucket):
+        raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
     try:
-        insert_event(event=event, path=path, country=country, region=region, city=city)
+        # SQLite has one writer. A lock wait on the event loop would stall
+        # every other request, including /api/health.
+        await run_in_threadpool(
+            insert_event,
+            event=event,
+            path=path,
+            country=country,
+            region=region,
+            city=city,
+        )
     except Exception:
         logger.warning("usage event write failed", exc_info=True)
         raise HTTPException(status_code=500, detail="Usage event was not stored.") from None

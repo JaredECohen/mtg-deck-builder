@@ -38,9 +38,12 @@ def _use_test_database() -> None:
     os.environ.setdefault("MTG_WARM_CACHES", "0")
     # Usage retention runs on a timer in production. Tests call purge directly.
     os.environ.setdefault("MTG_USAGE_PURGE_SCHEDULE", "0")
-    # Sign-in buckets store HMAC-SHA256(key, coarsened IP). A fixed test key
-    # keeps that path deterministic. Tests that cover a missing key delete it.
-    os.environ.setdefault("RATE_LIMIT_HMAC_KEY", "test-rate-limit-key")
+    # Sign-in buckets store HMAC-SHA256(key, coarsened IP). Production refuses
+    # a key shorter than 32 characters, so the suite default is long enough
+    # for tests that set FLY_APP_NAME. Tests that cover a missing or short key
+    # replace this.
+    if len(os.environ.get("RATE_LIMIT_HMAC_KEY", "").strip()) < 32:
+        os.environ["RATE_LIMIT_HMAC_KEY"] = "test-rate-limit-key-0123456789abcd"
     # app.config loads the repo-root .env without overriding set variables, so
     # blanking the provider keys here keeps a developer's real keys out of the
     # suite: no billed calls, and the deterministic fallbacks CI exercises.

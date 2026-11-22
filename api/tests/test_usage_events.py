@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
+import threading
 from datetime import datetime, timezone
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -15,7 +18,7 @@ import app.services.usage_events as usage
 from app.db import get_engine
 from app.db_models import Base
 from app.main import app
-from app.rate_limiter import public_rate_limiter, usage_write_limiter
+from app.rate_limiter import public_rate_limiter, usage_funnel_limiter, usage_page_view_limiter
 
 client = TestClient(app)
 
@@ -51,7 +54,8 @@ def _clean_usage_events():
 @pytest.fixture
 def usage_secret(monkeypatch):
     monkeypatch.setenv("USAGE_INGEST_SECRET", "test-usage-secret")
-    usage_write_limiter.reset()
+    usage_page_view_limiter.reset()
+    usage_funnel_limiter.reset()
     return "test-usage-secret"
 
 
@@ -268,7 +272,7 @@ def test_oversized_payload_is_rejected(usage_secret):
 
 
 def test_write_rate_limit_triggers_without_storing_an_ip(usage_secret, monkeypatch):
-    monkeypatch.setattr(usage_write_limiter, "limit", 2)
+    monkeypatch.setattr(usage_page_view_limiter, "limit", 2)
     body = {"event": "page_view", "path": "/"}
     assert client.post("/v1/usage", json=body, headers=_headers(usage_secret)).status_code == 204
     assert client.post("/v1/usage", json=body, headers=_headers(usage_secret)).status_code == 204
@@ -276,7 +280,27 @@ def test_write_rate_limit_triggers_without_storing_an_ip(usage_secret, monkeypat
     assert limited.status_code == 429
     _columns, rows = _stored()
     assert len(rows) == 2
-    assert list(usage_write_limiter._timestamps) == ["usage"]
+    assert list(usage_page_view_limiter._timestamps) == ["page_view"]
+    funnel = {"event": "deck_generated", "path": "/"}
+    assert client.post("/v1/usage", json=funnel, headers=_headers(usage_secret)).status_code == 204
+
+
+def test_unknown_country_codes_are_null_and_region_is_trimmed(usage_secret):
+    long_region = "R" * 80
+    for country in ("XX", "t1", "US"):
+        response = client.post(
+            "/v1/usage",
+            json={"event": "page_view", "path": f"/{country}", "country": country, "region": long_region},
+            headers=_headers(usage_secret),
+        )
+        assert response.status_code == 204, country
+    _columns, rows = _stored()
+    by_path = {row["path"]: row for row in rows}
+    assert by_path["/XX"]["country"] is None
+    assert by_path["/t1"]["country"] is None
+    assert by_path["/US"]["country"] == "US"
+    assert by_path["/US"]["region"] == "R" * 64
+    assert "XX" not in json.dumps([by_path["/XX"]["country"], by_path["/t1"]["country"]])
 
 
 def test_usage_writes_skip_the_ip_rate_limiter(usage_secret, monkeypatch):
@@ -291,7 +315,7 @@ def test_usage_writes_skip_the_ip_rate_limiter(usage_secret, monkeypatch):
     assert client.post("/v1/usage", json=body, headers=headers).status_code == 204
     blob = json.dumps(_stored()[1])
     assert "203.0.113.50" not in blob
-    assert "203.0.113.50" not in str(list(usage_write_limiter._timestamps))
+    assert "203.0.113.50" not in str(list(usage_page_view_limiter._timestamps))
 
 
 def test_retention_purges_rows_older_than_13_months():
@@ -321,6 +345,42 @@ def test_retention_loop_purges_on_a_timer_without_writes():
     waits = iter([False, False, True])
     usage.run_retention_loop(3600, stop=lambda _interval: next(waits), purge=lambda: calls.append(1))
     assert calls == [1, 1]
+
+
+def test_slow_insert_does_not_block_health(monkeypatch, usage_secret):
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_insert(**_kwargs):
+        started.set()
+        assert release.wait(timeout=5)
+
+    monkeypatch.setattr(usage, "insert_event", slow_insert)
+
+    async def run() -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+            usage_task = asyncio.create_task(
+                http.post(
+                    "/v1/usage",
+                    json={"event": "page_view", "path": "/slow"},
+                    headers=_headers(usage_secret),
+                )
+            )
+            try:
+                for _ in range(100):
+                    if started.is_set():
+                        break
+                    await asyncio.sleep(0.01)
+                assert started.is_set()
+                health = await asyncio.wait_for(http.get("/api/health"), timeout=2)
+                assert health.status_code == 200
+            finally:
+                release.set()
+            recorded = await asyncio.wait_for(usage_task, timeout=2)
+            assert recorded.status_code == 204
+
+    asyncio.run(run())
 
 
 def test_retention_thread_stops_on_shutdown(monkeypatch):

@@ -4,6 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { POST } from "../app/api/usage/route";
+import { resetUsageClientLimit, usageClientBuckets, usageClientBudget } from "./usage-client-limit";
 import {
   clientUsagePayload,
   documentViewPayload,
@@ -252,6 +253,51 @@ test("the usage route acknowledges and does not throw", async () => {
   } finally {
     if (previous === undefined) delete process.env.USAGE_INGEST_SECRET;
     else process.env.USAGE_INGEST_SECRET = previous;
+  }
+});
+
+test("the usage route limits one client in memory without keeping the address", async () => {
+  const previousSecret = process.env.USAGE_INGEST_SECRET;
+  const previousBase = process.env.API_BASE;
+  const previousVercel = process.env.VERCEL;
+  const previousLimit = usageClientBudget.limit;
+  resetUsageClientLimit();
+  usageClientBudget.limit = 2;
+  process.env.USAGE_INGEST_SECRET = "server-secret";
+  process.env.API_BASE = "http://api.test";
+  process.env.VERCEL = "1";
+  let calls = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response(null, { status: 204 });
+  }) as typeof fetch;
+  const body = JSON.stringify({ event: "deck_shared", path: "/library" });
+  const headers = {
+    "content-type": "application/json",
+    "x-vercel-forwarded-for": "203.0.113.40",
+  };
+  try {
+    const first = await POST(new Request("https://mtgdecklab.app/api/usage", { method: "POST", headers, body }));
+    const second = await POST(new Request("https://mtgdecklab.app/api/usage", { method: "POST", headers, body }));
+    const third = await POST(new Request("https://mtgdecklab.app/api/usage", { method: "POST", headers, body }));
+    assert.equal(first.status, 204);
+    assert.equal(second.status, 204);
+    assert.equal(third.status, 429);
+    assert.equal(calls, 2);
+    const buckets = usageClientBuckets().join(" ");
+    assert.equal(buckets.includes("203.0.113.40"), false);
+    assert.equal(buckets.length > 0, true);
+  } finally {
+    globalThis.fetch = original;
+    resetUsageClientLimit();
+    usageClientBudget.limit = previousLimit;
+    if (previousSecret === undefined) delete process.env.USAGE_INGEST_SECRET;
+    else process.env.USAGE_INGEST_SECRET = previousSecret;
+    if (previousBase === undefined) delete process.env.API_BASE;
+    else process.env.API_BASE = previousBase;
+    if (previousVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = previousVercel;
   }
 });
 

@@ -90,6 +90,28 @@ def test_missing_key_fails_closed_in_production(monkeypatch):
     assert plain not in " ".join(_buckets(engine))
 
 
+def test_short_key_fails_closed_in_production_without_logging_it(monkeypatch, caplog):
+    import logging
+
+    import app.services.auth_service as auth_module
+
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.delenv("FLY_APP_NAME", raising=False)
+    monkeypatch.setenv("RATE_LIMIT_HMAC_KEY", "too-short-to-be-a-secret")
+    auth_module._missing_rate_key_logged = False
+    caplog.set_level(logging.ERROR)
+    assert connection_digest("203.0.113.50") is None
+    assert "too-short-to-be-a-secret" not in caplog.text
+    assert "shorter than 32" in caplog.text
+    engine = _engine()
+    accounts = AuthService(session_factory=sessionmaker(bind=engine, future=True))
+    assert accounts.consume_ip("203.0.113.50") is False
+    assert _buckets(engine) == []
+    long_key = "k" * 32
+    monkeypatch.setenv("RATE_LIMIT_HMAC_KEY", long_key)
+    assert connection_digest("203.0.113.10") == hmac.new(long_key.encode(), b"203.0.113.10", hashlib.sha256).hexdigest()
+
+
 def test_missing_key_outside_production_is_not_plain_sha256(monkeypatch):
     monkeypatch.delenv("RATE_LIMIT_HMAC_KEY", raising=False)
     monkeypatch.delenv("FLY_APP_NAME", raising=False)

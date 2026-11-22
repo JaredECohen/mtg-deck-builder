@@ -189,6 +189,7 @@ def _ensure_schema(engine) -> None:
 
 _ephemeral_rate_key: str | None = None
 _missing_rate_key_logged = False
+_MIN_RATE_KEY_LENGTH = 32
 
 
 def connection_digest(material: str) -> str | None:
@@ -196,16 +197,20 @@ def connection_digest(material: str) -> str | None:
 
     The digest is not sha256(material). The same address under two keys
     produces two digests, and neither is reversible without the key.
+    In production a key shorter than 32 characters is treated as unset.
     """
     global _ephemeral_rate_key, _missing_rate_key_logged
     key = os.getenv("RATE_LIMIT_HMAC_KEY", "").strip()
+    if _is_production() and len(key) < _MIN_RATE_KEY_LENGTH:
+        key = ""
     if not key:
         if _is_production():
             if not _missing_rate_key_logged:
                 _missing_rate_key_logged = True
                 logger.error(
-                    "RATE_LIMIT_HMAC_KEY is unset; sign-in rate limits are refusing requests "
-                    "instead of storing a hash of the client address."
+                    "RATE_LIMIT_HMAC_KEY is unset or shorter than 32 characters; "
+                    "sign-in rate limits are refusing requests instead of storing "
+                    "a hash of the client address."
                 )
             return None
         if _ephemeral_rate_key is None:
