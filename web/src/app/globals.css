@@ -2118,6 +2118,8 @@ ul.chips {
 
 .home-format a {
   color: var(--accent-2);
+  display: block;
+  margin-top: 8px;
 }
 
 .home-faq {
@@ -2598,6 +2600,81 @@ ul.chips {
   gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.precon-stats-prose {
+  max-width: 76ch;
+}
+
+.precon-stats-prose h2,
+.precon-stats-prose h3 {
+  margin: 28px 0 8px;
+}
+
+.precon-filters {
+  display: grid;
+  gap: 16px;
+  margin: 8px 0 16px;
+}
+
+.precon-filter-colors {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.precon-filter-set {
+  max-width: 280px;
+}
+
+.precon-set-select {
+  width: 100%;
+}
+
+.precon-filter-count {
+  margin: 0;
+}
+
+.precon-stats-table {
+  min-width: 1180px;
+  font-size: 13px;
+}
+
+.precon-sort {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.num .precon-sort {
+  align-items: flex-end;
+  margin-left: auto;
+}
+
+.precon-col-note,
+.precon-reprint,
+.precon-price-note {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.precon-curve {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .library-rename {

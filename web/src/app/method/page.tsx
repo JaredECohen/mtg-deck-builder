@@ -51,7 +51,9 @@ export default function MethodPage() {
         </a>
         . The committed snapshot keeps Commander Deck products and Pioneer Challenger Deck products. Collector editions
         of the same precon are dropped as duplicate products. That leaves 182 Commander products and 8 Pioneer
-        Challenger decks.
+        Challenger decks. The{" "}
+        <Link href="/commander-precons/stats">Commander precon stats table</Link> lists each of those Commander products
+        with the counts from the same facts file.
       </p>
       <p>
         Eight of those Commander products are Commander Anthology reprints of an earlier precon, with the same cards
