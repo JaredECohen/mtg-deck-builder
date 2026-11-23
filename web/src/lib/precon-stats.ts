@@ -6,6 +6,7 @@ import {
   COLOR_ORDER,
   PRECON_YEAR_RANGES,
   averageFromCurve,
+  displayPreconName,
   mediansFor,
   sortPreconRows,
   type PreconStatsModel,
@@ -18,6 +19,7 @@ export {
   PRECON_YEAR_RANGES,
   averageFromCurve,
   defaultSortDirection,
+  displayPreconName,
   filterPreconRows,
   formatAverage,
   formatCountMedian,
@@ -178,7 +180,7 @@ function buildModel(): PreconStatsModel {
     if (!Array.isArray(copies)) throw new Error("reprint copies are missing");
     for (const copyEntry of copies) {
       const copy = asRecord(copyEntry, "reprint copy");
-      reprintOf.set(asString(copy.id, "reprint id"), { name: keptName, release: keptRelease });
+      reprintOf.set(asString(copy.id, "reprint id"), { name: displayPreconName(keptName), release: keptRelease });
     }
   }
   const deckMap = asRecord(facts.decks, "decks");
@@ -213,7 +215,7 @@ function buildModel(): PreconStatsModel {
     const unpriced = asStringList(deck.unpriced, `${id} unpriced`);
     rows.push({
       id,
-      name: asString(deck.name, `${id} name`),
+      name: displayPreconName(asString(deck.name, `${id} name`)),
       setCode,
       releaseDate,
       year: Number(releaseDate.slice(0, 4)),

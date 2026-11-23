@@ -85,7 +85,7 @@ export function PreconStatsTable({
     <div className="precon-stats-browser">
       <div className="precon-filters">
         <fieldset className="precon-filter-colors">
-          <legend className="label">Color</legend>
+          <legend className="label">Includes colors</legend>
           <div className="chips">
             {COLOR_ORDER.map((color) => (
               <button
@@ -184,7 +184,7 @@ export function PreconStatsTable({
                   <td className="num">{row.removalCount}</td>
                   <td className="num">
                     {row.gameChangerCount}
-                    {row.gameChangers.length ? <span className="sr-only">: {row.gameChangers.join(", ")}</span> : null}
+                    {row.gameChangers.length ? <span className="precon-gc-names">{row.gameChangers.join(", ")}</span> : null}
                   </td>
                   <td className="num">
                     {formatMoney(row.priceUsd)}

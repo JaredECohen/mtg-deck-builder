@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PreconStatsTable } from "../components/precon-stats-table";
 import {
   averageFromCurve,
+  displayPreconName,
   filterPreconRows,
   formatAverage,
   loadPreconStats,
@@ -194,6 +195,34 @@ test("the server table markup contains the deck rows before any click", () => {
   assert.match(html, /2026-11-01/);
   assert.equal(html.includes('href="/commander-precons/'), false);
   assert.match(html, new RegExp(`Showing ${stats.productCount} of ${stats.productCount}`));
+});
+
+test("deck names show short words in lower case after the first word", () => {
+  assert.equal(displayPreconName("Guided By Nature"), "Guided by Nature");
+  assert.equal(displayPreconName("Forged In Stone"), "Forged in Stone");
+  assert.equal(displayPreconName("From Cute to Brute"), "From Cute to Brute");
+  assert.equal(displayPreconName("The Hosts of Mordor"), "The Hosts of Mordor");
+  assert.equal(displayPreconName("Angels: They're Just Like Us but Cooler and with Wings"), "Angels: They're Just Like Us but Cooler and with Wings");
+  assert.equal(displayPreconName("Heroes: The Next Wave"), "Heroes: The Next Wave");
+  const rows = loadPreconStats().rows;
+  for (const row of rows) {
+    assert.equal(row.name, displayPreconName(row.name), row.id);
+    if (row.reprintOfName) assert.equal(row.reprintOfName, displayPreconName(row.reprintOfName), row.id);
+  }
+  for (const name of ["Built from Scratch", "Forged in Stone", "Guided by Nature", "Sworn to Darkness"]) {
+    assert.ok(rows.some((row) => row.name === name), name);
+  }
+  assert.equal(rows.some((row) => row.name === "Guided By Nature"), false);
+});
+
+test("the table labels the color filter and shows Game Changer names", () => {
+  const stats = loadPreconStats();
+  const html = renderToStaticMarkup(
+    createElement(PreconStatsTable, { rows: stats.rows, sets: stats.sets, priceDate: stats.sources.priceDate }),
+  );
+  assert.match(html, /<legend class="label">Includes colors<\/legend>/);
+  assert.match(html, /<span class="precon-gc-names">Jeska(&#x27;|')s Will<\/span>/);
+  assert.equal(/class="sr-only">: Jeska/.test(html), false);
 });
 
 test("the stats page is in the sitemap and stays off the ad slots", () => {

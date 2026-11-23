@@ -175,6 +175,21 @@ export function averageFromCurve(curve: number[]): number {
   return total / cards;
 }
 
+// MTGJSON capitalizes some short words in deck names ("Guided By Nature", "Forged In Stone"),
+// while other entries for the same product use title case ("Guided by Nature"). Lowercase these
+// words unless they open the name or follow a colon, so the table shows one spelling.
+const MINOR_WORDS = new Set(["a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with"]);
+
+export function displayPreconName(name: string): string {
+  const words = name.split(" ");
+  return words
+    .map((word, index) => {
+      if (index === 0 || words[index - 1].endsWith(":")) return word;
+      return MINOR_WORDS.has(word.toLowerCase()) ? word.toLowerCase() : word;
+    })
+    .join(" ");
+}
+
 export function formatAverage(value: number): string {
   return value.toFixed(2);
 }

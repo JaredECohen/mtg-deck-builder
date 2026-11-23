@@ -2663,7 +2663,8 @@ ul.chips {
 
 .precon-col-note,
 .precon-reprint,
-.precon-price-note {
+.precon-price-note,
+.precon-gc-names {
   display: block;
   color: var(--muted);
   font-size: 11px;
