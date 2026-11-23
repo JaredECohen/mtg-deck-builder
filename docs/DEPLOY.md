@@ -180,6 +180,20 @@ custom events, which Vercel only records on Pro. The README section
 "Analytics" lists each event's properties and what is deliberately left out
 (prompts, deck names, share tokens).
 
+**Coarse location.** The API stores country, region, and city in `usage_events`.
+It does not store an IP address. Deploy the Fly API before the web app, so
+`POST /v1/usage` exists when Vercel starts sending.
+
+| Name | Where |
+| --- | --- |
+| `USAGE_INGEST_SECRET` | Fly and Vercel, the same value. Server-only. Never `NEXT_PUBLIC_`. The Next server sends it as `X-Usage-Ingest-Secret`. Unset means usage writes are skipped and the page still loads. |
+| `RATE_LIMIT_HMAC_KEY` | Fly only. At least 32 characters. Set it before the API deploy. If it is missing or shorter in production, `POST /v1/auth/magic-link` returns 429 until a long enough key is set. |
+
+Middleware records a page view only when `Accept` includes `text/html`. It
+starts one best-effort fetch per such request and does not wait on it.
+Prefetches, static files, `/api`, and App Router RSC flights (`RSC`,
+`Next-Router-*`, including `router.refresh()`) are not counted.
+
 ## 3. Weekly card refresh
 
 `.github/workflows/refresh-cards.yml` runs on Mondays and can also be started

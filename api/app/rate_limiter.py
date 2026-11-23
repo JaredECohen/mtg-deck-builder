@@ -61,5 +61,11 @@ evaluate_rate_limiter = InMemoryRateLimiter(requests_per_minute=20)
 # that still stops scraping and request floods.
 public_rate_limiter = InMemoryRateLimiter(requests_per_minute=240)
 
+# Usage ingest is server-to-server. Two global windows, keyed by a constant,
+# so a page-view flood cannot spend the funnel budget. Neither stores an IP.
+# The handler does not use public_rate_limiter.
+usage_page_view_limiter = InMemoryRateLimiter(requests_per_minute=4800)
+usage_funnel_limiter = InMemoryRateLimiter(requests_per_minute=1200)
+
 # Sign-in email budgets live in the database (see AuthService), not here.
 # An in-memory window would reset on every deploy and on the weekly restart.

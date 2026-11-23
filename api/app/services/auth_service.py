@@ -7,6 +7,13 @@ Sessions and magic links are opaque random tokens. Only their sha256 hashes
 are stored, so a database read does not yield a usable credential. Logout
 deletes the session row, which revokes the cookie immediately.
 
+Sign-in rate-limit buckets store HMAC-SHA256 of a coarsened client address,
+keyed by ``RATE_LIMIT_HMAC_KEY``, which is not kept in the database. Production
+(``FLY_APP_NAME`` or ``ENV=production``) refuses the sign-in write when that
+key is unset, instead of falling back to sha256(ip). Other environments use
+one process-local key so local sign-in still works; those buckets die with
+the process. Rows age out after about two days either way.
+
 A magic link is bound to a pre-auth cookie set when the link was requested.
 ``verify`` consumes the link only when that cookie matches, and each login
 mints a new session id. A new link replaces only an older unused link from the
@@ -180,6 +187,42 @@ def _ensure_schema(engine) -> None:
     _ensure_login_token_columns(engine)
 
 
+_ephemeral_rate_key: str | None = None
+_missing_rate_key_logged = False
+_MIN_RATE_KEY_LENGTH = 32
+
+
+def connection_digest(material: str) -> str | None:
+    """HMAC-SHA256 of a rate-limit identity. None when production has no key.
+
+    The digest is not sha256(material). The same address under two keys
+    produces two digests, and neither is reversible without the key.
+    In production a key shorter than 32 characters is treated as unset.
+    """
+    global _ephemeral_rate_key, _missing_rate_key_logged
+    key = os.getenv("RATE_LIMIT_HMAC_KEY", "").strip()
+    if _is_production() and len(key) < _MIN_RATE_KEY_LENGTH:
+        key = ""
+    if not key:
+        if _is_production():
+            if not _missing_rate_key_logged:
+                _missing_rate_key_logged = True
+                logger.error(
+                    "RATE_LIMIT_HMAC_KEY is unset or shorter than 32 characters; "
+                    "sign-in rate limits are refusing requests instead of storing "
+                    "a hash of the client address."
+                )
+            return None
+        if _ephemeral_rate_key is None:
+            _ephemeral_rate_key = secrets.token_hex(32)
+            logger.warning(
+                "RATE_LIMIT_HMAC_KEY is unset outside production. Using a process-local key "
+                "for sign-in rate limits. Set RATE_LIMIT_HMAC_KEY before deploying."
+            )
+        key = _ephemeral_rate_key
+    return hmac.new(key.encode("utf-8"), material.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def rate_limit_ip(value: str | None) -> str:
     """Identity used for the per-IP sign-in budget.
 
@@ -273,16 +316,23 @@ class AuthService:
             session.close()
 
     def consume_ip(self, client_ip: str) -> bool:
-        """Persist the per-IP hour and day budgets. False when either is exhausted."""
+        """Persist the per-IP hour and day budgets. False when either is exhausted.
+
+        The bucket id is HMAC-SHA256 of the coarsened address. The address is
+        not stored. A missing RATE_LIMIT_HMAC_KEY in production returns False
+        and writes nothing.
+        """
         self._ensure()
+        digest = connection_digest(rate_limit_ip(client_ip))
+        if digest is None:
+            return False
         session = self._session()
         try:
             self._maybe_purge(session)
-            identity = _hash_token(rate_limit_ip(client_ip))
             now = _now()
             allowed = [
-                _bump(session, "ip:" + identity, _hour_window(now), IP_LIMIT),
-                _bump(session, "ip-day:" + identity, _day_window(now), IP_DAILY_LIMIT),
+                _bump(session, "ip:" + digest, _hour_window(now), IP_LIMIT),
+                _bump(session, "ip-day:" + digest, _day_window(now), IP_DAILY_LIMIT),
             ]
             if not all(allowed):
                 session.rollback()
@@ -299,11 +349,13 @@ class AuthService:
         touch login tokens; a throttled request must leave a pending link in place.
         """
         self._ensure()
+        network = connection_digest(email + "\n" + rate_limit_ip(client_ip))
+        if network is None:
+            return False
         now = _now()
         session = self._session()
         try:
             email_hash = _hash_token(email)
-            network = _hash_token(email + "\n" + rate_limit_ip(client_ip))
             allowed = [
                 _bump(session, "email:" + email_hash, _hour_window(now), EMAIL_LIMIT),
                 _bump(session, "email-day:" + email_hash, _day_window(now), EMAIL_DAILY_LIMIT),

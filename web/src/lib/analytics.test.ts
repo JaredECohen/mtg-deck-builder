@@ -6,6 +6,7 @@ import {
   ANALYTICS_EVENT_PROPS,
   GUIDE_CATEGORIES,
   redactAnalyticsUrl,
+  redactUsagePath,
   sanitizeEvent,
   setAnalyticsTransport,
   trackDeckExported,
@@ -15,6 +16,7 @@ import {
   trackDeckShared,
   trackGuideViewed,
   trackTcgplayerCartClicked,
+  usageBeaconBody,
   type AnalyticsProps,
 } from "./analytics";
 
@@ -134,6 +136,22 @@ test("page URLs lose brief text and share tokens", () => {
   assert.equal(shared, "https://mtgdecklab.app/d?utm_source=discord");
   assert.equal(redactAnalyticsUrl("/d/abcDEF123456"), "/d");
   assert.equal(redactAnalyticsUrl("/d/abcDEF123456?deck=abcDEF123456"), "/d");
+});
+
+test("usage redaction strips the query string and the fragment", () => {
+  assert.equal(redactUsagePath("/?format=modern&brief=secret%20deck#builder"), "/");
+  assert.equal(
+    redactUsagePath("/blog/mtg-formats-explained?utm_source=newsletter#top"),
+    "/blog/mtg-formats-explained",
+  );
+  assert.equal(redactUsagePath("/d/abcDEF123456?deck=abcDEF123456#list"), "/d");
+  assert.equal(redactUsagePath("/auth/verify?token=secret-token-value#done"), "/auth/verify");
+  assert.equal(redactUsagePath("/library?email=ada@example.com#deck"), "/library");
+  const beacon = usageBeaconBody("deck_generated", "/?brief=secret%20deck&format=modern#builder");
+  assert.deepEqual(beacon, { event: "deck_generated", path: "/" });
+  assert.deepEqual(beacon && Object.keys(beacon).sort(), ["event", "path"]);
+  assert.equal(JSON.stringify(beacon).includes("secret"), false);
+  assert.equal(JSON.stringify(beacon).includes("format="), false);
 });
 
 test("page URLs keep a normal guide path and a safe format hash link", () => {

@@ -47,6 +47,7 @@ from app.rate_limiter import (
     prose_rate_limiter,
     public_rate_limiter,
 )
+from app.services.usage_events import router as usage_router, start_retention_schedule, stop_retention_schedule
 from app.services.card_refresh import CardRefreshService
 from app.services.card_repository import CardRepository
 from app.services.deck_analysis import DeckAnalysisService
@@ -196,6 +197,10 @@ async def _lifespan(app: FastAPI):
         create_schema()
     except Exception:
         logger.warning("schema bootstrap on startup failed", exc_info=True)
+    try:
+        start_retention_schedule()
+    except Exception:
+        logger.warning("usage retention schedule failed to start", exc_info=True)
     # Warn loudly when card_profiles is stale: the optimizer silently
     # returns an empty pool ("optimizer pool is empty") when profiles
     # are missing, which is hard to diagnose without this check.
@@ -221,9 +226,14 @@ async def _lifespan(app: FastAPI):
         yield
     finally:
         card_refresh_service.stop()
+        try:
+            stop_retention_schedule()
+        except Exception:
+            logger.warning("usage retention schedule failed to stop", exc_info=True)
 
 
 app = FastAPI(title="MTG Deck Builder API", version="0.1.0", lifespan=_lifespan)
+app.include_router(usage_router)
 
 
 _LIMITED_ELSEWHERE = (
@@ -236,11 +246,20 @@ _LIMITED_ELSEWHERE = (
 )
 
 
+def _counts_toward_public_limit(path: str) -> bool:
+    """Usage ingest is limited inside its handler, not by caller IP."""
+    if path == "/v1/usage" or path.startswith("/v1/usage/"):
+        return False
+    if not (path.startswith("/v1/") or path.startswith("/api/")):
+        return False
+    return not path.startswith(_LIMITED_ELSEWHERE)
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next: object) -> Response:
     start = time.monotonic()
     path = request.url.path
-    if (path.startswith("/v1/") or path.startswith("/api/")) and not path.startswith(_LIMITED_ELSEWHERE):
+    if _counts_toward_public_limit(path):
         if not public_rate_limiter.is_allowed(f"public:{client_key(request)}"):
             return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
     try:
