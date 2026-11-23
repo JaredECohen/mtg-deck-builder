@@ -27,6 +27,8 @@ test("ads stay on reviewed guides and the guides index, and off the builder and 
   assert.equal(pageAllowsAds("/auth/verify"), false);
   assert.equal(pageAllowsAds("/method"), false);
   assert.equal(pageAllowsAds("/method/"), false);
+  assert.equal(pageAllowsAds("/commander-precons/stats"), false);
+  assert.equal(pageAllowsAds("/commander-precons/stats/"), false);
   assert.equal(pageAllowsAds("/"), false);
   assert.equal(pageAllowsAds("/about"), false);
   assert.equal(pageAllowsAds("/contact"), false);
@@ -40,7 +42,7 @@ test("ads stay on reviewed guides and the guides index, and off the builder and 
 test("the builder, thin pages, and shared decks do not render the AdSense script", () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   const source = (rel: string) => fs.readFileSync(path.join(root, rel), "utf8");
-  for (const file of ["app/page.tsx", "app/about/page.tsx", "app/contact/page.tsx", "app/privacy/page.tsx", "app/terms/page.tsx", "app/method/page.tsx", "app/d/[token]/page.tsx"]) {
+  for (const file of ["app/page.tsx", "app/about/page.tsx", "app/contact/page.tsx", "app/privacy/page.tsx", "app/terms/page.tsx", "app/method/page.tsx", "app/commander-precons/stats/page.tsx", "app/d/[token]/page.tsx"]) {
     assert.doesNotMatch(source(file), /EnableAds/, file);
   }
   assert.match(source("app/blog/page.tsx"), /EnableAds/);

@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 
-import { CATEGORIES, SITE_URL, indexablePosts, isIndexableHub, type CategoryId } from "@/lib/blog";
+import { SITE_URL, indexablePosts, indexableStaticPaths } from "@/lib/blog";
 import { fetchPublicDeckIndex } from "@/lib/public-deck";
+import { PRECON_STATS_PATH, PRECON_STATS_UPDATED } from "@/lib/precon-stats-path";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
@@ -9,29 +10,25 @@ export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = indexablePosts();
   const newest = posts[0]?.updated ?? new Date().toISOString().slice(0, 10);
-  const pages: MetadataRoute.Sitemap = [
-    { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
-    { url: `${SITE_URL}/blog`, lastModified: newest, changeFrequency: "weekly", priority: 0.9 },
-    ...Object.keys(CATEGORIES)
-      .filter((id): id is CategoryId => isIndexableHub(id as CategoryId))
-      .map((id) => ({
-        url: `${SITE_URL}/blog/${id}`,
-        lastModified: newest,
-        changeFrequency: "weekly" as const,
-        priority: 0.7,
-      })),
-    ...posts.map((post) => ({
-      url: `${SITE_URL}/blog/${post.slug}`,
-      lastModified: post.updated,
-      changeFrequency: "monthly" as const,
-      priority: 0.8,
-    })),
-    { url: `${SITE_URL}/method`, changeFrequency: "yearly", priority: 0.4 },
-    { url: `${SITE_URL}/about`, changeFrequency: "yearly", priority: 0.4 },
-    { url: `${SITE_URL}/contact`, changeFrequency: "yearly", priority: 0.3 },
-    { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.2 },
-    { url: `${SITE_URL}/terms`, changeFrequency: "yearly", priority: 0.2 },
-  ];
+  const postByPath = new Map(posts.map((post) => [`/blog/${post.slug}`, post]));
+  const pages: MetadataRoute.Sitemap = indexableStaticPaths().map((path) => {
+    if (path === "/") return { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 };
+    if (path === "/blog") return { url: `${SITE_URL}/blog`, lastModified: newest, changeFrequency: "weekly", priority: 0.9 };
+    const post = postByPath.get(path);
+    if (post) {
+      return {
+        url: `${SITE_URL}${path}`,
+        lastModified: post.updated,
+        changeFrequency: "monthly",
+        priority: 0.8,
+      };
+    }
+    if (path.startsWith("/blog/")) {
+      return { url: `${SITE_URL}${path}`, lastModified: newest, changeFrequency: "weekly", priority: 0.7 };
+    }
+    const priority = path === "/method" || path === "/about" ? 0.4 : path === "/contact" ? 0.3 : 0.2;
+    return { url: `${SITE_URL}${path}`, changeFrequency: "yearly", priority };
+  });
   // Public decks only. Unlisted (noindex) decks are omitted by the API.
   const shared = await fetchPublicDeckIndex();
   for (const deck of shared) {
@@ -42,5 +39,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6
     });
   }
+  pages.push({
+    url: `${SITE_URL}${PRECON_STATS_PATH}`,
+    lastModified: PRECON_STATS_UPDATED,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  });
   return pages;
 }

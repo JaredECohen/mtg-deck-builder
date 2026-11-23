@@ -2,7 +2,7 @@
 title: "What Does a Spellslinger Deck Spend Its Mana On?"
 description: "What does a spellslinger deck pay for in Magic: The Gathering? Kalamax's precon is $152.89, and Deflecting Swat is $75.69 of it. The goldfish won 0 games."
 date: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-17
 author: Deck Lab Editorial
 reviewed: true
 category: deck-archetypes
@@ -20,16 +20,18 @@ Prismari Performance, Zaffai, Thunder Conductor, is the curve lesson at $76.00 w
 
 <InArticleAd />
 
-## When to choose this
+## Instant and sorcery share
 
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| One card is half the receipt | Deflecting Swat is $75.69 of Kalamax's $152.89 | Decide if you are buying the card or the deck |
-| The curve peaks at seven | Zaffai needs rituals and 37 lands, not more seven-drops | A two-mana spell deck is a different commander |
-| You want the goldfish to storm off | It will not. Both spell lists won 0 of 120 | Practice the turn you cast two spells, by hand |
-| You wanted creatures | These products spend the mana on spells | Tokens or voltron |
+Arcane Maelstrom has 25 instants and 1 sorcery, which is 26 of its 61 nonlands. Prismari Performance has 8 instants and 21 sorceries, which is 29 of its 62 nonlands. Kalamax's list is an instant deck. Zaffai's list is a sorcery deck. Treating them as one spellslinger curve hides that split.
 
-## Example decks
+A mana value of 2 or less is also not a spell you can reliably cast for 2. Scryfall records X as 0, so an X spell lands in that bucket. Arcane Maelstrom has 5 such X spells and only 4 spells with a fixed cost at 2 or less: Crop Rotation, Evolution Charm, Tribute to the Wild, and Growth Spiral. Those four ramp or answer. They do not copy a spell. Prismari Performance has 2 X spells in that bucket and 6 fixed spells: Ponder, Serum Visions, Brainstorm, Expressive Iteration, Resculpt, and Faithless Looting. Faithless Looting draws two cards and discards two. It is not a cantrip. The cheap end of the Kalamax list is not a pile of one-mana copy effects. It is five X spells and four fixed instants.
+
+| List | Instants | Sorceries | Fixed cost at 2 or less | X in the text, mana value 2 or less |
+| --- | --- | --- | --- | --- |
+| Arcane Maelstrom | 25 | 1 | 4 | 5 |
+| Prismari Performance | 8 | 21 | 6 | 2 |
+
+## The Arcane Maelstrom and Prismari Performance lists
 
 <DeckBlock id="arcane-maelstrom" />
 
@@ -97,7 +99,7 @@ Control spends mana to answer a threat and then draws. Spellslinger spends mana 
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. Instant and sorcery counts use the front type line. A spell is in the X bucket when the 2026-11-01 oracle text contains X and the mana value is 2 or less.
 
 <FanContentNotice />
 

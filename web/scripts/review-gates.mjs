@@ -88,6 +88,18 @@ export function loadRules(file) {
   return { effective, numbers, source: file };
 }
 
+/** Pinned Scryfall subset used to check printed mana values. A missing file is a failed gate. */
+export function loadCardFacts(file) {
+  if (!fs.existsSync(file)) {
+    throw new Error(`missing example-card-oracle.json (${file})`);
+  }
+  const data = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!data?.cards || typeof data.cards !== "object") {
+    throw new Error(`example-card-oracle.json has no cards (${file})`);
+  }
+  return data;
+}
+
 function deckNamesFrom(catalog, facts) {
   const names = [];
   for (const deck of Object.values(catalog?.decks ?? {})) if (deck?.name) names.push(deck.name);
@@ -439,6 +451,7 @@ function sourcedNumbers({ claims, catalog, body }) {
     const goldfish = analysis.goldfish ?? {};
     addInt(goldfish.games);
     addInt(goldfish.seed);
+    for (const value of Object.values(analysis.role ?? {})) addInt(value);
   }
   return { prices, ints };
 }
@@ -455,6 +468,135 @@ function tablesOf(body) {
   }
   if (current.length) tables.push(current.join("\n"));
   return tables;
+}
+
+function tableRows(table) {
+  return String(table)
+    .split("\n")
+    .filter((line) => /^\s*\|/.test(line))
+    .map((line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()));
+}
+
+function parsedFaceMana(cost) {
+  const symbols = [...String(cost || "").matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+  if (!symbols.length) return null;
+  let total = 0;
+  for (const symbol of symbols) {
+    if (/^\d+$/.test(symbol)) total += Number(symbol);
+    else if (symbol !== "X") total += 1;
+  }
+  return total;
+}
+
+function manaEntries(cardFacts) {
+  const entries = [];
+  for (const [name, info] of Object.entries(cardFacts?.cards ?? {})) {
+    if (info?.cmc != null) entries.push({ name, mv: Number(info.cmc) });
+    for (const face of info?.faces ?? []) {
+      const mv = parsedFaceMana(face.mana_cost);
+      if (face?.name && mv != null) entries.push({ name: face.name, mv });
+    }
+  }
+  entries.sort((left, right) => right.name.length - left.name.length);
+  return entries;
+}
+
+function namedManaIn(text, entries) {
+  const found = [];
+  let haystack = String(text);
+  const lower = () => haystack.toLowerCase();
+  for (const entry of entries) {
+    const needle = entry.name.toLowerCase();
+    let from = 0;
+    const source = lower();
+    while (from < source.length) {
+      const index = source.indexOf(needle, from);
+      if (index < 0) break;
+      const end = index + needle.length;
+      const before = index === 0 || !/[a-z0-9]/i.test(haystack[index - 1]);
+      const after = end >= haystack.length || !/[a-z0-9]/i.test(haystack[end]);
+      if (before && after) {
+        found.push(entry);
+        haystack = `${haystack.slice(0, index)}${" ".repeat(entry.name.length)}${haystack.slice(end)}`;
+        break;
+      }
+      from = index + 1;
+    }
+  }
+  return found;
+}
+
+function dataRows(rows) {
+  return rows.slice(1).filter((row) => !row.every((cell) => /^:?-+:?$/.test(cell)));
+}
+
+function columnIsIntegers(rows, index) {
+  return rows.length > 0 && rows.every((row) => /^\d+$/.test(row[index] ?? ""));
+}
+
+/**
+ * Exact "Mana value" wins. Otherwise the column whose body cells are all
+ * integers. A header that only mentions mana value ("At mana value 2 or less")
+ * is that column when its own cells are all integers, which keeps count tables
+ * on the column they already use. null means the table is not a mana-value
+ * table. -1 means it is one and no column could be resolved.
+ */
+function manaColumnIndex(rows) {
+  const header = rows[0];
+  const exact = header.findIndex((cell) => /^\s*mana value\s*$/i.test(cell));
+  if (exact >= 0) return exact;
+
+  const mentions = [];
+  header.forEach((cell, index) => {
+    if (/mana value/i.test(cell)) mentions.push(index);
+  });
+  if (!mentions.length) return null;
+
+  const body = dataRows(rows);
+  const width = Math.max(header.length, ...body.map((row) => row.length), 0);
+  const integerColumns = [];
+  for (let index = 0; index < width; index += 1) {
+    if (columnIsIntegers(body, index)) integerColumns.push(index);
+  }
+  const mentionedIntegers = integerColumns.filter((index) => mentions.includes(index));
+  if (mentionedIntegers.length === 1) return mentionedIntegers[0];
+  if (integerColumns.length === 1) return integerColumns[0];
+  return -1;
+}
+
+/** A mana-value cell has to be that row's card, not some other integer on the deck. */
+export function manaValueTableProblems({ file, body, cardFacts }) {
+  const entries = cardFacts?.cards ? manaEntries(cardFacts) : null;
+  const problems = [];
+  let reportedMissingFacts = false;
+  for (const table of tablesOf(body)) {
+    const rows = tableRows(table);
+    if (rows.length < 2) continue;
+    const manaColumn = manaColumnIndex(rows);
+    if (manaColumn === null) continue;
+    if (!entries) {
+      if (!reportedMissingFacts) {
+        problems.push(`${file}: example-card-oracle.json is missing, so mana values cannot be checked`);
+        reportedMissingFacts = true;
+      }
+      continue;
+    }
+    if (manaColumn < 0) {
+      problems.push(`${file}: mana value table has no Mana value column`);
+      continue;
+    }
+    for (const row of rows.slice(1)) {
+      if (row.every((cell) => /^:?-+:?$/.test(cell))) continue;
+      const cell = row[manaColumn] ?? "";
+      if (!/^\d+$/.test(cell)) continue;
+      for (const entry of namedManaIn(row.join(" "), entries)) {
+        if (String(entry.mv) !== cell) {
+          problems.push(`${file}: ${entry.name} mana value is ${entry.mv}, table says ${cell}`);
+        }
+      }
+    }
+  }
+  return problems;
 }
 
 function meaningfulTableHits(table, sourced) {
@@ -499,7 +641,7 @@ export function sourcedClaimProblems({ file, body, claims }) {
   return problems;
 }
 
-export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNames, claims }) {
+export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNames, claims, cardFacts }) {
   const problems = [];
   const words = wordCount(body);
   if (words < MIN_REVIEWED_WORDS) problems.push(`${file}: ${words} words (reviewed guides need at least ${MIN_REVIEWED_WORDS})`);
@@ -510,6 +652,7 @@ export function reviewGateProblems({ file, body, oracle, rules, catalog, deckNam
   problems.push(...rulesProblems({ file, body, rules }));
   problems.push(...sourcedClaimProblems({ file, body, claims }));
   problems.push(...dataTableProblems({ file, body, claims, catalog }));
+  problems.push(...manaValueTableProblems({ file, body, cardFacts }));
   return problems;
 }
 

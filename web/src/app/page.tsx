@@ -58,6 +58,8 @@ const FORMATS = [
     text: "100-card singleton decks led by a legendary commander. Multiplayer, social, and the most popular way to play.",
     guide: "/blog/precon-lands-ramp-draw",
     guideLabel: "See the precon census",
+    stats: "/commander-precons/stats",
+    statsLabel: "See every precon’s stats",
   },
 ];
 
@@ -162,6 +164,9 @@ export default function HomePage() {
               <h3>{format.name}</h3>
               <p className="muted">{format.text}</p>
               <Link href={format.guide}>{format.guideLabel} →</Link>
+              {"stats" in format && format.stats ? (
+                <Link href={format.stats}>{format.statsLabel} →</Link>
+              ) : null}
             </article>
           ))}
         </div>
@@ -179,7 +184,9 @@ export default function HomePage() {
           </div>
           <p className="muted">
             These guides are counted from the checked-in Scryfall bulk and the MTGJSON product lists. The method page
-            says how each number is produced.
+            says how each number is produced.{" "}
+            <Link href="/commander-precons/stats">Commander precon stats</Link> lists every Commander Deck product in
+            that snapshot.
           </p>
           <div className="blog-grid">
             {dataPosts.map((post) => (
