@@ -2,7 +2,7 @@
 title: "How Many Lands Does a Landfall Deck Actually Need?"
 description: "How many lands does a landfall deck need in Magic: The Gathering? Obuun's official list plays 37 lands in the 99, because the land drop is the ramp spell."
 date: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-17
 author: Deck Lab Editorial
 reviewed: true
 category: deck-archetypes
@@ -20,16 +20,22 @@ Say the number out loud before you cut anything. If the payoff triggers when a l
 
 <InArticleAd />
 
-## When to choose this
+## Ramp pieces, and the mana the goldfish did not record
 
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| The payoff triggers on a land drop | Keep the lands printed in the 99 | A mana dork that dies before it taps |
-| The payoff costs three and does not care about lands | You may not need a ramp package | Cutting lands anyway, out of habit |
-| You want another landfall creature | Take it from a nonland slot | Taking it from the land count |
-| You are pricing the product's basics | That receipt is the printing in the box | The price of a random basic at the shop |
+Land's Wrath has 14 ramp cards: nonlands that add mana, put a land onto the battlefield, or create a treasure you get. Beanstalk Giant // Fertile Footsteps is one of them because Fertile Footsteps, the adventure, costs 3 and searches for a basic land. The creature face costs 7, and that face is one of the 9 creatures at mana value 6 or more. It is not a 7-mana ramp spell. Counting the adventure at 3, 6 of the ramp cards cost 3 and 4 cost 4, so 10 of the 14 cost 3 or 4. Sol Ring is the card at 1, 2 cards cost 2, and Nissa's Renewal costs 6, the highest ramp cost on the list. A package piled at 3 and 4 does not, by itself, put a six-mana creature on the battlefield on turn 3.
 
-## Example decks
+The goldfish record stores wins, a kill turn, a seed, and a starting life of 40. It has no field for the turn the deck first reached 6 mana. The average winning turn is 12.32, which is when creatures dealt enough damage to that 40 life, not when a ramp spell resolved. Use 14 for the ramp count and 12.32 for the combat clock. Do not read one as the other.
+
+| Ramp mana value on Land's Wrath | Cards |
+| --- | --- |
+| 1 | 1 |
+| 2 | 2 |
+| 3 | 6 |
+| 4 | 4 |
+| 6 | 1 |
+| 3 or 4 together | 10 |
+
+## The Land's Wrath list
 
 <DeckBlock id="lands-wrath" />
 
@@ -48,6 +54,10 @@ On the 2026-11-01 AllPricesToday nonfoil printings, Land's Wrath is $53.33 for p
 Land's Wrath won 77.5% of 120 goldfish games, average winning turn 12.32 (median 12, seed 1729, midrange policy, opponent at 40 life).
 
 Every card in Land's Wrath is legal in commander today per the Scryfall bulk of 2026-11-01.
+
+| List | Lands | Nonlands | Goldfish games | AllPricesToday total |
+| --- | --- | --- | --- | --- |
+| Land's Wrath | 37 | 62 | 120 | $53.33 |
 
 <InArticleAd />
 
@@ -79,7 +89,7 @@ You can compare the two after you have counted this one. The dinosaur list is a 
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. The 14 ramp cards are the precon census for this file, and their mana values are the oracle file from the same day. The goldfish object has no turn-to-6 field.
 
 <FanContentNotice />
 

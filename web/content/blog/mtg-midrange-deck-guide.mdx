@@ -2,7 +2,7 @@
 title: "Is Midrange the Right MTG Deck for You?"
 description: "Is midrange right for you in Magic: The Gathering? Gruul Stompy goldfishes turn 7.02 for $53.38. Orzhov Humans is turn 8.27 and half its price is three cards."
 date: 2026-11-01
-updated: 2026-11-01
+updated: 2026-11-17
 author: Deck Lab Editorial
 reviewed: true
 category: deck-archetypes
@@ -20,16 +20,7 @@ Price is the other half of the decision. Gruul's $53.38 product total has its to
 
 <InArticleAd />
 
-## When to choose this
-
-| Situation | Lean in | Walk away |
-| --- | --- | --- |
-| You want a threat that costs four or five | Gruul's curve includes both | Humans, which stops at two mana |
-| You want the cheapest possible manabase | Neither of these products. Their top costs are lands | A mono-red basic-land burn list |
-| The game often ends on turn five in your group | You will not cast the five-drop | Aggro, which the aggro page measures on the burn product |
-| You want to answer a creature and then play a bigger one | That is the midrange turn | Control, which would rather not play the bigger creature yet |
-
-## Example decks
+## The Gruul Stompy and Orzhov Humans lists
 
 <DeckBlock id="gruul-stompy" />
 
@@ -67,6 +58,20 @@ Orzhov Humans won 77.5% of 120 goldfish games, average winning turn 8.27 (median
 
 Every card in Orzhov Humans is legal in pioneer today per the Scryfall bulk of 2026-11-01.
 
+| List | Lands | Nonlands | Goldfish games | AllPricesToday total |
+| --- | --- | --- | --- | --- |
+| Gruul Stompy | 25 | 35 | 120 | $53.38 |
+| Orzhov Humans | 22 | 38 | 120 | $47.38 |
+
+## Where each creature curve stops
+
+Gruul Stompy has 26 creatures. 12 of them cost 2 or less, and 14 cost more than 2. Orzhov Humans has 30 creatures, and all 30 cost 2 or less, so the count above 2 is 0. Humans can cast every creature in the deck on 2 mana. That is why 22 lands carry the Humans list, and why its curve file has nothing past mana value 2. Gruul's 14 larger creatures are why that list plays 25 lands and still has cards at mana value 4 and 5. The land gap is the creature gap.
+
+| List | Creatures | At mana value 2 or less | Above 2 |
+| --- | --- | --- | --- |
+| Gruul Stompy | 26 | 12 | 14 |
+| Orzhov Humans | 30 | 30 | 0 |
+
 <InArticleAd />
 
 ## Common mistakes
@@ -97,7 +102,7 @@ She is $7.36 of the Gruul product as a line cost in the file, one of the three n
 
 ## How this was made
 
-Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729.
+Lists and nonfoil prices are MTGJSON; legality is the Scryfall oracle-cards bulk. Fetched 2026-11-01. The clock is the Deck Lab goldfish, 120 games, seed 1729. Creature counts use the front type line on the 2026-11-01 oracle file, split at mana value 2.
 
 <FanContentNotice />
 
