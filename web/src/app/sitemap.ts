@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { SITE_URL, indexablePosts, indexableStaticPaths } from "@/lib/blog";
 import { fetchPublicDeckIndex } from "@/lib/public-deck";
+import { PRECON_STATS_PATH, PRECON_STATS_UPDATED } from "@/lib/precon-stats-path";
 
 // Re-render hourly so scheduled guides appear on their date (BLOG_REVALIDATE_SECONDS).
 export const revalidate = 3600;
@@ -38,5 +39,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6
     });
   }
+  pages.push({
+    url: `${SITE_URL}${PRECON_STATS_PATH}`,
+    lastModified: PRECON_STATS_UPDATED,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  });
   return pages;
 }
